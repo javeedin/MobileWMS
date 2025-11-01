@@ -505,6 +505,7 @@ export default function App() {
               {item.itemdescription && (
                 <Text style={styles.itemDescription}>{item.itemdescription}</Text>
               )}
+              <Text style={styles.itemDetail}>Line No: {item.documentlinenumber || 'N/A'}</Text>
               <Text style={styles.itemDetail}>SKU: {item.itemnumber || 'N/A'}</Text>
               <Text style={styles.itemDetail}>Locator: {item.locator || 'Not assigned'}</Text>
               <Text style={styles.itemDetail}>Org: {item.organizationcode || 'N/A'}</Text>
@@ -544,6 +545,11 @@ export default function App() {
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Item Number:</Text>
               <Text style={styles.detailValue}>{selectedItem.itemnumber || 'N/A'}</Text>
+            </View>
+
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Line No:</Text>
+              <Text style={styles.detailValue}>{selectedItem.documentlinenumber || 'N/A'}</Text>
             </View>
 
             {selectedItem.itemdescription && (
