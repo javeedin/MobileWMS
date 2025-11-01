@@ -188,18 +188,20 @@ export default function App() {
       <View style={styles.modalOverlay}>
         <View style={styles.modalContainer}>
           <Text style={styles.modalTitle}>Select Organization</Text>
-          <Text style={styles.modalSubtitle}>Choose your organization to continue</Text>
+          <Text style={styles.modalSubtitle}>Choose your organization</Text>
 
-          {organizations.map((org) => (
-            <TouchableOpacity
-              key={org}
-              style={styles.orgButton}
-              onPress={() => handleOrgSelection(org)}
-            >
-              <Text style={styles.orgButtonText}>{org}</Text>
-              <Text style={styles.orgButtonArrow}>→</Text>
-            </TouchableOpacity>
-          ))}
+          <ScrollView style={styles.orgScrollView} showsVerticalScrollIndicator={true}>
+            {organizations.map((org) => (
+              <TouchableOpacity
+                key={org}
+                style={styles.orgButton}
+                onPress={() => handleOrgSelection(org)}
+              >
+                <Text style={styles.orgButtonText}>{org}</Text>
+                <Text style={styles.orgButtonArrow}>→</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -275,11 +277,6 @@ export default function App() {
             <View style={styles.headerTitleContainer}>
               <Text style={styles.dashboardGreeting}>Welcome back,</Text>
               <Text style={styles.dashboardUserName}>{user?.name || 'User'}</Text>
-              {selectedOrg && (
-                <View style={styles.orgBadge}>
-                  <Text style={styles.orgBadgeText}>🏢 {selectedOrg}</Text>
-                </View>
-              )}
             </View>
           </View>
           <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
@@ -308,6 +305,14 @@ export default function App() {
         )}
 
         <ScrollView style={styles.dashboardContent}>
+          {/* Organization Display */}
+          {selectedOrg && (
+            <View style={styles.orgDisplayContainer}>
+              <Text style={styles.orgDisplayLabel}>Organization:</Text>
+              <Text style={styles.orgDisplayValue}>{selectedOrg}</Text>
+            </View>
+          )}
+
           <View style={styles.cardGrid}>
             {/* Inventory Card */}
             <TouchableOpacity
@@ -405,6 +410,10 @@ export default function App() {
           <View style={styles.statBox}>
             <Text style={styles.statValue}>{poList.length}</Text>
             <Text style={styles.statLabel}>Total POs</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{poData.length}</Text>
+            <Text style={styles.statLabel}>Total Items</Text>
           </View>
         </View>
 
@@ -785,40 +794,44 @@ const styles = StyleSheet.create({
   modalContainer: {
     backgroundColor: COLORS.white,
     borderRadius: 20,
-    padding: SPACING.xl,
-    width: '80%',
+    padding: SPACING.lg,
+    width: '85%',
     maxWidth: 400,
+    maxHeight: '70%',
   },
   modalTitle: {
-    fontSize: FONT_SIZES.xl,
+    fontSize: FONT_SIZES.lg,
     fontWeight: 'bold',
     color: COLORS.text,
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.xs,
     textAlign: 'center',
   },
   modalSubtitle: {
-    fontSize: FONT_SIZES.md,
+    fontSize: FONT_SIZES.sm,
     color: COLORS.textSecondary,
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.md,
     textAlign: 'center',
+  },
+  orgScrollView: {
+    maxHeight: 400,
   },
   orgButton: {
     backgroundColor: COLORS.primary,
-    borderRadius: 10,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
+    borderRadius: 8,
+    padding: SPACING.sm,
+    marginBottom: SPACING.sm,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   orgButtonText: {
     color: COLORS.white,
-    fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
   },
   orgButtonArrow: {
     color: COLORS.white,
-    fontSize: FONT_SIZES.xl,
+    fontSize: FONT_SIZES.md,
   },
 
   // Dashboard Styles
@@ -844,12 +857,12 @@ const styles = StyleSheet.create({
     color: COLORS.white,
   },
   dashboardGreeting: {
-    fontSize: FONT_SIZES.sm,
+    fontSize: FONT_SIZES.xs,
     color: COLORS.white,
     opacity: 0.9,
   },
   dashboardUserName: {
-    fontSize: FONT_SIZES.xl,
+    fontSize: FONT_SIZES.md,
     fontWeight: 'bold',
     color: COLORS.white,
   },
@@ -925,6 +938,28 @@ const styles = StyleSheet.create({
   dashboardContent: {
     flex: 1,
   },
+  orgDisplayContainer: {
+    backgroundColor: COLORS.white,
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.xs,
+    padding: SPACING.md,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+  },
+  orgDisplayLabel: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textSecondary,
+    marginRight: SPACING.sm,
+  },
+  orgDisplayValue: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
   cardGrid: {
     padding: SPACING.md,
     flexDirection: 'row',
@@ -997,7 +1032,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   screenTitle: {
-    fontSize: FONT_SIZES.xl,
+    fontSize: FONT_SIZES.lg,
     fontWeight: 'bold',
     color: COLORS.white,
     flex: 1,
