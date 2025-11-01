@@ -129,20 +129,24 @@ export default function App() {
     }
   };
 
-  // Group PO data by PO number
+  // Group PO data by document number
   const groupedPOs = poData.reduce((acc, item) => {
-    const poNum = item.ponumber || 'Unknown';
-    if (!acc[poNum]) {
-      acc[poNum] = [];
+    const docNum = item.documentnumber || 'Unknown';
+    if (!acc[docNum]) {
+      acc[docNum] = {
+        items: [],
+        vendorname: item.vendorname || 'Unknown Vendor',
+      };
     }
-    acc[poNum].push(item);
+    acc[docNum].items.push(item);
     return acc;
   }, {});
 
-  const poList = Object.keys(groupedPOs).map(poNum => ({
-    ponumber: poNum,
-    items: groupedPOs[poNum],
-    itemCount: groupedPOs[poNum].length,
+  const poList = Object.keys(groupedPOs).map(docNum => ({
+    documentnumber: docNum,
+    items: groupedPOs[docNum].items,
+    itemCount: groupedPOs[docNum].items.length,
+    vendorname: groupedPOs[docNum].vendorname,
   }));
 
   // Handle barcode scan
@@ -425,7 +429,7 @@ export default function App() {
         ) : (
           <FlatList
             data={poList}
-            keyExtractor={(item) => item.ponumber}
+            keyExtractor={(item) => item.documentnumber}
             contentContainerStyle={styles.poList}
             renderItem={({ item }) => (
               <TouchableOpacity
@@ -436,12 +440,12 @@ export default function App() {
                 }}
               >
                 <View style={styles.poCardHeader}>
-                  <Text style={styles.poNumber}>PO: {item.ponumber}</Text>
+                  <Text style={styles.poNumber}>PO: {item.documentnumber}</Text>
                   <View style={styles.itemCountBadge}>
                     <Text style={styles.itemCountText}>{item.itemCount} items</Text>
                   </View>
                 </View>
-                <Text style={styles.poCardSubtext}>Tap to view items</Text>
+                <Text style={styles.poCardSubtext}>Vendor: {item.vendorname}</Text>
               </TouchableOpacity>
             )}
             ListEmptyComponent={
@@ -471,7 +475,7 @@ export default function App() {
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             <Text style={styles.screenTitle}>PO Items</Text>
-            <Text style={styles.screenSubtitle}>PO: {selectedPO.ponumber}</Text>
+            <Text style={styles.screenSubtitle}>PO: {selectedPO.documentnumber}</Text>
           </View>
           <View style={styles.headerRight}>
             {selectedOrg && <Text style={styles.headerOrgText}>{selectedOrg}</Text>}
@@ -498,6 +502,9 @@ export default function App() {
                 <Text style={styles.itemName}>{item.itemnumber || 'Unknown Item'}</Text>
                 <Text style={styles.itemQty}>Qty: {item.transactionquantity || 0}</Text>
               </View>
+              {item.itemdescription && (
+                <Text style={styles.itemDescription}>{item.itemdescription}</Text>
+              )}
               <Text style={styles.itemDetail}>SKU: {item.itemnumber || 'N/A'}</Text>
               <Text style={styles.itemDetail}>Locator: {item.locator || 'Not assigned'}</Text>
               <Text style={styles.itemDetail}>Org: {item.organizationcode || 'N/A'}</Text>
@@ -531,13 +538,20 @@ export default function App() {
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>PO Number:</Text>
-              <Text style={styles.detailValue}>{selectedItem.ponumber || 'N/A'}</Text>
+              <Text style={styles.detailValue}>{selectedItem.documentnumber || 'N/A'}</Text>
             </View>
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Item Number:</Text>
               <Text style={styles.detailValue}>{selectedItem.itemnumber || 'N/A'}</Text>
             </View>
+
+            {selectedItem.itemdescription && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Description:</Text>
+                <Text style={styles.detailValue}>{selectedItem.itemdescription}</Text>
+              </View>
+            )}
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Quantity:</Text>
@@ -564,6 +578,28 @@ export default function App() {
               onPress={() => handleScanLocator(selectedItem)}
             >
               <Text style={styles.scanButtonText}>📷 Scan Pallet Locator</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.confirmButton}
+              onPress={() => {
+                Alert.alert(
+                  'Confirm Receipt',
+                  `Confirm receipt of ${selectedItem.itemnumber}?\n\nQuantity: ${selectedItem.transactionquantity}\nLocator: ${selectedItem.actualLocator || selectedItem.locator}`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Confirm',
+                      onPress: () => {
+                        Alert.alert('Success', 'Receipt confirmed successfully!');
+                        setCurrentScreen('POItems');
+                      },
+                    },
+                  ]
+                );
+              }}
+            >
+              <Text style={styles.confirmButtonText}>✓ Confirm Receipt</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -1162,6 +1198,13 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginBottom: SPACING.xs,
   },
+  itemDescription: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.text,
+    fontStyle: 'italic',
+    marginBottom: SPACING.sm,
+    paddingVertical: SPACING.xs,
+  },
 
   // Item Detail
   detailContainer: {
@@ -1205,6 +1248,18 @@ const styles = StyleSheet.create({
     marginTop: SPACING.lg,
   },
   scanButtonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.lg,
+    fontWeight: 'bold',
+  },
+  confirmButton: {
+    backgroundColor: COLORS.success,
+    borderRadius: 10,
+    padding: SPACING.md,
+    alignItems: 'center',
+    marginTop: SPACING.md,
+  },
+  confirmButtonText: {
     color: COLORS.white,
     fontSize: FONT_SIZES.lg,
     fontWeight: 'bold',
