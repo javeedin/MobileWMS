@@ -769,6 +769,12 @@ export default function App() {
           </TouchableOpacity>
           <Text style={styles.screenTitle}>Inventory Onhand</Text>
           <View style={styles.headerRight}>
+            <TouchableOpacity
+              style={styles.headerFetchButton}
+              onPress={() => setShowParameterModal(true)}
+            >
+              <Text style={styles.headerFetchButtonText}>📥</Text>
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => setCurrentScreen('Scanner')}>
               <Text style={styles.notificationIconSmall}>📷</Text>
             </TouchableOpacity>
@@ -780,28 +786,20 @@ export default function App() {
 
         {/* Search Section */}
         <View style={styles.searchSection}>
-          <View style={styles.searchHeader}>
-            <View style={styles.searchInputContainer}>
-              <Text style={styles.searchIcon}>🔍</Text>
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search items by code or description..."
-                value={searchQuery}
-                onChangeText={handleSearchChange}
-                autoCapitalize="none"
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <Text style={styles.clearIcon}>✕</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            <TouchableOpacity
-              style={styles.fetchButton}
-              onPress={() => setShowParameterModal(true)}
-            >
-              <Text style={styles.fetchButtonText}>📥 Fetch</Text>
-            </TouchableOpacity>
+          <View style={styles.searchInputContainer}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search items by code or description..."
+              value={searchQuery}
+              onChangeText={handleSearchChange}
+              autoCapitalize="none"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Text style={styles.clearIcon}>✕</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Autocomplete Suggestions */}
@@ -1682,13 +1680,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  searchHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
   searchInputContainer: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.backgroundSecondary,
@@ -1712,16 +1704,12 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     paddingLeft: SPACING.xs,
   },
-  fetchButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: 8,
+  headerFetchButton: {
+    marginRight: SPACING.xs,
   },
-  fetchButtonText: {
+  headerFetchButtonText: {
+    fontSize: 20,
     color: COLORS.white,
-    fontSize: FONT_SIZES.sm,
-    fontWeight: 'bold',
   },
   suggestionsContainer: {
     backgroundColor: COLORS.white,
