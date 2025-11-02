@@ -82,7 +82,11 @@ export default function App() {
   const [onhandLoading, setOnhandLoading] = useState(false);
   const [searchOrgCode, setSearchOrgCode] = useState('');
   const [searchSubinventory, setSearchSubinventory] = useState('');
-  const [searchFormExpanded, setSearchFormExpanded] = useState(true);
+  const [showParameterModal, setShowParameterModal] = useState(false);
+  const [filterItemCode, setFilterItemCode] = useState('');
+  const [filterItemDescription, setFilterItemDescription] = useState('');
+  const [itemSuggestions, setItemSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   // Handle Login
   const handleLogin = () => {
@@ -163,11 +167,61 @@ export default function App() {
 
       setOnhandData(transformedData);
       setOnhandLoading(false);
+      setShowParameterModal(false);
     } catch (error) {
       Alert.alert('Error', 'Failed to fetch onhand data: ' + error.message);
       setOnhandLoading(false);
     }
   };
+
+  // Handle item code search with autocomplete
+  const handleItemCodeChange = (text) => {
+    setFilterItemCode(text);
+    if (text.length > 1 && onhandData.length > 0) {
+      const suggestions = onhandData
+        .filter(item => item.itemnumber && item.itemnumber.toLowerCase().includes(text.toLowerCase()))
+        .slice(0, 5)
+        .map(item => ({ type: 'code', value: item.itemnumber }));
+      setItemSuggestions(suggestions);
+      setShowSuggestions(suggestions.length > 0);
+    } else {
+      setShowSuggestions(false);
+    }
+  };
+
+  // Handle item description search with autocomplete
+  const handleItemDescriptionChange = (text) => {
+    setFilterItemDescription(text);
+    if (text.length > 2 && onhandData.length > 0) {
+      const suggestions = onhandData
+        .filter(item => item.itemdescription && item.itemdescription.toLowerCase().includes(text.toLowerCase()))
+        .slice(0, 5)
+        .map(item => ({ type: 'description', value: item.itemdescription }));
+      setItemSuggestions(suggestions);
+      setShowSuggestions(suggestions.length > 0);
+    } else {
+      setShowSuggestions(false);
+    }
+  };
+
+  // Select autocomplete suggestion
+  const selectSuggestion = (suggestion) => {
+    if (suggestion.type === 'code') {
+      setFilterItemCode(suggestion.value);
+    } else {
+      setFilterItemDescription(suggestion.value);
+    }
+    setShowSuggestions(false);
+  };
+
+  // Filter onhand data
+  const filteredOnhandData = onhandData.filter(item => {
+    const matchesItemCode = !filterItemCode ||
+      (item.itemnumber && item.itemnumber.toLowerCase().includes(filterItemCode.toLowerCase()));
+    const matchesDescription = !filterItemDescription ||
+      (item.itemdescription && item.itemdescription.toLowerCase().includes(filterItemDescription.toLowerCase()));
+    return matchesItemCode && matchesDescription;
+  });
 
   // Group PO data by document number
   const groupedPOs = poData.reduce((acc, item) => {
@@ -706,27 +760,82 @@ export default function App() {
             setOnhandData([]);
             setSearchOrgCode('');
             setSearchSubinventory('');
+            setFilterItemCode('');
+            setFilterItemDescription('');
           }}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
           <Text style={styles.screenTitle}>Inventory Onhand</Text>
-          <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
-            <Text style={styles.notificationIconSmall}>🔔</Text>
-          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            <TouchableOpacity onPress={() => setCurrentScreen('Scanner')}>
+              <Text style={styles.notificationIconSmall}>📷</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
+              <Text style={styles.notificationIconSmall}>🔔</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Search Form */}
-        <View style={styles.searchForm}>
-          <TouchableOpacity
-            style={styles.searchFormHeader}
-            onPress={() => setSearchFormExpanded(!searchFormExpanded)}
-          >
-            <Text style={styles.searchFormTitle}>Search Parameters</Text>
-            <Text style={styles.expandIcon}>{searchFormExpanded ? '▼' : '▶'}</Text>
-          </TouchableOpacity>
+        {/* Filter Section */}
+        <View style={styles.filterSection}>
+          <View style={styles.filterHeader}>
+            <Text style={styles.filterTitle}>Filter Items</Text>
+            <TouchableOpacity
+              style={styles.fetchButton}
+              onPress={() => setShowParameterModal(true)}
+            >
+              <Text style={styles.fetchButtonText}>📥 Fetch</Text>
+            </TouchableOpacity>
+          </View>
 
-          {searchFormExpanded && (
-            <>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Item Code</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Search by item code"
+              value={filterItemCode}
+              onChangeText={handleItemCodeChange}
+              autoCapitalize="characters"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Item Description</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Search by description"
+              value={filterItemDescription}
+              onChangeText={handleItemDescriptionChange}
+            />
+          </View>
+
+          {/* Autocomplete Suggestions */}
+          {showSuggestions && itemSuggestions.length > 0 && (
+            <View style={styles.suggestionsContainer}>
+              {itemSuggestions.map((suggestion, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.suggestionItem}
+                  onPress={() => selectSuggestion(suggestion)}
+                >
+                  <Text style={styles.suggestionText}>{suggestion.value}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* Parameter Modal */}
+        <Modal
+          visible={showParameterModal}
+          transparent={true}
+          animationType="slide"
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.parameterModalContainer}>
+              <Text style={styles.modalTitle}>Fetch Parameters</Text>
+              <Text style={styles.modalSubtitle}>Enter search parameters</Text>
+
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Organization Code *</Text>
                 <TextInput
@@ -749,15 +858,24 @@ export default function App() {
                 />
               </View>
 
-              <TouchableOpacity
-                style={styles.searchButton}
-                onPress={fetchOnhandData}
-              >
-                <Text style={styles.searchButtonText}>🔍 Search Inventory</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
+                  onPress={() => setShowParameterModal(false)}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.modalFetchButton}
+                  onPress={fetchOnhandData}
+                >
+                  <Text style={styles.modalFetchText}>Fetch Data</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* Results */}
         {onhandLoading ? (
@@ -768,11 +886,13 @@ export default function App() {
         ) : onhandData.length > 0 ? (
           <View style={styles.resultsContainer}>
             <View style={styles.resultsHeader}>
-              <Text style={styles.resultsTitle}>Results ({onhandData.length} items)</Text>
+              <Text style={styles.resultsTitle}>
+                Results ({filteredOnhandData.length} of {onhandData.length} items)
+              </Text>
             </View>
 
             <FlatList
-              data={onhandData}
+              data={filteredOnhandData}
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.onhandList}
               renderItem={({ item }) => (
@@ -1556,7 +1676,7 @@ const styles = StyleSheet.create({
   },
 
   // Inventory Onhand Styles
-  searchForm: {
+  filterSection: {
     backgroundColor: COLORS.white,
     padding: SPACING.lg,
     margin: SPACING.md,
@@ -1567,31 +1687,80 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  searchFormHeader: {
+  filterHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: SPACING.md,
   },
-  searchFormTitle: {
+  filterTitle: {
     fontSize: FONT_SIZES.lg,
     fontWeight: 'bold',
     color: COLORS.text,
     flex: 1,
   },
-  expandIcon: {
-    fontSize: FONT_SIZES.lg,
-    color: COLORS.primary,
+  fetchButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 8,
+  },
+  fetchButtonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.sm,
     fontWeight: 'bold',
   },
-  searchButton: {
+  suggestionsContainer: {
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    marginTop: SPACING.xs,
+    maxHeight: 200,
+  },
+  suggestionItem: {
+    padding: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  suggestionText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.text,
+  },
+  parameterModalContainer: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: SPACING.xl,
+    width: '90%',
+    maxWidth: 400,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: SPACING.lg,
+  },
+  modalCancelButton: {
+    flex: 1,
+    backgroundColor: COLORS.backgroundSecondary,
+    borderRadius: 10,
+    padding: SPACING.md,
+    alignItems: 'center',
+    marginRight: SPACING.sm,
+  },
+  modalCancelText: {
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZES.md,
+    fontWeight: 'bold',
+  },
+  modalFetchButton: {
+    flex: 1,
     backgroundColor: COLORS.primary,
     borderRadius: 10,
     padding: SPACING.md,
     alignItems: 'center',
-    marginTop: SPACING.sm,
+    marginLeft: SPACING.sm,
   },
-  searchButtonText: {
+  modalFetchText: {
     color: COLORS.white,
     fontSize: FONT_SIZES.md,
     fontWeight: 'bold',
