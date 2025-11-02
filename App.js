@@ -83,8 +83,7 @@ export default function App() {
   const [searchOrgCode, setSearchOrgCode] = useState('');
   const [searchSubinventory, setSearchSubinventory] = useState('');
   const [showParameterModal, setShowParameterModal] = useState(false);
-  const [filterItemCode, setFilterItemCode] = useState('');
-  const [filterItemDescription, setFilterItemDescription] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [itemSuggestions, setItemSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -174,30 +173,36 @@ export default function App() {
     }
   };
 
-  // Handle item code search with autocomplete
-  const handleItemCodeChange = (text) => {
-    setFilterItemCode(text);
+  // Handle unified search with autocomplete (Amazon-style)
+  const handleSearchChange = (text) => {
+    setSearchQuery(text);
     if (text.length > 1 && onhandData.length > 0) {
-      const suggestions = onhandData
-        .filter(item => item.itemnumber && item.itemnumber.toLowerCase().includes(text.toLowerCase()))
-        .slice(0, 5)
-        .map(item => ({ type: 'code', value: item.itemnumber }));
-      setItemSuggestions(suggestions);
-      setShowSuggestions(suggestions.length > 0);
-    } else {
-      setShowSuggestions(false);
-    }
-  };
+      // Search both item code and description
+      const suggestions = [];
+      const seen = new Set();
 
-  // Handle item description search with autocomplete
-  const handleItemDescriptionChange = (text) => {
-    setFilterItemDescription(text);
-    if (text.length > 2 && onhandData.length > 0) {
-      const suggestions = onhandData
-        .filter(item => item.itemdescription && item.itemdescription.toLowerCase().includes(text.toLowerCase()))
-        .slice(0, 5)
-        .map(item => ({ type: 'description', value: item.itemdescription }));
-      setItemSuggestions(suggestions);
+      onhandData.forEach(item => {
+        // Add item code matches
+        if (item.itemnumber && item.itemnumber.toLowerCase().includes(text.toLowerCase()) && !seen.has(item.itemnumber)) {
+          suggestions.push({
+            type: 'code',
+            value: item.itemnumber,
+            display: `${item.itemnumber} - ${item.itemdescription || 'No description'}`
+          });
+          seen.add(item.itemnumber);
+        }
+        // Add description matches
+        else if (item.itemdescription && item.itemdescription.toLowerCase().includes(text.toLowerCase()) && !seen.has(item.itemdescription)) {
+          suggestions.push({
+            type: 'description',
+            value: item.itemdescription,
+            display: `${item.itemnumber || 'N/A'} - ${item.itemdescription}`
+          });
+          seen.add(item.itemdescription);
+        }
+      });
+
+      setItemSuggestions(suggestions.slice(0, 5));
       setShowSuggestions(suggestions.length > 0);
     } else {
       setShowSuggestions(false);
@@ -206,21 +211,19 @@ export default function App() {
 
   // Select autocomplete suggestion
   const selectSuggestion = (suggestion) => {
-    if (suggestion.type === 'code') {
-      setFilterItemCode(suggestion.value);
-    } else {
-      setFilterItemDescription(suggestion.value);
-    }
+    setSearchQuery(suggestion.value);
     setShowSuggestions(false);
   };
 
-  // Filter onhand data
+  // Filter onhand data (searches both item code and description)
   const filteredOnhandData = onhandData.filter(item => {
-    const matchesItemCode = !filterItemCode ||
-      (item.itemnumber && item.itemnumber.toLowerCase().includes(filterItemCode.toLowerCase()));
-    const matchesDescription = !filterItemDescription ||
-      (item.itemdescription && item.itemdescription.toLowerCase().includes(filterItemDescription.toLowerCase()));
-    return matchesItemCode && matchesDescription;
+    if (!searchQuery) return true;
+
+    const query = searchQuery.toLowerCase();
+    const matchesItemCode = item.itemnumber && item.itemnumber.toLowerCase().includes(query);
+    const matchesDescription = item.itemdescription && item.itemdescription.toLowerCase().includes(query);
+
+    return matchesItemCode || matchesDescription;
   });
 
   // Group PO data by document number
@@ -760,8 +763,7 @@ export default function App() {
             setOnhandData([]);
             setSearchOrgCode('');
             setSearchSubinventory('');
-            setFilterItemCode('');
-            setFilterItemDescription('');
+            setSearchQuery('');
           }}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
@@ -776,37 +778,30 @@ export default function App() {
           </View>
         </View>
 
-        {/* Filter Section */}
-        <View style={styles.filterSection}>
-          <View style={styles.filterHeader}>
-            <Text style={styles.filterTitle}>Filter Items</Text>
+        {/* Search Section */}
+        <View style={styles.searchSection}>
+          <View style={styles.searchHeader}>
+            <View style={styles.searchInputContainer}>
+              <Text style={styles.searchIcon}>🔍</Text>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search items by code or description..."
+                value={searchQuery}
+                onChangeText={handleSearchChange}
+                autoCapitalize="none"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <Text style={styles.clearIcon}>✕</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             <TouchableOpacity
               style={styles.fetchButton}
               onPress={() => setShowParameterModal(true)}
             >
               <Text style={styles.fetchButtonText}>📥 Fetch</Text>
             </TouchableOpacity>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Item Code</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Search by item code"
-              value={filterItemCode}
-              onChangeText={handleItemCodeChange}
-              autoCapitalize="characters"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Item Description</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Search by description"
-              value={filterItemDescription}
-              onChangeText={handleItemDescriptionChange}
-            />
           </View>
 
           {/* Autocomplete Suggestions */}
@@ -818,7 +813,7 @@ export default function App() {
                   style={styles.suggestionItem}
                   onPress={() => selectSuggestion(suggestion)}
                 >
-                  <Text style={styles.suggestionText}>{suggestion.value}</Text>
+                  <Text style={styles.suggestionText}>{suggestion.display}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -1676,9 +1671,9 @@ const styles = StyleSheet.create({
   },
 
   // Inventory Onhand Styles
-  filterSection: {
+  searchSection: {
     backgroundColor: COLORS.white,
-    padding: SPACING.lg,
+    padding: SPACING.md,
     margin: SPACING.md,
     borderRadius: 12,
     shadowColor: '#000',
@@ -1687,17 +1682,35 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  filterHeader: {
+  searchHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.md,
+    gap: SPACING.sm,
   },
-  filterTitle: {
-    fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
-    color: COLORS.text,
+  searchInputContainer: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.backgroundSecondary,
+    borderRadius: 8,
+    paddingHorizontal: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  searchIcon: {
+    fontSize: FONT_SIZES.md,
+    marginRight: SPACING.xs,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: SPACING.sm,
+    fontSize: FONT_SIZES.md,
+    color: COLORS.text,
+  },
+  clearIcon: {
+    fontSize: FONT_SIZES.lg,
+    color: COLORS.textSecondary,
+    paddingLeft: SPACING.xs,
   },
   fetchButton: {
     backgroundColor: COLORS.primary,
