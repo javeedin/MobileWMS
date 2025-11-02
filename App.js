@@ -197,31 +197,67 @@ export default function App() {
   // Handle unified search with autocomplete (Amazon-style)
   const handleSearchChange = (text) => {
     setSearchQuery(text);
-    if (text.length > 1 && onhandData.length > 0) {
-      // Search both item code and description
+    if (text.length > 1) {
       const suggestions = [];
       const seen = new Set();
 
-      onhandData.forEach(item => {
-        // Add item code matches
-        if (item.itemnumber && item.itemnumber.toLowerCase().includes(text.toLowerCase()) && !seen.has(item.itemnumber)) {
-          suggestions.push({
-            type: 'code',
-            value: item.itemnumber,
-            display: `${item.itemnumber} - ${item.itemdescription || 'No description'}`
-          });
-          seen.add(item.itemnumber);
-        }
-        // Add description matches
-        else if (item.itemdescription && item.itemdescription.toLowerCase().includes(text.toLowerCase()) && !seen.has(item.itemdescription)) {
-          suggestions.push({
-            type: 'description',
-            value: item.itemdescription,
-            display: `${item.itemnumber || 'N/A'} - ${item.itemdescription}`
-          });
-          seen.add(item.itemdescription);
-        }
-      });
+      // Different autocomplete based on current tab
+      if (currentInventoryTab === 'byLot' && lotsData.length > 0) {
+        // For By Lot tab: search item code, description, and lot number
+        lotsData.forEach(lot => {
+          const searchKey = `${lot.item_number}_${lot.lotnumber}`;
+
+          // Add item code matches
+          if (lot.item_number && lot.item_number.toLowerCase().includes(text.toLowerCase()) && !seen.has(searchKey)) {
+            suggestions.push({
+              type: 'code',
+              value: lot.item_number,
+              display: `${lot.item_number} - ${lot.item_description || 'No description'}`
+            });
+            seen.add(searchKey);
+          }
+          // Add description matches
+          else if (lot.item_description && lot.item_description.toLowerCase().includes(text.toLowerCase()) && !seen.has(searchKey)) {
+            suggestions.push({
+              type: 'description',
+              value: lot.item_description,
+              display: `${lot.item_number || 'N/A'} - ${lot.item_description}`
+            });
+            seen.add(searchKey);
+          }
+          // Add lot number matches
+          else if (lot.lotnumber && lot.lotnumber.toLowerCase().includes(text.toLowerCase()) && !seen.has(searchKey)) {
+            suggestions.push({
+              type: 'lot',
+              value: lot.lotnumber,
+              display: `Lot: ${lot.lotnumber} - ${lot.item_number || 'N/A'} - ${lot.item_description || 'No description'}`
+            });
+            seen.add(searchKey);
+          }
+        });
+      } else if (onhandData.length > 0) {
+        // For By Item tab: search item code and description
+        onhandData.forEach(item => {
+          // Add item code matches
+          if (item.itemnumber && item.itemnumber.toLowerCase().includes(text.toLowerCase()) && !seen.has(item.itemnumber)) {
+            suggestions.push({
+              type: 'code',
+              value: item.itemnumber,
+              display: `${item.itemnumber} - ${item.itemdescription || 'No description'}`
+            });
+            seen.add(item.itemnumber);
+          }
+          // Add description matches
+          else if (item.itemdescription && item.itemdescription.toLowerCase().includes(text.toLowerCase()) && !seen.has(item.itemdescription)) {
+            suggestions.push({
+              type: 'description',
+              value: item.itemdescription,
+              display: `${item.itemnumber || 'N/A'} - ${item.itemdescription}`
+            });
+            seen.add(item.itemdescription);
+          }
+        });
+      }
 
       setItemSuggestions(suggestions.slice(0, 5));
       setShowSuggestions(suggestions.length > 0);
@@ -945,7 +981,17 @@ export default function App() {
           <View style={styles.modalOverlay}>
             <View style={styles.lotsModalContainer}>
               <View style={styles.lotsModalHeader}>
-                <Text style={styles.modalTitle}>Lots for {selectedItemForLots?.itemnumber}</Text>
+                <View style={styles.lotsModalTitleContainer}>
+                  <Text style={styles.modalTitle}>Lots for {selectedItemForLots?.itemnumber}</Text>
+                  {selectedItemForLots?.itemdescription && (
+                    <Text style={styles.lotsModalSubtitle}>{selectedItemForLots.itemdescription}</Text>
+                  )}
+                  {selectedItemForLots && (
+                    <Text style={styles.lotsModalCount}>
+                      {getLotsForItem(selectedItemForLots.itemnumber).length} {getLotsForItem(selectedItemForLots.itemnumber).length === 1 ? 'lot' : 'lots'}
+                    </Text>
+                  )}
+                </View>
                 <TouchableOpacity onPress={() => setShowLotsModal(false)}>
                   <Text style={styles.modalCloseButton}>✕</Text>
                 </TouchableOpacity>
@@ -1009,39 +1055,44 @@ export default function App() {
                     data={filteredOnhandData}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.onhandList}
-                    renderItem={({ item }) => (
-                      <TouchableOpacity
-                        style={styles.onhandCard}
-                        onPress={() => {
-                          setSelectedItemForLots(item);
-                          setShowLotsModal(true);
-                        }}
-                      >
-                        <View style={styles.onhandCardHeader}>
-                          <Text style={styles.onhandItemNumber}>{item.itemnumber || 'N/A'}</Text>
-                          <View style={styles.qohBadge}>
-                            <Text style={styles.qohText}>{item.qoh || 0} {item.uom || ''}</Text>
+                    renderItem={({ item }) => {
+                      const lotsCount = getLotsForItem(item.itemnumber).length;
+                      return (
+                        <TouchableOpacity
+                          style={styles.onhandCard}
+                          onPress={() => {
+                            setSelectedItemForLots(item);
+                            setShowLotsModal(true);
+                          }}
+                        >
+                          <View style={styles.onhandCardHeader}>
+                            <Text style={styles.onhandItemNumber}>{item.itemnumber || 'N/A'}</Text>
+                            <View style={styles.qohBadge}>
+                              <Text style={styles.qohText}>{item.qoh || 0} {item.uom || ''}</Text>
+                            </View>
                           </View>
-                        </View>
 
-                        {item.itemdescription && (
-                          <Text style={styles.onhandDescription}>{item.itemdescription}</Text>
-                        )}
+                          {item.itemdescription && (
+                            <Text style={styles.onhandDescription}>{item.itemdescription}</Text>
+                          )}
 
-                        <View style={styles.onhandDetailsRow}>
-                          <View style={styles.onhandDetailItem}>
-                            <Text style={styles.onhandDetailLabel}>Org:</Text>
-                            <Text style={styles.onhandDetailValue}>{item.organizationcode || 'N/A'}</Text>
+                          <View style={styles.onhandDetailsRow}>
+                            <View style={styles.onhandDetailItem}>
+                              <Text style={styles.onhandDetailLabel}>Org:</Text>
+                              <Text style={styles.onhandDetailValue}>{item.organizationcode || 'N/A'}</Text>
+                            </View>
+                            <View style={styles.onhandDetailItem}>
+                              <Text style={styles.onhandDetailLabel}>Subinventory:</Text>
+                              <Text style={styles.onhandDetailValue}>{item.subinventorycode || 'N/A'}</Text>
+                            </View>
                           </View>
-                          <View style={styles.onhandDetailItem}>
-                            <Text style={styles.onhandDetailLabel}>Subinventory:</Text>
-                            <Text style={styles.onhandDetailValue}>{item.subinventorycode || 'N/A'}</Text>
-                          </View>
-                        </View>
 
-                        <Text style={styles.tapToViewLots}>Tap to view lots</Text>
-                      </TouchableOpacity>
-                    )}
+                          <Text style={styles.lotCountInfo}>
+                            {lotsCount} {lotsCount === 1 ? 'lot' : 'lots'} available • Tap to view lots
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    }}
                   />
                 </View>
               ) : (
@@ -2179,6 +2230,29 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: SPACING.xs,
     textAlign: 'center',
+  },
+  lotCountInfo: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.primary,
+    fontWeight: '600',
+    marginTop: SPACING.xs,
+    textAlign: 'center',
+  },
+  lotsModalTitleContainer: {
+    flex: 1,
+    marginRight: SPACING.md,
+  },
+  lotsModalSubtitle: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.xs,
+    fontStyle: 'italic',
+  },
+  lotsModalCount: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.primary,
+    marginTop: SPACING.xs,
+    fontWeight: '600',
   },
 
   // By Lot Tab Item Card Styles
