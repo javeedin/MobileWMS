@@ -82,6 +82,7 @@ export default function App() {
   const [onhandLoading, setOnhandLoading] = useState(false);
   const [searchOrgCode, setSearchOrgCode] = useState('');
   const [searchSubinventory, setSearchSubinventory] = useState('');
+  const [searchFormExpanded, setSearchFormExpanded] = useState(true);
 
   // Handle Login
   const handleLogin = () => {
@@ -360,7 +361,10 @@ export default function App() {
             {/* Inventory Card */}
             <TouchableOpacity
               style={styles.featureCard}
-              onPress={() => setCurrentScreen('Inventory')}
+              onPress={() => {
+                setSearchOrgCode(selectedOrg || '');
+                setCurrentScreen('Inventory');
+              }}
             >
               <Text style={styles.cardIcon}>📦</Text>
               <Text style={styles.cardTitle}>Inventory</Text>
@@ -408,7 +412,7 @@ export default function App() {
             <Text style={styles.navIcon}>🏠</Text>
             <Text style={styles.navText}>Home</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('Inventory')}>
+          <TouchableOpacity style={styles.navItem} onPress={() => { setSearchOrgCode(selectedOrg || ''); setCurrentScreen('Inventory'); }}>
             <Text style={styles.navIcon}>📦</Text>
             <Text style={styles.navText}>Inventory</Text>
           </TouchableOpacity>
@@ -713,36 +717,46 @@ export default function App() {
 
         {/* Search Form */}
         <View style={styles.searchForm}>
-          <Text style={styles.searchFormTitle}>Search Parameters</Text>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Organization Code *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter Organization Code (e.g., AMS)"
-              value={searchOrgCode}
-              onChangeText={setSearchOrgCode}
-              autoCapitalize="characters"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Subinventory (Optional)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter Subinventory"
-              value={searchSubinventory}
-              onChangeText={setSearchSubinventory}
-              autoCapitalize="characters"
-            />
-          </View>
-
           <TouchableOpacity
-            style={styles.searchButton}
-            onPress={fetchOnhandData}
+            style={styles.searchFormHeader}
+            onPress={() => setSearchFormExpanded(!searchFormExpanded)}
           >
-            <Text style={styles.searchButtonText}>🔍 Search Inventory</Text>
+            <Text style={styles.searchFormTitle}>Search Parameters</Text>
+            <Text style={styles.expandIcon}>{searchFormExpanded ? '▼' : '▶'}</Text>
           </TouchableOpacity>
+
+          {searchFormExpanded && (
+            <>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Organization Code *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter Organization Code (e.g., AMS)"
+                  value={searchOrgCode}
+                  onChangeText={setSearchOrgCode}
+                  autoCapitalize="characters"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Subinventory (Optional)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter Subinventory"
+                  value={searchSubinventory}
+                  onChangeText={setSearchSubinventory}
+                  autoCapitalize="characters"
+                />
+              </View>
+
+              <TouchableOpacity
+                style={styles.searchButton}
+                onPress={fetchOnhandData}
+              >
+                <Text style={styles.searchButtonText}>🔍 Search Inventory</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         {/* Results */}
@@ -1553,11 +1567,22 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  searchFormHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
   searchFormTitle: {
     fontSize: FONT_SIZES.lg,
     fontWeight: 'bold',
     color: COLORS.text,
-    marginBottom: SPACING.md,
+    flex: 1,
+  },
+  expandIcon: {
+    fontSize: FONT_SIZES.lg,
+    color: COLORS.primary,
+    fontWeight: 'bold',
   },
   searchButton: {
     backgroundColor: COLORS.primary,
