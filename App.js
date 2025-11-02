@@ -79,6 +79,7 @@ export default function App() {
 
   // Inventory Onhand state
   const [onhandData, setOnhandData] = useState([]);
+  const [lotsData, setLotsData] = useState([]);
   const [onhandLoading, setOnhandLoading] = useState(false);
   const [searchOrgCode, setSearchOrgCode] = useState('');
   const [searchSubinventory, setSearchSubinventory] = useState('');
@@ -86,6 +87,9 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [itemSuggestions, setItemSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [currentInventoryTab, setCurrentInventoryTab] = useState('byItem'); // byItem, byLot, byLocator
+  const [selectedItemForLots, setSelectedItemForLots] = useState(null);
+  const [showLotsModal, setShowLotsModal] = useState(false);
 
   // Handle Login
   const handleLogin = () => {
@@ -139,7 +143,7 @@ export default function App() {
     }
   };
 
-  // Fetch Inventory Onhand
+  // Fetch Inventory Onhand and Lots
   const fetchOnhandData = async () => {
     if (!searchOrgCode) {
       Alert.alert('Error', 'Please enter Organization Code');
@@ -148,27 +152,44 @@ export default function App() {
 
     setOnhandLoading(true);
     try {
+      // Fetch onhand data
       // Note: Using the typo from user's URL "orgainzation_code"
-      let url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhand?orgainzation_code=${searchOrgCode}`;
+      let onhandUrl = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhand?orgainzation_code=${searchOrgCode}`;
 
       if (searchSubinventory) {
-        url += `&subinventory=${searchSubinventory}`;
+        onhandUrl += `&subinventory=${searchSubinventory}`;
       }
 
-      const response = await fetch(url);
-      const data = await response.json();
+      // Fetch lots data
+      let lotsUrl = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandbylots?ORGANIZATION_CODE=${searchOrgCode}`;
 
-      // Transform data
-      const transformedData = (data.items || []).map((item, index) => ({
+      // Fetch both in parallel
+      const [onhandResponse, lotsResponse] = await Promise.all([
+        fetch(onhandUrl),
+        fetch(lotsUrl)
+      ]);
+
+      const onhandData = await onhandResponse.json();
+      const lotsData = await lotsResponse.json();
+
+      // Transform onhand data
+      const transformedOnhandData = (onhandData.items || []).map((item, index) => ({
         ...item,
         id: index.toString(),
       }));
 
-      setOnhandData(transformedData);
+      // Transform lots data
+      const transformedLotsData = (lotsData.items || []).map((item, index) => ({
+        ...item,
+        id: index.toString(),
+      }));
+
+      setOnhandData(transformedOnhandData);
+      setLotsData(transformedLotsData);
       setOnhandLoading(false);
       setShowParameterModal(false);
     } catch (error) {
-      Alert.alert('Error', 'Failed to fetch onhand data: ' + error.message);
+      Alert.alert('Error', 'Failed to fetch data: ' + error.message);
       setOnhandLoading(false);
     }
   };
@@ -752,6 +773,21 @@ export default function App() {
 
   // Inventory Onhand Screen
   if (currentScreen === 'Inventory') {
+    // Get lots for selected item
+    const getLotsForItem = (itemNumber) => {
+      return lotsData.filter(lot => lot.item_number === itemNumber);
+    };
+
+    // Filter lots data for "By Lot" tab
+    const filteredLotsData = lotsData.filter(lot => {
+      if (!searchQuery) return true;
+      const query = searchQuery.toLowerCase();
+      const matchesItemCode = lot.item_number && lot.item_number.toLowerCase().includes(query);
+      const matchesDescription = lot.item_description && lot.item_description.toLowerCase().includes(query);
+      const matchesLot = lot.lotnumber && lot.lotnumber.toLowerCase().includes(query);
+      return matchesItemCode || matchesDescription || matchesLot;
+    });
+
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
@@ -761,9 +797,11 @@ export default function App() {
           <TouchableOpacity onPress={() => {
             setCurrentScreen('Dashboard');
             setOnhandData([]);
+            setLotsData([]);
             setSearchOrgCode('');
             setSearchSubinventory('');
             setSearchQuery('');
+            setCurrentInventoryTab('byItem');
           }}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
@@ -782,6 +820,34 @@ export default function App() {
               <Text style={styles.notificationIconSmall}>🔔</Text>
             </TouchableOpacity>
           </View>
+        </View>
+
+        {/* Tab Navigation */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tabButton, currentInventoryTab === 'byItem' && styles.tabButtonActive]}
+            onPress={() => setCurrentInventoryTab('byItem')}
+          >
+            <Text style={[styles.tabButtonText, currentInventoryTab === 'byItem' && styles.tabButtonTextActive]}>
+              By Item
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabButton, currentInventoryTab === 'byLot' && styles.tabButtonActive]}
+            onPress={() => setCurrentInventoryTab('byLot')}
+          >
+            <Text style={[styles.tabButtonText, currentInventoryTab === 'byLot' && styles.tabButtonTextActive]}>
+              By Lot
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabButton, currentInventoryTab === 'byLocator' && styles.tabButtonActive]}
+            onPress={() => setCurrentInventoryTab('byLocator')}
+          >
+            <Text style={[styles.tabButtonText, currentInventoryTab === 'byLocator' && styles.tabButtonTextActive]}>
+              By Locator
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Search Section */}
@@ -870,57 +936,198 @@ export default function App() {
           </View>
         </Modal>
 
-        {/* Results */}
+        {/* Lots Modal */}
+        <Modal
+          visible={showLotsModal}
+          transparent={true}
+          animationType="slide"
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.lotsModalContainer}>
+              <View style={styles.lotsModalHeader}>
+                <Text style={styles.modalTitle}>Lots for {selectedItemForLots?.itemnumber}</Text>
+                <TouchableOpacity onPress={() => setShowLotsModal(false)}>
+                  <Text style={styles.modalCloseButton}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              {selectedItemForLots && (
+                <ScrollView style={styles.lotsScrollView}>
+                  {getLotsForItem(selectedItemForLots.itemnumber).length > 0 ? (
+                    getLotsForItem(selectedItemForLots.itemnumber).map((lot, index) => (
+                      <View key={index} style={styles.lotCard}>
+                        <View style={styles.lotCardHeader}>
+                          <Text style={styles.lotNumber}>Lot: {lot.lotnumber || 'N/A'}</Text>
+                          <View style={styles.lotQtyBadge}>
+                            <Text style={styles.lotQtyText}>{lot.primaryquantity || 0}</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.lotDetail}>Subinventory: {lot.sub_inventory_code || 'N/A'}</Text>
+                        <Text style={styles.lotDetail}>Status: {lot.materialstatus || 'N/A'}</Text>
+                        {lot.expirationdate && (
+                          <Text style={styles.lotDetail}>Expiry: {lot.expirationdate}</Text>
+                        )}
+                      </View>
+                    ))
+                  ) : (
+                    <View style={styles.noLotsContainer}>
+                      <Text style={styles.noLotsText}>No lots found for this item</Text>
+                    </View>
+                  )}
+                </ScrollView>
+              )}
+
+              <TouchableOpacity
+                style={styles.modalCloseButtonBottom}
+                onPress={() => setShowLotsModal(false)}
+              >
+                <Text style={styles.modalCloseButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Tab Content */}
         {onhandLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={COLORS.primary} />
             <Text style={styles.loadingText}>Loading inventory data...</Text>
           </View>
-        ) : onhandData.length > 0 ? (
-          <View style={styles.resultsContainer}>
-            <View style={styles.resultsHeader}>
-              <Text style={styles.resultsTitle}>
-                Results ({filteredOnhandData.length} of {onhandData.length} items)
-              </Text>
-            </View>
-
-            <FlatList
-              data={filteredOnhandData}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.onhandList}
-              renderItem={({ item }) => (
-                <View style={styles.onhandCard}>
-                  <View style={styles.onhandCardHeader}>
-                    <Text style={styles.onhandItemNumber}>{item.itemnumber || 'N/A'}</Text>
-                    <View style={styles.qohBadge}>
-                      <Text style={styles.qohText}>{item.qoh || 0} {item.uom || ''}</Text>
-                    </View>
-                  </View>
-
-                  {item.itemdescription && (
-                    <Text style={styles.onhandDescription}>{item.itemdescription}</Text>
-                  )}
-
-                  <View style={styles.onhandDetailsRow}>
-                    <View style={styles.onhandDetailItem}>
-                      <Text style={styles.onhandDetailLabel}>Org:</Text>
-                      <Text style={styles.onhandDetailValue}>{item.organizationcode || 'N/A'}</Text>
-                    </View>
-                    <View style={styles.onhandDetailItem}>
-                      <Text style={styles.onhandDetailLabel}>Subinventory:</Text>
-                      <Text style={styles.onhandDetailValue}>{item.subinventorycode || 'N/A'}</Text>
-                    </View>
-                  </View>
-                </View>
-              )}
-            />
-          </View>
         ) : (
-          <View style={styles.emptyStateContainer}>
-            <Text style={styles.emptyStateIcon}>📦</Text>
-            <Text style={styles.emptyStateText}>No data found</Text>
-            <Text style={styles.emptyStateHint}>Enter search parameters above and tap Search</Text>
-          </View>
+          <>
+            {/* By Item Tab */}
+            {currentInventoryTab === 'byItem' && (
+              onhandData.length > 0 ? (
+                <View style={styles.resultsContainer}>
+                  <View style={styles.resultsHeader}>
+                    <Text style={styles.resultsTitle}>
+                      Results ({filteredOnhandData.length} of {onhandData.length} items)
+                    </Text>
+                  </View>
+
+                  <FlatList
+                    data={filteredOnhandData}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={styles.onhandList}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.onhandCard}
+                        onPress={() => {
+                          setSelectedItemForLots(item);
+                          setShowLotsModal(true);
+                        }}
+                      >
+                        <View style={styles.onhandCardHeader}>
+                          <Text style={styles.onhandItemNumber}>{item.itemnumber || 'N/A'}</Text>
+                          <View style={styles.qohBadge}>
+                            <Text style={styles.qohText}>{item.qoh || 0} {item.uom || ''}</Text>
+                          </View>
+                        </View>
+
+                        {item.itemdescription && (
+                          <Text style={styles.onhandDescription}>{item.itemdescription}</Text>
+                        )}
+
+                        <View style={styles.onhandDetailsRow}>
+                          <View style={styles.onhandDetailItem}>
+                            <Text style={styles.onhandDetailLabel}>Org:</Text>
+                            <Text style={styles.onhandDetailValue}>{item.organizationcode || 'N/A'}</Text>
+                          </View>
+                          <View style={styles.onhandDetailItem}>
+                            <Text style={styles.onhandDetailLabel}>Subinventory:</Text>
+                            <Text style={styles.onhandDetailValue}>{item.subinventorycode || 'N/A'}</Text>
+                          </View>
+                        </View>
+
+                        <Text style={styles.tapToViewLots}>Tap to view lots</Text>
+                      </TouchableOpacity>
+                    )}
+                  />
+                </View>
+              ) : (
+                <View style={styles.emptyStateContainer}>
+                  <Text style={styles.emptyStateIcon}>📦</Text>
+                  <Text style={styles.emptyStateText}>No data found</Text>
+                  <Text style={styles.emptyStateHint}>Tap 📥 to fetch inventory data</Text>
+                </View>
+              )
+            )}
+
+            {/* By Lot Tab */}
+            {currentInventoryTab === 'byLot' && (
+              lotsData.length > 0 ? (
+                <View style={styles.resultsContainer}>
+                  <View style={styles.resultsHeader}>
+                    <Text style={styles.resultsTitle}>
+                      Results ({filteredLotsData.length} of {lotsData.length} lots)
+                    </Text>
+                  </View>
+
+                  <FlatList
+                    data={filteredLotsData}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={styles.onhandList}
+                    renderItem={({ item }) => (
+                      <View style={styles.lotItemCard}>
+                        <View style={styles.lotItemHeader}>
+                          <View style={styles.lotItemInfo}>
+                            <Text style={styles.lotItemCode}>{item.item_number || 'N/A'}</Text>
+                            <Text style={styles.lotItemLot}>Lot: {item.lotnumber || 'N/A'}</Text>
+                          </View>
+                          <View style={styles.lotItemQtyBadge}>
+                            <Text style={styles.lotItemQtyText}>{item.primaryquantity || 0}</Text>
+                          </View>
+                        </View>
+
+                        {item.item_description && (
+                          <Text style={styles.lotItemDescription}>{item.item_description}</Text>
+                        )}
+
+                        <View style={styles.lotItemDetailsRow}>
+                          <View style={styles.lotItemDetail}>
+                            <Text style={styles.lotItemDetailLabel}>Org:</Text>
+                            <Text style={styles.lotItemDetailValue}>{item.organization_code || 'N/A'}</Text>
+                          </View>
+                          <View style={styles.lotItemDetail}>
+                            <Text style={styles.lotItemDetailLabel}>Subinventory:</Text>
+                            <Text style={styles.lotItemDetailValue}>{item.sub_inventory_code || 'N/A'}</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.lotItemDetailsRow}>
+                          <View style={styles.lotItemDetail}>
+                            <Text style={styles.lotItemDetailLabel}>Status:</Text>
+                            <Text style={styles.lotItemDetailValue}>{item.materialstatus || 'N/A'}</Text>
+                          </View>
+                          {item.expirationdate && (
+                            <View style={styles.lotItemDetail}>
+                              <Text style={styles.lotItemDetailLabel}>Expiry:</Text>
+                              <Text style={styles.lotItemDetailValue}>{item.expirationdate}</Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    )}
+                  />
+                </View>
+              ) : (
+                <View style={styles.emptyStateContainer}>
+                  <Text style={styles.emptyStateIcon}>📦</Text>
+                  <Text style={styles.emptyStateText}>No lots data found</Text>
+                  <Text style={styles.emptyStateHint}>Tap 📥 to fetch inventory data</Text>
+                </View>
+              )
+            )}
+
+            {/* By Locator Tab */}
+            {currentInventoryTab === 'byLocator' && (
+              <View style={styles.emptyStateContainer}>
+                <Text style={styles.emptyStateIcon}>📍</Text>
+                <Text style={styles.emptyStateText}>By Locator</Text>
+                <Text style={styles.emptyStateHint}>Coming soon...</Text>
+              </View>
+            )}
+          </>
         )}
       </View>
     );
@@ -1858,5 +2065,185 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.sm,
     color: COLORS.textSecondary,
     textAlign: 'center',
+  },
+
+  // Tab Navigation Styles
+  tabContainer: {
+    backgroundColor: COLORS.white,
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: SPACING.md,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabButtonActive: {
+    borderBottomColor: COLORS.primary,
+  },
+  tabButtonText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  tabButtonTextActive: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
+  },
+
+  // Lots Modal Styles
+  lotsModalContainer: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: SPACING.lg,
+    width: '90%',
+    maxWidth: 500,
+    maxHeight: '70%',
+  },
+  lotsModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  modalCloseButton: {
+    fontSize: FONT_SIZES.xl,
+    color: COLORS.textSecondary,
+    fontWeight: 'bold',
+  },
+  lotsScrollView: {
+    maxHeight: 400,
+  },
+  lotCard: {
+    backgroundColor: COLORS.backgroundSecondary,
+    borderRadius: 8,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  lotCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  lotNumber: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: 'bold',
+    color: COLORS.text,
+  },
+  lotQtyBadge: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: 8,
+  },
+  lotQtyText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: 'bold',
+  },
+  lotDetail: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.xs,
+  },
+  noLotsContainer: {
+    padding: SPACING.xl,
+    alignItems: 'center',
+  },
+  noLotsText: {
+    fontSize: FONT_SIZES.md,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  modalCloseButtonBottom: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    padding: SPACING.md,
+    alignItems: 'center',
+    marginTop: SPACING.md,
+  },
+  modalCloseButtonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.md,
+    fontWeight: 'bold',
+  },
+  tapToViewLots: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.primary,
+    fontStyle: 'italic',
+    marginTop: SPACING.xs,
+    textAlign: 'center',
+  },
+
+  // By Lot Tab Item Card Styles
+  lotItemCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  lotItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: SPACING.sm,
+  },
+  lotItemInfo: {
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  lotItemCode: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginBottom: SPACING.xs,
+  },
+  lotItemLot: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  lotItemQtyBadge: {
+    backgroundColor: COLORS.success,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: 8,
+  },
+  lotItemQtyText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.md,
+    fontWeight: 'bold',
+  },
+  lotItemDescription: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.text,
+    fontStyle: 'italic',
+    marginBottom: SPACING.sm,
+  },
+  lotItemDetailsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: SPACING.xs,
+  },
+  lotItemDetail: {
+    flex: 1,
+  },
+  lotItemDetailLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textSecondary,
+    marginBottom: 2,
+  },
+  lotItemDetailValue: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.text,
+    fontWeight: '600',
   },
 });
