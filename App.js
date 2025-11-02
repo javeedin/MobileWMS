@@ -77,6 +77,12 @@ export default function App() {
   const [scanningForItem, setScanningForItem] = useState(null);
   const [scannedLocator, setScannedLocator] = useState('');
 
+  // Inventory Onhand state
+  const [onhandData, setOnhandData] = useState([]);
+  const [onhandLoading, setOnhandLoading] = useState(false);
+  const [searchOrgCode, setSearchOrgCode] = useState('');
+  const [searchSubinventory, setSearchSubinventory] = useState('');
+
   // Handle Login
   const handleLogin = () => {
     if (username === 'admin' && password === 'admin123') {
@@ -126,6 +132,39 @@ export default function App() {
     } catch (error) {
       Alert.alert('Error', 'Failed to fetch data: ' + error.message);
       setLoading(false);
+    }
+  };
+
+  // Fetch Inventory Onhand
+  const fetchOnhandData = async () => {
+    if (!searchOrgCode) {
+      Alert.alert('Error', 'Please enter Organization Code');
+      return;
+    }
+
+    setOnhandLoading(true);
+    try {
+      // Note: Using the typo from user's URL "orgainzation_code"
+      let url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhand?orgainzation_code=${searchOrgCode}`;
+
+      if (searchSubinventory) {
+        url += `&subinventory=${searchSubinventory}`;
+      }
+
+      const response = await fetch(url);
+      const data = await response.json();
+
+      // Transform data
+      const transformedData = (data.items || []).map((item, index) => ({
+        ...item,
+        id: index.toString(),
+      }));
+
+      setOnhandData(transformedData);
+      setOnhandLoading(false);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to fetch onhand data: ' + error.message);
+      setOnhandLoading(false);
     }
   };
 
@@ -650,27 +689,112 @@ export default function App() {
     );
   }
 
-  // Inventory Screen
+  // Inventory Onhand Screen
   if (currentScreen === 'Inventory') {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
 
+        {/* Header */}
         <View style={styles.screenHeader}>
-          <TouchableOpacity onPress={() => setCurrentScreen('Dashboard')}>
+          <TouchableOpacity onPress={() => {
+            setCurrentScreen('Dashboard');
+            setOnhandData([]);
+            setSearchOrgCode('');
+            setSearchSubinventory('');
+          }}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.screenTitle}>Inventory</Text>
+          <Text style={styles.screenTitle}>Inventory Onhand</Text>
           <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
             <Text style={styles.notificationIconSmall}>🔔</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.contentCenter}>
-          <Text style={styles.placeholderIcon}>📦</Text>
-          <Text style={styles.placeholderTitle}>Inventory Management</Text>
-          <Text style={styles.placeholderText}>Coming soon...</Text>
+        {/* Search Form */}
+        <View style={styles.searchForm}>
+          <Text style={styles.searchFormTitle}>Search Parameters</Text>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Organization Code *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter Organization Code (e.g., AMS)"
+              value={searchOrgCode}
+              onChangeText={setSearchOrgCode}
+              autoCapitalize="characters"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Subinventory (Optional)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter Subinventory"
+              value={searchSubinventory}
+              onChangeText={setSearchSubinventory}
+              autoCapitalize="characters"
+            />
+          </View>
+
+          <TouchableOpacity
+            style={styles.searchButton}
+            onPress={fetchOnhandData}
+          >
+            <Text style={styles.searchButtonText}>🔍 Search Inventory</Text>
+          </TouchableOpacity>
         </View>
+
+        {/* Results */}
+        {onhandLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Loading inventory data...</Text>
+          </View>
+        ) : onhandData.length > 0 ? (
+          <View style={styles.resultsContainer}>
+            <View style={styles.resultsHeader}>
+              <Text style={styles.resultsTitle}>Results ({onhandData.length} items)</Text>
+            </View>
+
+            <FlatList
+              data={onhandData}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.onhandList}
+              renderItem={({ item }) => (
+                <View style={styles.onhandCard}>
+                  <View style={styles.onhandCardHeader}>
+                    <Text style={styles.onhandItemNumber}>{item.itemnumber || 'N/A'}</Text>
+                    <View style={styles.qohBadge}>
+                      <Text style={styles.qohText}>{item.qoh || 0} {item.uom || ''}</Text>
+                    </View>
+                  </View>
+
+                  {item.itemdescription && (
+                    <Text style={styles.onhandDescription}>{item.itemdescription}</Text>
+                  )}
+
+                  <View style={styles.onhandDetailsRow}>
+                    <View style={styles.onhandDetailItem}>
+                      <Text style={styles.onhandDetailLabel}>Org:</Text>
+                      <Text style={styles.onhandDetailValue}>{item.organizationcode || 'N/A'}</Text>
+                    </View>
+                    <View style={styles.onhandDetailItem}>
+                      <Text style={styles.onhandDetailLabel}>Subinventory:</Text>
+                      <Text style={styles.onhandDetailValue}>{item.subinventorycode || 'N/A'}</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+            />
+          </View>
+        ) : (
+          <View style={styles.emptyStateContainer}>
+            <Text style={styles.emptyStateIcon}>📦</Text>
+            <Text style={styles.emptyStateText}>No data found</Text>
+            <Text style={styles.emptyStateHint}>Enter search parameters above and tap Search</Text>
+          </View>
+        )}
       </View>
     );
   }
@@ -1415,5 +1539,129 @@ const styles = StyleSheet.create({
   placeholderText: {
     fontSize: FONT_SIZES.md,
     color: COLORS.textSecondary,
+  },
+
+  // Inventory Onhand Styles
+  searchForm: {
+    backgroundColor: COLORS.white,
+    padding: SPACING.lg,
+    margin: SPACING.md,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  searchFormTitle: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginBottom: SPACING.md,
+  },
+  searchButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    padding: SPACING.md,
+    alignItems: 'center',
+    marginTop: SPACING.sm,
+  },
+  searchButtonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.md,
+    fontWeight: 'bold',
+  },
+  resultsContainer: {
+    flex: 1,
+  },
+  resultsHeader: {
+    backgroundColor: COLORS.white,
+    padding: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  resultsTitle: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  onhandList: {
+    padding: SPACING.md,
+  },
+  onhandCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  onhandCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  onhandItemNumber: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    flex: 1,
+  },
+  qohBadge: {
+    backgroundColor: COLORS.success,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: 8,
+  },
+  qohText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: 'bold',
+  },
+  onhandDescription: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.text,
+    fontStyle: 'italic',
+    marginBottom: SPACING.sm,
+  },
+  onhandDetailsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: SPACING.xs,
+  },
+  onhandDetailItem: {
+    flex: 1,
+  },
+  onhandDetailLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textSecondary,
+    marginBottom: 2,
+  },
+  onhandDetailValue: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.text,
+    fontWeight: '600',
+  },
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.xl,
+  },
+  emptyStateIcon: {
+    fontSize: 60,
+    marginBottom: SPACING.md,
+  },
+  emptyStateText: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginBottom: SPACING.xs,
+  },
+  emptyStateHint: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
   },
 });
