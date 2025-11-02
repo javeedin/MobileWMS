@@ -117,6 +117,19 @@ export default function App() {
     setCurrentScreen('Login');
     setUsername('admin');
     setPassword('admin123');
+
+    // Clear all inventory data on logout
+    setOnhandData([]);
+    setLotsData([]);
+    setSearchOrgCode('');
+    setSearchSubinventory('');
+    setSearchQuery('');
+    setCurrentInventoryTab('byItem');
+
+    // Clear PO data
+    setPoData([]);
+    setSelectedPO(null);
+    setSelectedItem(null);
   };
 
   // Fetch Purchase Orders
@@ -832,12 +845,7 @@ export default function App() {
         <View style={styles.screenHeader}>
           <TouchableOpacity onPress={() => {
             setCurrentScreen('Dashboard');
-            setOnhandData([]);
-            setLotsData([]);
-            setSearchOrgCode('');
-            setSearchSubinventory('');
-            setSearchQuery('');
-            setCurrentInventoryTab('byItem');
+            setSearchQuery(''); // Clear search filter when navigating away
           }}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
