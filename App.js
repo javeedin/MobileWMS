@@ -94,6 +94,11 @@ export default function App() {
   const [selectedItemForTransfer, setSelectedItemForTransfer] = useState(null);
   const [selectedDestinationLocator, setSelectedDestinationLocator] = useState(null);
 
+  // Ship Orders state
+  const [shipOrdersData, setShipOrdersData] = useState([]);
+  const [shipOrdersLoading, setShipOrdersLoading] = useState(false);
+  const [selectedShipOrder, setSelectedShipOrder] = useState(null);
+
   // Handle Login
   const handleLogin = () => {
     if (username === 'admin' && password === 'admin123') {
@@ -156,6 +161,27 @@ export default function App() {
     } catch (error) {
       Alert.alert('Error', 'Failed to fetch data: ' + error.message);
       setLoading(false);
+    }
+  };
+
+  // Fetch Ship Orders
+  const fetchShipOrdersData = async () => {
+    setShipOrdersLoading(true);
+    try {
+      const response = await fetch('https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/pendingpickingdetails');
+      const data = await response.json();
+
+      // Transform data
+      const transformedData = (data.items || []).map((item, index) => ({
+        ...item,
+        id: index.toString(),
+      }));
+
+      setShipOrdersData(transformedData);
+      setShipOrdersLoading(false);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to fetch ship orders: ' + error.message);
+      setShipOrdersLoading(false);
     }
   };
 
@@ -1448,27 +1474,191 @@ export default function App() {
     );
   }
 
-  // Ship Screen
-  if (currentScreen === 'Ship') {
+  // Ship Screen - Order Summary
+  if (currentScreen === 'Ship' && !selectedShipOrder) {
+    // Group ship orders by source_order_number
+    const groupedShipOrders = shipOrdersData.reduce((acc, item) => {
+      const orderNum = item.source_order_number || 'Unknown';
+      if (!acc[orderNum]) {
+        acc[orderNum] = {
+          items: [],
+          account_name: item.account_name || 'Unknown Customer',
+        };
+      }
+      acc[orderNum].items.push(item);
+      return acc;
+    }, {});
+
+    const orderList = Object.keys(groupedShipOrders).map(orderNum => ({
+      source_order_number: orderNum,
+      items: groupedShipOrders[orderNum].items,
+      lineCount: groupedShipOrders[orderNum].items.length,
+      account_name: groupedShipOrders[orderNum].account_name,
+    }));
+
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
 
+        {/* Header */}
         <View style={styles.screenHeader}>
           <TouchableOpacity onPress={() => setCurrentScreen('Dashboard')}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
           <Text style={styles.screenTitle}>Ship Orders</Text>
-          <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
-            <Text style={styles.notificationIconSmall}>🔔</Text>
-          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            {selectedOrg && <Text style={styles.headerOrgText}>{selectedOrg}</Text>}
+            <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
+              <Text style={styles.notificationIconSmall}>🔔</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={fetchShipOrdersData}>
+              <Text style={styles.refreshButton}>📥</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <View style={styles.contentCenter}>
-          <Text style={styles.placeholderIcon}>📤</Text>
-          <Text style={styles.placeholderTitle}>Ship Orders</Text>
-          <Text style={styles.placeholderText}>Coming soon...</Text>
+        {/* Stats */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{orderList.length}</Text>
+            <Text style={styles.statLabel}>Total Orders</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{shipOrdersData.length}</Text>
+            <Text style={styles.statLabel}>Total Lines</Text>
+          </View>
         </View>
+
+        {shipOrdersLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Loading Ship Orders...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={orderList}
+            keyExtractor={(item) => item.source_order_number}
+            contentContainerStyle={styles.poList}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.shipOrderCard}
+                onPress={() => {
+                  setSelectedShipOrder(item);
+                  setCurrentScreen('ShipOrderItems');
+                }}
+              >
+                <View style={styles.shipOrderCardHeader}>
+                  <Text style={styles.shipOrderNumber}>Order: {item.source_order_number}</Text>
+                  <View style={styles.itemCountBadge}>
+                    <Text style={styles.itemCountText}>{item.lineCount} lines</Text>
+                  </View>
+                </View>
+                <Text style={styles.shipOrderCustomer}>Customer: {item.account_name}</Text>
+              </TouchableOpacity>
+            )}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No ship orders found</Text>
+                <TouchableOpacity style={styles.retryButton} onPress={fetchShipOrdersData}>
+                  <Text style={styles.retryButtonText}>Fetch Ship Orders</Text>
+                </TouchableOpacity>
+              </View>
+            }
+          />
+        )}
+      </View>
+    );
+  }
+
+  // Ship Order Items Screen
+  if (currentScreen === 'ShipOrderItems' && selectedShipOrder) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity onPress={() => { setSelectedShipOrder(null); setCurrentScreen('Ship'); }}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.screenTitle}>Order Items</Text>
+            <Text style={styles.screenSubtitle}>Order: {selectedShipOrder.source_order_number}</Text>
+          </View>
+          <View style={styles.headerRight}>
+            {selectedOrg && <Text style={styles.headerOrgText}>{selectedOrg}</Text>}
+            <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
+              <Text style={styles.notificationIconSmall}>🔔</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Items List */}
+        <FlatList
+          data={selectedShipOrder.items}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.itemsList}
+          renderItem={({ item }) => (
+            <View style={styles.shipItemCard}>
+              <View style={styles.shipItemHeader}>
+                <Text style={styles.shipItemCode}>{item.item_number || 'N/A'}</Text>
+                <View style={styles.shipItemQtyBadge}>
+                  <Text style={styles.shipItemQtyText}>{item.qty || 0} {item.ordered_uom || ''}</Text>
+                </View>
+              </View>
+
+              {item.description && (
+                <Text style={styles.shipItemDescription}>{item.description}</Text>
+              )}
+
+              <View style={styles.shipItemDetailsRow}>
+                <View style={styles.shipItemDetail}>
+                  <Text style={styles.shipItemDetailLabel}>Lot Number:</Text>
+                  <Text style={styles.shipItemDetailValue}>{item.lot_number || 'N/A'}</Text>
+                </View>
+                <View style={styles.shipItemDetail}>
+                  <Text style={styles.shipItemDetailLabel}>Organization:</Text>
+                  <Text style={styles.shipItemDetailValue}>{item.organization_name || 'N/A'}</Text>
+                </View>
+              </View>
+
+              {item.picker_name && (
+                <Text style={styles.shipItemPicker}>Picker: {item.picker_name}</Text>
+              )}
+
+              <View style={styles.shipItemActions}>
+                <TouchableOpacity
+                  style={styles.shipPickButton}
+                  onPress={() => {
+                    Alert.alert(
+                      'Pick Confirmed',
+                      `Item ${item.item_number} has been picked\nQty: ${item.qty} ${item.ordered_uom}`,
+                      [{ text: 'OK' }]
+                    );
+                  }}
+                >
+                  <Text style={styles.shipPickButtonText}>✓ Pick</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.shipCancelButton}
+                  onPress={() => {
+                    Alert.alert(
+                      'Cancel Pick',
+                      `Are you sure you want to cancel picking ${item.item_number}?`,
+                      [
+                        { text: 'No', style: 'cancel' },
+                        { text: 'Yes', onPress: () => Alert.alert('Cancelled', 'Pick cancelled') }
+                      ]
+                    );
+                  }}
+                >
+                  <Text style={styles.shipCancelButtonText}>✕ Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        />
       </View>
     );
   }
@@ -2762,5 +2952,124 @@ const styles = StyleSheet.create({
   },
   transferConfirmButtonTextDisabled: {
     color: COLORS.textSecondary,
+  },
+
+  // Ship Orders Styles
+  shipOrderCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  shipOrderCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  shipOrderNumber: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: 'bold',
+    color: COLORS.text,
+  },
+  shipOrderCustomer: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textSecondary,
+  },
+
+  // Ship Order Items Styles
+  shipItemCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  shipItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  shipItemCode: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    flex: 1,
+  },
+  shipItemQtyBadge: {
+    backgroundColor: COLORS.success,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: 8,
+  },
+  shipItemQtyText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: 'bold',
+  },
+  shipItemDescription: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.text,
+    fontStyle: 'italic',
+    marginBottom: SPACING.sm,
+  },
+  shipItemDetailsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.xs,
+  },
+  shipItemDetail: {
+    flex: 1,
+  },
+  shipItemDetailLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textSecondary,
+    marginBottom: 2,
+  },
+  shipItemDetailValue: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.text,
+    fontWeight: '600',
+  },
+  shipItemPicker: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.primary,
+    fontStyle: 'italic',
+    marginBottom: SPACING.sm,
+  },
+  shipItemActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: SPACING.md,
+  },
+  shipPickButton: {
+    flex: 1,
+    backgroundColor: COLORS.success,
+    borderRadius: 10,
+    padding: SPACING.md,
+    alignItems: 'center',
+    marginRight: SPACING.sm,
+  },
+  shipPickButtonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.md,
+    fontWeight: 'bold',
+  },
+  shipCancelButton: {
+    flex: 1,
+    backgroundColor: COLORS.danger,
+    borderRadius: 10,
+    padding: SPACING.md,
+    alignItems: 'center',
+    marginLeft: SPACING.sm,
+  },
+  shipCancelButtonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.md,
+    fontWeight: 'bold',
   },
 });
