@@ -248,6 +248,39 @@ export default function App() {
             seen.add(searchKey);
           }
         });
+      } else if (currentInventoryTab === 'byLocator' && onhandData.length > 0) {
+        // For By Locator tab: search item code, description, and locator
+        onhandData.forEach(item => {
+          const searchKey = `${item.itemnumber}_${item.locator}`;
+
+          // Add locator matches
+          if (item.locator && item.locator.toLowerCase().includes(text.toLowerCase()) && !seen.has(searchKey)) {
+            suggestions.push({
+              type: 'locator',
+              value: item.locator,
+              display: `Locator: ${item.locator} - ${item.itemnumber || 'N/A'} - ${item.itemdescription || 'No description'}`
+            });
+            seen.add(searchKey);
+          }
+          // Add item code matches
+          else if (item.itemnumber && item.itemnumber.toLowerCase().includes(text.toLowerCase()) && !seen.has(item.itemnumber)) {
+            suggestions.push({
+              type: 'code',
+              value: item.itemnumber,
+              display: `${item.itemnumber} - ${item.itemdescription || 'No description'}`
+            });
+            seen.add(item.itemnumber);
+          }
+          // Add description matches
+          else if (item.itemdescription && item.itemdescription.toLowerCase().includes(text.toLowerCase()) && !seen.has(item.itemdescription)) {
+            suggestions.push({
+              type: 'description',
+              value: item.itemdescription,
+              display: `${item.itemnumber || 'N/A'} - ${item.itemdescription}`
+            });
+            seen.add(item.itemdescription);
+          }
+        });
       } else if (onhandData.length > 0) {
         // For By Item tab: search item code and description
         onhandData.forEach(item => {
@@ -837,6 +870,16 @@ export default function App() {
       return matchesItemCode || matchesDescription || matchesLot;
     });
 
+    // Filter onhand data for "By Locator" tab
+    const filteredLocatorData = onhandData.filter(item => {
+      if (!searchQuery) return true;
+      const query = searchQuery.toLowerCase();
+      const matchesItemCode = item.itemnumber && item.itemnumber.toLowerCase().includes(query);
+      const matchesDescription = item.itemdescription && item.itemdescription.toLowerCase().includes(query);
+      const matchesLocator = item.locator && item.locator.toLowerCase().includes(query);
+      return matchesItemCode || matchesDescription || matchesLocator;
+    });
+
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
@@ -1095,6 +1138,15 @@ export default function App() {
                             </View>
                           </View>
 
+                          {item.locator && (
+                            <View style={styles.onhandDetailsRow}>
+                              <View style={styles.onhandDetailItem}>
+                                <Text style={styles.onhandDetailLabel}>Locator:</Text>
+                                <Text style={styles.onhandDetailValue}>{item.locator}</Text>
+                              </View>
+                            </View>
+                          )}
+
                           <Text style={styles.lotCountInfo}>
                             {lotsCount} {lotsCount === 1 ? 'lot' : 'lots'} available • Tap to view lots
                           </Text>
@@ -1180,11 +1232,59 @@ export default function App() {
 
             {/* By Locator Tab */}
             {currentInventoryTab === 'byLocator' && (
-              <View style={styles.emptyStateContainer}>
-                <Text style={styles.emptyStateIcon}>📍</Text>
-                <Text style={styles.emptyStateText}>By Locator</Text>
-                <Text style={styles.emptyStateHint}>Coming soon...</Text>
-              </View>
+              onhandData.length > 0 ? (
+                <View style={styles.resultsContainer}>
+                  <View style={styles.resultsHeader}>
+                    <Text style={styles.resultsTitle}>
+                      Results ({filteredLocatorData.length} of {onhandData.length} items)
+                    </Text>
+                  </View>
+
+                  <FlatList
+                    data={filteredLocatorData}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={styles.onhandList}
+                    renderItem={({ item }) => (
+                      <View style={styles.locatorItemCard}>
+                        <View style={styles.locatorItemHeader}>
+                          <View style={styles.locatorItemInfo}>
+                            <Text style={styles.locatorName}>📍 {item.locator || 'N/A'}</Text>
+                            <Text style={styles.locatorItemCode}>{item.itemnumber || 'N/A'}</Text>
+                          </View>
+                          <View style={styles.locatorItemQtyBadge}>
+                            <Text style={styles.locatorItemQtyText}>{item.qoh || 0}</Text>
+                          </View>
+                        </View>
+
+                        {item.itemdescription && (
+                          <Text style={styles.locatorItemDescription}>{item.itemdescription}</Text>
+                        )}
+
+                        <View style={styles.locatorItemDetailsRow}>
+                          <View style={styles.locatorItemDetail}>
+                            <Text style={styles.locatorItemDetailLabel}>Org:</Text>
+                            <Text style={styles.locatorItemDetailValue}>{item.organizationcode || 'N/A'}</Text>
+                          </View>
+                          <View style={styles.locatorItemDetail}>
+                            <Text style={styles.locatorItemDetailLabel}>Subinventory:</Text>
+                            <Text style={styles.locatorItemDetailValue}>{item.subinventorycode || 'N/A'}</Text>
+                          </View>
+                          <View style={styles.locatorItemDetail}>
+                            <Text style={styles.locatorItemDetailLabel}>UOM:</Text>
+                            <Text style={styles.locatorItemDetailValue}>{item.uom || 'N/A'}</Text>
+                          </View>
+                        </View>
+                      </View>
+                    )}
+                  />
+                </View>
+              ) : (
+                <View style={styles.emptyStateContainer}>
+                  <Text style={styles.emptyStateIcon}>📍</Text>
+                  <Text style={styles.emptyStateText}>No locator data found</Text>
+                  <Text style={styles.emptyStateHint}>Tap 📥 to fetch inventory data</Text>
+                </View>
+              )
             )}
           </>
         )}
@@ -2324,6 +2424,72 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   lotItemDetailValue: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.text,
+    fontWeight: '600',
+  },
+
+  // By Locator Tab Item Card Styles
+  locatorItemCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  locatorItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: SPACING.sm,
+  },
+  locatorItemInfo: {
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  locatorName: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+    marginBottom: SPACING.xs,
+  },
+  locatorItemCode: {
+    fontSize: FONT_SIZES.md,
+    color: COLORS.text,
+    fontWeight: '600',
+  },
+  locatorItemQtyBadge: {
+    backgroundColor: COLORS.success,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: 8,
+  },
+  locatorItemQtyText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.md,
+    fontWeight: 'bold',
+  },
+  locatorItemDescription: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.text,
+    fontStyle: 'italic',
+    marginBottom: SPACING.sm,
+  },
+  locatorItemDetailsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: SPACING.xs,
+  },
+  locatorItemDetail: {
+    flex: 1,
+  },
+  locatorItemDetailLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textSecondary,
+    marginBottom: 2,
+  },
+  locatorItemDetailValue: {
     fontSize: FONT_SIZES.sm,
     color: COLORS.text,
     fontWeight: '600',
