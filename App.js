@@ -90,6 +90,9 @@ export default function App() {
   const [currentInventoryTab, setCurrentInventoryTab] = useState('byItem'); // byItem, byLot, byLocator
   const [selectedItemForLots, setSelectedItemForLots] = useState(null);
   const [showLotsModal, setShowLotsModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [selectedItemForTransfer, setSelectedItemForTransfer] = useState(null);
+  const [selectedDestinationLocator, setSelectedDestinationLocator] = useState(null);
 
   // Handle Login
   const handleLogin = () => {
@@ -1084,6 +1087,123 @@ export default function App() {
           </View>
         </Modal>
 
+        {/* Transfer Modal */}
+        <Modal
+          visible={showTransferModal}
+          transparent={true}
+          animationType="slide"
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.transferModalContainer}>
+              <View style={styles.transferModalHeader}>
+                <Text style={styles.modalTitle}>Locator Transfer</Text>
+                <TouchableOpacity onPress={() => setShowTransferModal(false)}>
+                  <Text style={styles.modalCloseButton}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              {selectedItemForTransfer && (
+                <View>
+                  {/* Current Item Info */}
+                  <View style={styles.transferCurrentInfo}>
+                    <Text style={styles.transferSectionTitle}>Current Details</Text>
+                    <View style={styles.transferInfoRow}>
+                      <Text style={styles.transferInfoLabel}>Item Code:</Text>
+                      <Text style={styles.transferInfoValue}>{selectedItemForTransfer.itemnumber || 'N/A'}</Text>
+                    </View>
+                    <View style={styles.transferInfoRow}>
+                      <Text style={styles.transferInfoLabel}>Description:</Text>
+                      <Text style={styles.transferInfoValue}>{selectedItemForTransfer.itemdescription || 'N/A'}</Text>
+                    </View>
+                    <View style={styles.transferInfoRow}>
+                      <Text style={styles.transferInfoLabel}>Current Locator:</Text>
+                      <Text style={styles.transferInfoValueHighlight}>📍 {selectedItemForTransfer.locator || 'N/A'}</Text>
+                    </View>
+                    <View style={styles.transferInfoRow}>
+                      <Text style={styles.transferInfoLabel}>Quantity:</Text>
+                      <Text style={styles.transferInfoValue}>{selectedItemForTransfer.qoh || 0} {selectedItemForTransfer.uom || ''}</Text>
+                    </View>
+                  </View>
+
+                  {/* Destination Locator Selection */}
+                  <View style={styles.transferDestinationSection}>
+                    <Text style={styles.transferSectionTitle}>Select Destination Locator</Text>
+                    <ScrollView style={styles.transferLocatorList}>
+                      {[...new Set(onhandData.map(item => item.locator).filter(loc => loc && loc !== selectedItemForTransfer.locator))].map((locator, index) => (
+                        <TouchableOpacity
+                          key={index}
+                          style={[
+                            styles.transferLocatorOption,
+                            selectedDestinationLocator === locator && styles.transferLocatorOptionSelected
+                          ]}
+                          onPress={() => setSelectedDestinationLocator(locator)}
+                        >
+                          <Text style={[
+                            styles.transferLocatorOptionText,
+                            selectedDestinationLocator === locator && styles.transferLocatorOptionTextSelected
+                          ]}>
+                            📍 {locator}
+                          </Text>
+                          {selectedDestinationLocator === locator && (
+                            <Text style={styles.transferLocatorSelectedIcon}>✓</Text>
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+
+                  {/* Action Buttons */}
+                  <View style={styles.transferActionButtons}>
+                    <TouchableOpacity
+                      style={styles.transferCancelButton}
+                      onPress={() => {
+                        setShowTransferModal(false);
+                        setSelectedItemForTransfer(null);
+                        setSelectedDestinationLocator(null);
+                      }}
+                    >
+                      <Text style={styles.transferCancelButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.transferConfirmButton,
+                        !selectedDestinationLocator && styles.transferConfirmButtonDisabled
+                      ]}
+                      disabled={!selectedDestinationLocator}
+                      onPress={() => {
+                        if (selectedDestinationLocator) {
+                          Alert.alert(
+                            'Transfer Confirmed',
+                            `Item ${selectedItemForTransfer.itemnumber} will be transferred from ${selectedItemForTransfer.locator} to ${selectedDestinationLocator}`,
+                            [
+                              {
+                                text: 'OK',
+                                onPress: () => {
+                                  setShowTransferModal(false);
+                                  setSelectedItemForTransfer(null);
+                                  setSelectedDestinationLocator(null);
+                                }
+                              }
+                            ]
+                          );
+                        }
+                      }}
+                    >
+                      <Text style={[
+                        styles.transferConfirmButtonText,
+                        !selectedDestinationLocator && styles.transferConfirmButtonTextDisabled
+                      ]}>
+                        Confirm Transfer
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        </Modal>
+
         {/* Tab Content */}
         {onhandLoading ? (
           <View style={styles.loadingContainer}>
@@ -1274,6 +1394,17 @@ export default function App() {
                             <Text style={styles.locatorItemDetailValue}>{item.uom || 'N/A'}</Text>
                           </View>
                         </View>
+
+                        <TouchableOpacity
+                          style={styles.transferButton}
+                          onPress={() => {
+                            setSelectedItemForTransfer(item);
+                            setSelectedDestinationLocator(null);
+                            setShowTransferModal(true);
+                          }}
+                        >
+                          <Text style={styles.transferButtonText}>🔄 Transfer</Text>
+                        </TouchableOpacity>
                       </View>
                     )}
                   />
@@ -2493,5 +2624,143 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.sm,
     color: COLORS.text,
     fontWeight: '600',
+  },
+
+  // Transfer Button Style
+  transferButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+    alignItems: 'center',
+    marginTop: SPACING.md,
+  },
+  transferButtonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+  },
+
+  // Transfer Modal Styles
+  transferModalContainer: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: SPACING.lg,
+    width: '90%',
+    maxWidth: 500,
+    maxHeight: '80%',
+  },
+  transferModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  transferCurrentInfo: {
+    backgroundColor: COLORS.backgroundSecondary,
+    borderRadius: 12,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  transferSectionTitle: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginBottom: SPACING.sm,
+  },
+  transferInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.xs,
+  },
+  transferInfoLabel: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  transferInfoValue: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.text,
+    fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'right',
+  },
+  transferInfoValueHighlight: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.primary,
+    fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'right',
+  },
+  transferDestinationSection: {
+    marginBottom: SPACING.md,
+  },
+  transferLocatorList: {
+    maxHeight: 200,
+  },
+  transferLocatorOption: {
+    backgroundColor: COLORS.backgroundSecondary,
+    borderRadius: 8,
+    padding: SPACING.md,
+    marginBottom: SPACING.xs,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  transferLocatorOptionSelected: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  transferLocatorOptionText: {
+    fontSize: FONT_SIZES.md,
+    color: COLORS.text,
+    fontWeight: '600',
+  },
+  transferLocatorOptionTextSelected: {
+    color: COLORS.white,
+  },
+  transferLocatorSelectedIcon: {
+    fontSize: FONT_SIZES.lg,
+    color: COLORS.white,
+    fontWeight: 'bold',
+  },
+  transferActionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: SPACING.md,
+  },
+  transferCancelButton: {
+    flex: 1,
+    backgroundColor: COLORS.backgroundSecondary,
+    borderRadius: 10,
+    padding: SPACING.md,
+    alignItems: 'center',
+    marginRight: SPACING.sm,
+  },
+  transferCancelButtonText: {
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZES.md,
+    fontWeight: 'bold',
+  },
+  transferConfirmButton: {
+    flex: 1,
+    backgroundColor: COLORS.success,
+    borderRadius: 10,
+    padding: SPACING.md,
+    alignItems: 'center',
+    marginLeft: SPACING.sm,
+  },
+  transferConfirmButtonDisabled: {
+    backgroundColor: COLORS.border,
+  },
+  transferConfirmButtonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.md,
+    fontWeight: 'bold',
+  },
+  transferConfirmButtonTextDisabled: {
+    color: COLORS.textSecondary,
   },
 });
