@@ -98,6 +98,9 @@ export default function App() {
   const [shipOrdersData, setShipOrdersData] = useState([]);
   const [shipOrdersLoading, setShipOrdersLoading] = useState(false);
   const [selectedShipOrder, setSelectedShipOrder] = useState(null);
+  const [shipOrderSearchQuery, setShipOrderSearchQuery] = useState('');
+  const [shipOrderSuggestions, setShipOrderSuggestions] = useState([]);
+  const [showShipOrderSuggestions, setShowShipOrderSuggestions] = useState(false);
 
   // Handle Login
   const handleLogin = () => {
@@ -1572,13 +1575,61 @@ export default function App() {
 
   // Ship Order Items Screen
   if (currentScreen === 'ShipOrderItems' && selectedShipOrder) {
+    // Handle search for ship order items
+    const handleShipOrderSearchChange = (text) => {
+      setShipOrderSearchQuery(text);
+      if (text.length > 1 && selectedShipOrder.items.length > 0) {
+        const suggestions = [];
+        const seen = new Set();
+
+        selectedShipOrder.items.forEach(item => {
+          // Add item code matches
+          if (item.item_number && item.item_number.toLowerCase().includes(text.toLowerCase()) && !seen.has(item.item_number)) {
+            suggestions.push({
+              type: 'code',
+              value: item.item_number,
+              display: `${item.item_number} - ${item.description || 'No description'}`
+            });
+            seen.add(item.item_number);
+          }
+          // Add description matches
+          else if (item.description && item.description.toLowerCase().includes(text.toLowerCase()) && !seen.has(item.description)) {
+            suggestions.push({
+              type: 'description',
+              value: item.description,
+              display: `${item.item_number || 'N/A'} - ${item.description}`
+            });
+            seen.add(item.description);
+          }
+        });
+
+        setShipOrderSuggestions(suggestions.slice(0, 5));
+        setShowShipOrderSuggestions(suggestions.length > 0);
+      } else {
+        setShowShipOrderSuggestions(false);
+      }
+    };
+
+    // Filter ship order items
+    const filteredShipOrderItems = selectedShipOrder.items.filter(item => {
+      if (!shipOrderSearchQuery) return true;
+      const query = shipOrderSearchQuery.toLowerCase();
+      const matchesItemCode = item.item_number && item.item_number.toLowerCase().includes(query);
+      const matchesDescription = item.description && item.description.toLowerCase().includes(query);
+      return matchesItemCode || matchesDescription;
+    });
+
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
 
         {/* Header */}
         <View style={styles.screenHeader}>
-          <TouchableOpacity onPress={() => { setSelectedShipOrder(null); setCurrentScreen('Ship'); }}>
+          <TouchableOpacity onPress={() => {
+            setSelectedShipOrder(null);
+            setCurrentScreen('Ship');
+            setShipOrderSearchQuery('');
+          }}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
           <View style={styles.headerCenter}>
@@ -1593,9 +1644,51 @@ export default function App() {
           </View>
         </View>
 
+        {/* Total Lines */}
+        <View style={styles.shipOrderLinesCount}>
+          <Text style={styles.shipOrderLinesText}>Total Lines: {selectedShipOrder.items.length}</Text>
+        </View>
+
+        {/* Search Section */}
+        <View style={styles.searchSection}>
+          <View style={styles.searchInputContainer}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search items by code or description..."
+              value={shipOrderSearchQuery}
+              onChangeText={handleShipOrderSearchChange}
+              autoCapitalize="none"
+            />
+            {shipOrderSearchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setShipOrderSearchQuery('')}>
+                <Text style={styles.clearIcon}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Autocomplete Suggestions */}
+          {showShipOrderSuggestions && shipOrderSuggestions.length > 0 && (
+            <View style={styles.suggestionsContainer}>
+              {shipOrderSuggestions.map((suggestion, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.suggestionItem}
+                  onPress={() => {
+                    setShipOrderSearchQuery(suggestion.value);
+                    setShowShipOrderSuggestions(false);
+                  }}
+                >
+                  <Text style={styles.suggestionText}>{suggestion.display}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+
         {/* Items List */}
         <FlatList
-          data={selectedShipOrder.items}
+          data={filteredShipOrderItems}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.itemsList}
           renderItem={({ item }) => (
@@ -1626,36 +1719,18 @@ export default function App() {
                 <Text style={styles.shipItemPicker}>Picker: {item.picker_name}</Text>
               )}
 
-              <View style={styles.shipItemActions}>
-                <TouchableOpacity
-                  style={styles.shipPickButton}
-                  onPress={() => {
-                    Alert.alert(
-                      'Pick Confirmed',
-                      `Item ${item.item_number} has been picked\nQty: ${item.qty} ${item.ordered_uom}`,
-                      [{ text: 'OK' }]
-                    );
-                  }}
-                >
-                  <Text style={styles.shipPickButtonText}>✓ Pick</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.shipCancelButton}
-                  onPress={() => {
-                    Alert.alert(
-                      'Cancel Pick',
-                      `Are you sure you want to cancel picking ${item.item_number}?`,
-                      [
-                        { text: 'No', style: 'cancel' },
-                        { text: 'Yes', onPress: () => Alert.alert('Cancelled', 'Pick cancelled') }
-                      ]
-                    );
-                  }}
-                >
-                  <Text style={styles.shipCancelButtonText}>✕ Cancel</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={styles.shipPickButtonFull}
+                onPress={() => {
+                  Alert.alert(
+                    'Pick Confirmed',
+                    `Item ${item.item_number} has been picked\nQty: ${item.qty} ${item.ordered_uom}`,
+                    [{ text: 'OK' }]
+                  );
+                }}
+              >
+                <Text style={styles.shipPickButtonText}>✓ Pick</Text>
+              </TouchableOpacity>
             </View>
           )}
         />
@@ -2980,6 +3055,18 @@ const styles = StyleSheet.create({
   },
 
   // Ship Order Items Styles
+  shipOrderLinesCount: {
+    backgroundColor: COLORS.white,
+    padding: SPACING.md,
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  shipOrderLinesText: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
   shipItemCard: {
     backgroundColor: COLORS.white,
     borderRadius: 12,
@@ -3053,6 +3140,13 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     alignItems: 'center',
     marginRight: SPACING.sm,
+  },
+  shipPickButtonFull: {
+    backgroundColor: COLORS.success,
+    borderRadius: 10,
+    padding: SPACING.md,
+    alignItems: 'center',
+    marginTop: SPACING.md,
   },
   shipPickButtonText: {
     color: COLORS.white,
