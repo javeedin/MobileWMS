@@ -594,6 +594,7 @@ export default function App() {
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
           <Text style={styles.screenTitle}>Purchase Orders</Text>
+          <View style={styles.headerSpacer} />
           <View style={styles.headerRight}>
             {selectedOrg && <Text style={styles.headerOrgText}>{selectedOrg}</Text>}
             <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
@@ -673,6 +674,7 @@ export default function App() {
             <Text style={styles.screenTitle}>PO Items</Text>
             <Text style={styles.screenSubtitle}>PO: {selectedPO.documentnumber}</Text>
           </View>
+          <View style={styles.headerSpacer} />
           <View style={styles.headerRight}>
             {selectedOrg && <Text style={styles.headerOrgText}>{selectedOrg}</Text>}
             <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
@@ -724,6 +726,7 @@ export default function App() {
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
           <Text style={styles.screenTitle}>Item Details</Text>
+          <View style={styles.headerSpacer} />
           <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
             <Text style={styles.notificationIconSmall}>🔔</Text>
           </TouchableOpacity>
@@ -970,6 +973,7 @@ export default function App() {
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
           <Text style={styles.screenTitle}>Inventory Onhand</Text>
+          <View style={styles.headerSpacer} />
           <View style={styles.headerRight}>
             <TouchableOpacity onPress={() => setCurrentScreen('Scanner')}>
               <Text style={styles.notificationIconSmall}>📷</Text>
@@ -1141,6 +1145,7 @@ export default function App() {
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
           <Text style={styles.screenTitle}>Scanner</Text>
+          <View style={styles.headerSpacer} />
           <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
             <Text style={styles.notificationIconSmall}>🔔</Text>
           </TouchableOpacity>
@@ -1166,6 +1171,7 @@ export default function App() {
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
           <Text style={styles.screenTitle}>Ship Orders</Text>
+          <View style={styles.headerSpacer} />
           <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
             <Text style={styles.notificationIconSmall}>🔔</Text>
           </TouchableOpacity>
@@ -1539,8 +1545,7 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.lg,
     fontWeight: '600',
     color: COLORS.white,
-    flex: 1,
-    marginLeft: SPACING.md,
+    marginLeft: SPACING.sm,
   },
   screenSubtitle: {
     fontSize: FONT_SIZES.sm,
@@ -1549,8 +1554,10 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.md,
   },
   headerCenter: {
+    marginLeft: SPACING.sm,
+  },
+  headerSpacer: {
     flex: 1,
-    marginLeft: SPACING.md,
   },
   headerRight: {
     flexDirection: 'row',
