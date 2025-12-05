@@ -13,21 +13,51 @@ import {
   StatusBar,
 } from 'react-native';
 
-// Constants
+// Oracle Redwood Design System Constants
 const COLORS = {
-  primary: '#2563eb',
-  secondary: '#7c3aed',
-  success: '#10b981',
-  warning: '#f59e0b',
-  danger: '#ef4444',
-  dark: '#1f2937',
-  light: '#f3f4f6',
-  white: '#ffffff',
-  text: '#111827',
-  textSecondary: '#6b7280',
-  border: '#e5e7eb',
-  background: '#ffffff',
-  backgroundSecondary: '#f9fafb',
+  // Primary Brand Colors
+  primary: '#C74634',           // Oracle Red
+  primaryHover: '#A33B2C',      // Darker Oracle Red
+  primaryLight: '#FEF1EF',      // Light red tint
+
+  // Secondary/Neutral Colors
+  secondary: '#312D2A',         // Charcoal
+  secondaryLight: '#4A4541',    // Lighter charcoal
+
+  // Semantic Colors
+  success: '#107F47',           // Redwood Green
+  successLight: '#E8F5ED',      // Light green background
+  warning: '#D4820A',           // Redwood Amber
+  warningLight: '#FEF6E7',      // Light amber background
+  danger: '#C74634',            // Redwood Red
+  dangerLight: '#FEF1EF',       // Light red background
+  info: '#0572CE',              // Redwood Blue
+  infoLight: '#E8F4FC',         // Light blue background
+
+  // Neutral Colors
+  neutral900: '#201E1C',        // Darkest text
+  neutral700: '#403B36',        // Dark text
+  neutral600: '#524C47',        // Medium-dark text
+  neutral500: '#6B6560',        // Secondary text
+  neutral400: '#8C8680',        // Placeholder text
+  neutral300: '#B8B3AE',        // Disabled text
+  neutral200: '#D9D5D2',        // Borders
+  neutral100: '#E8E5E2',        // Light borders
+  neutral50: '#F4F2F0',         // Light background
+
+  // Background Colors
+  background: '#FAF9F8',        // Warm off-white (main background)
+  surface: '#FFFFFF',           // White surface (cards)
+  surfaceHover: '#F7F5F3',      // Hover state for surfaces
+
+  // Legacy mappings for compatibility
+  dark: '#312D2A',
+  light: '#F4F2F0',
+  white: '#FFFFFF',
+  text: '#201E1C',
+  textSecondary: '#6B6560',
+  border: '#E8E5E2',
+  backgroundSecondary: '#F4F2F0',
 };
 
 const SPACING = {
@@ -40,12 +70,48 @@ const SPACING = {
 };
 
 const FONT_SIZES = {
-  xs: 12,
-  sm: 14,
-  md: 16,
-  lg: 18,
-  xl: 24,
-  xxl: 32,
+  xs: 11,
+  sm: 13,
+  md: 15,
+  lg: 17,
+  xl: 22,
+  xxl: 28,
+  xxxl: 34,
+};
+
+// Redwood border radius
+const RADIUS = {
+  sm: 4,
+  md: 8,
+  lg: 12,
+  xl: 16,
+  xxl: 24,
+  full: 9999,
+};
+
+// Redwood shadows
+const SHADOWS = {
+  sm: {
+    shadowColor: '#201E1C',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  md: {
+    shadowColor: '#201E1C',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  lg: {
+    shadowColor: '#201E1C',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
+  },
 };
 
 // API Configuration
@@ -981,65 +1047,65 @@ export default function App() {
   return null;
 }
 
-// ============= STYLES =============
+// ============= ORACLE REDWOOD STYLES =============
 
 const styles = StyleSheet.create({
+  // Base Container
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundSecondary,
+    backgroundColor: COLORS.background,
   },
 
-  // Login Styles
+  // ========== LOGIN SCREEN ==========
   loginTopSection: {
     backgroundColor: COLORS.primary,
-    paddingTop: 60,
-    paddingBottom: 80,
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
+    paddingTop: 70,
+    paddingBottom: 90,
+    borderBottomLeftRadius: RADIUS.xxl,
+    borderBottomRightRadius: RADIUS.xxl,
     alignItems: 'center',
   },
   loginLogoContainer: {
-    width: 80,
-    height: 80,
-    backgroundColor: COLORS.white,
-    borderRadius: 40,
+    width: 88,
+    height: 88,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.full,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.lg,
+    ...SHADOWS.lg,
   },
   loginLogoIcon: {
-    fontSize: 40,
+    fontSize: 44,
   },
   loginTitle: {
-    fontSize: FONT_SIZES.xxl,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZES.xxxl,
+    fontWeight: '700',
     color: COLORS.white,
     marginBottom: SPACING.xs,
+    letterSpacing: -0.5,
   },
   loginSubtitle: {
     fontSize: FONT_SIZES.md,
     color: COLORS.white,
     opacity: 0.9,
+    fontWeight: '400',
   },
   loginFormContainer: {
     flex: 1,
     paddingHorizontal: SPACING.lg,
-    marginTop: -40,
+    marginTop: -50,
   },
   loginCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.xl,
     padding: SPACING.xl,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
+    ...SHADOWS.lg,
   },
   loginCardTitle: {
     fontSize: FONT_SIZES.xl,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    fontWeight: '600',
+    color: COLORS.neutral900,
     marginBottom: SPACING.lg,
     textAlign: 'center',
   },
@@ -1048,91 +1114,97 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral600,
     marginBottom: SPACING.xs,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   input: {
-    backgroundColor: COLORS.backgroundSecondary,
-    borderRadius: 10,
+    backgroundColor: COLORS.neutral50,
+    borderRadius: RADIUS.md,
     padding: SPACING.md,
     fontSize: FONT_SIZES.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.neutral200,
+    color: COLORS.neutral900,
   },
   loginButton: {
     backgroundColor: COLORS.primary,
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
     padding: SPACING.md,
     alignItems: 'center',
-    marginTop: SPACING.md,
+    marginTop: SPACING.lg,
+    ...SHADOWS.sm,
   },
   loginButtonText: {
     color: COLORS.white,
-    fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
   },
   loginHint: {
     fontSize: FONT_SIZES.xs,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral500,
     textAlign: 'center',
-    marginTop: SPACING.md,
+    marginTop: SPACING.lg,
   },
 
-  // Modal Styles
+  // ========== MODAL STYLES ==========
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(32, 30, 28, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContainer: {
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.xl,
     padding: SPACING.lg,
     width: '85%',
     maxWidth: 400,
     maxHeight: '70%',
+    ...SHADOWS.lg,
   },
   modalTitle: {
     fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    fontWeight: '600',
+    color: COLORS.neutral900,
     marginBottom: SPACING.xs,
     textAlign: 'center',
   },
   modalSubtitle: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.md,
+    color: COLORS.neutral500,
+    marginBottom: SPACING.lg,
     textAlign: 'center',
   },
   orgScrollView: {
     maxHeight: 400,
   },
   orgButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 8,
-    padding: SPACING.sm,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
     marginBottom: SPACING.sm,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.neutral200,
   },
   orgButtonText: {
-    color: COLORS.white,
-    fontSize: FONT_SIZES.sm,
-    fontWeight: '600',
+    color: COLORS.neutral900,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '500',
   },
   orgButtonArrow: {
-    color: COLORS.white,
-    fontSize: FONT_SIZES.md,
+    color: COLORS.primary,
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '600',
   },
 
-  // Dashboard Styles
+  // ========== DASHBOARD HEADER ==========
   dashboardHeader: {
     backgroundColor: COLORS.primary,
-    paddingTop: 40,
+    paddingTop: 50,
     paddingBottom: SPACING.lg,
     paddingHorizontal: SPACING.lg,
     flexDirection: 'row',
@@ -1148,24 +1220,24 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.md,
   },
   menuIcon: {
-    fontSize: 28,
+    fontSize: 26,
     color: COLORS.white,
   },
   dashboardGreeting: {
     fontSize: FONT_SIZES.xs,
     color: COLORS.white,
-    opacity: 0.9,
+    opacity: 0.85,
   },
   dashboardUserName: {
-    fontSize: FONT_SIZES.md,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '600',
     color: COLORS.white,
   },
   orgBadge: {
     backgroundColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
-    borderRadius: 8,
+    borderRadius: RADIUS.sm,
     marginTop: SPACING.xs,
   },
   orgBadgeText: {
@@ -1183,63 +1255,63 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.sm,
   },
 
-  // Hamburger Menu
+  // ========== HAMBURGER MENU ==========
   hamburgerMenu: {
     position: 'absolute',
-    top: 100,
+    top: 110,
     left: 0,
-    backgroundColor: COLORS.white,
-    width: 250,
-    borderTopRightRadius: 20,
-    borderBottomRightRadius: 20,
+    backgroundColor: COLORS.surface,
+    width: 280,
+    borderTopRightRadius: RADIUS.xl,
+    borderBottomRightRadius: RADIUS.xl,
     padding: SPACING.lg,
     zIndex: 1000,
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 10,
+    ...SHADOWS.lg,
   },
   menuHeader: {
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: COLORS.neutral100,
     paddingBottom: SPACING.md,
     marginBottom: SPACING.md,
   },
   menuUserName: {
     fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    fontWeight: '600',
+    color: COLORS.neutral900,
   },
   menuUserRole: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral500,
+    marginTop: 2,
   },
   menuOrgText: {
     fontSize: FONT_SIZES.xs,
     color: COLORS.primary,
-    marginTop: SPACING.xs,
+    marginTop: SPACING.sm,
     fontWeight: '600',
   },
   menuItem: {
     paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral50,
   },
   menuItemText: {
     fontSize: FONT_SIZES.md,
-    color: COLORS.text,
+    color: COLORS.neutral700,
+    fontWeight: '500',
   },
 
-  // Dashboard Content
+  // ========== DASHBOARD CONTENT ==========
   dashboardContent: {
     flex: 1,
   },
   orgDisplayContainer: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.primaryLight,
     marginHorizontal: SPACING.md,
     marginTop: SPACING.md,
     marginBottom: SPACING.xs,
     padding: SPACING.md,
-    borderRadius: 8,
+    borderRadius: RADIUS.md,
     flexDirection: 'row',
     alignItems: 'center',
     borderLeftWidth: 4,
@@ -1247,12 +1319,12 @@ const styles = StyleSheet.create({
   },
   orgDisplayLabel: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral600,
     marginRight: SPACING.sm,
   },
   orgDisplayValue: {
     fontSize: FONT_SIZES.md,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: COLORS.primary,
   },
   cardGrid: {
@@ -1262,40 +1334,40 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   featureCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
     padding: SPACING.lg,
     marginBottom: SPACING.md,
     width: '48%',
-    minHeight: 150,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    minHeight: 160,
+    borderWidth: 1,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
   },
   cardIcon: {
     fontSize: 40,
     marginBottom: SPACING.sm,
   },
   cardTitle: {
-    fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral900,
     marginBottom: SPACING.xs,
   },
   cardDescription: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral500,
+    lineHeight: 18,
   },
 
-  // Bottom Navigation
+  // ========== BOTTOM NAVIGATION ==========
   bottomNav: {
     flexDirection: 'row',
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: COLORS.neutral100,
     paddingVertical: SPACING.sm,
+    paddingBottom: SPACING.md,
   },
   navItem: {
     flex: 1,
@@ -1307,14 +1379,15 @@ const styles = StyleSheet.create({
   },
   navText: {
     fontSize: FONT_SIZES.xs,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral500,
     marginTop: SPACING.xs,
+    fontWeight: '500',
   },
 
-  // Screen Header
+  // ========== SCREEN HEADER ==========
   screenHeader: {
     backgroundColor: COLORS.primary,
-    paddingTop: 40,
+    paddingTop: 50,
     paddingBottom: SPACING.md,
     paddingHorizontal: SPACING.md,
     flexDirection: 'row',
@@ -1324,11 +1397,11 @@ const styles = StyleSheet.create({
   backButton: {
     fontSize: 28,
     color: COLORS.white,
-    fontWeight: 'bold',
+    fontWeight: '500',
   },
   screenTitle: {
     fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: COLORS.white,
     flex: 1,
     marginLeft: SPACING.md,
@@ -1336,7 +1409,7 @@ const styles = StyleSheet.create({
   screenSubtitle: {
     fontSize: FONT_SIZES.sm,
     color: COLORS.white,
-    opacity: 0.9,
+    opacity: 0.85,
     marginLeft: SPACING.md,
   },
   headerCenter: {
@@ -1348,12 +1421,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerOrgText: {
-    fontSize: FONT_SIZES.sm,
+    fontSize: FONT_SIZES.xs,
     color: COLORS.white,
     backgroundColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: RADIUS.sm,
     fontWeight: '600',
   },
   refreshButton: {
@@ -1362,39 +1435,43 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.sm,
   },
 
-  // Stats Container
+  // ========== STATS CONTAINER ==========
   statsContainer: {
-    backgroundColor: COLORS.white,
-    padding: SPACING.md,
+    backgroundColor: COLORS.surface,
+    padding: SPACING.lg,
     flexDirection: 'row',
     justifyContent: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
   },
   statBox: {
     alignItems: 'center',
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
   },
   statValue: {
-    fontSize: FONT_SIZES.xxl,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZES.xxxl,
+    fontWeight: '700',
     color: COLORS.primary,
   },
   statLabel: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral500,
     marginTop: SPACING.xs,
+    fontWeight: '500',
   },
 
-  // PO List
+  // ========== PO LIST ==========
   poList: {
     padding: SPACING.md,
   },
   poCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
   },
   poCardHeader: {
     flexDirection: 'row',
@@ -1403,37 +1480,38 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   poNumber: {
-    fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral900,
   },
   itemCountBadge: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
-    borderRadius: 12,
+    borderRadius: RADIUS.full,
   },
   itemCountText: {
     color: COLORS.white,
-    fontSize: FONT_SIZES.sm,
+    fontSize: FONT_SIZES.xs,
     fontWeight: '600',
   },
   poCardSubtext: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral500,
   },
 
-  // Items List
+  // ========== ITEMS LIST ==========
   itemsList: {
     padding: SPACING.md,
   },
   itemCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
   },
   itemCardHeader: {
     flexDirection: 'row',
@@ -1442,43 +1520,47 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   itemName: {
-    fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral900,
     flex: 1,
   },
   itemQty: {
-    fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZES.md,
+    fontWeight: '700',
     color: COLORS.success,
   },
   itemDetail: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral500,
     marginBottom: SPACING.xs,
   },
   itemDescription: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.text,
+    color: COLORS.neutral600,
     fontStyle: 'italic',
     marginBottom: SPACING.sm,
     paddingVertical: SPACING.xs,
+    backgroundColor: COLORS.neutral50,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: RADIUS.sm,
   },
 
-  // Item Detail
+  // ========== ITEM DETAIL ==========
   detailContainer: {
     flex: 1,
     padding: SPACING.md,
   },
   detailCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
     padding: SPACING.lg,
+    ...SHADOWS.sm,
   },
   detailTitle: {
     fontSize: FONT_SIZES.xl,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    fontWeight: '600',
+    color: COLORS.neutral900,
     marginBottom: SPACING.lg,
     textAlign: 'center',
   },
@@ -1487,53 +1569,55 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: COLORS.neutral100,
   },
   detailLabel: {
-    fontSize: FONT_SIZES.md,
-    color: COLORS.textSecondary,
-    fontWeight: '600',
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral500,
+    fontWeight: '500',
   },
   detailValue: {
-    fontSize: FONT_SIZES.md,
-    color: COLORS.text,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral900,
+    fontWeight: '600',
   },
   scanButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 10,
+    backgroundColor: COLORS.info,
+    borderRadius: RADIUS.md,
     padding: SPACING.md,
     alignItems: 'center',
     marginTop: SPACING.lg,
+    ...SHADOWS.sm,
   },
   scanButtonText: {
     color: COLORS.white,
-    fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
   },
   confirmButton: {
     backgroundColor: COLORS.success,
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
     padding: SPACING.md,
     alignItems: 'center',
     marginTop: SPACING.md,
+    ...SHADOWS.sm,
   },
   confirmButtonText: {
     color: COLORS.white,
-    fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
   },
 
-  // Scanner
+  // ========== SCANNER ==========
   scannerContainer: {
     flex: 1,
-    backgroundColor: COLORS.dark,
+    backgroundColor: COLORS.secondary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   scannerFrame: {
-    width: 250,
-    height: 250,
+    width: 260,
+    height: 260,
     position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
@@ -1542,78 +1626,87 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     left: 0,
-    width: 40,
-    height: 40,
+    width: 50,
+    height: 50,
     borderTopWidth: 4,
     borderLeftWidth: 4,
-    borderColor: COLORS.white,
+    borderColor: COLORS.primary,
+    borderTopLeftRadius: RADIUS.md,
   },
   scannerCornerTR: {
     position: 'absolute',
     top: 0,
     right: 0,
-    width: 40,
-    height: 40,
+    width: 50,
+    height: 50,
     borderTopWidth: 4,
     borderRightWidth: 4,
-    borderColor: COLORS.white,
+    borderColor: COLORS.primary,
+    borderTopRightRadius: RADIUS.md,
   },
   scannerCornerBL: {
     position: 'absolute',
     bottom: 0,
     left: 0,
-    width: 40,
-    height: 40,
+    width: 50,
+    height: 50,
     borderBottomWidth: 4,
     borderLeftWidth: 4,
-    borderColor: COLORS.white,
+    borderColor: COLORS.primary,
+    borderBottomLeftRadius: RADIUS.md,
   },
   scannerCornerBR: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: 40,
-    height: 40,
+    width: 50,
+    height: 50,
     borderBottomWidth: 4,
     borderRightWidth: 4,
-    borderColor: COLORS.white,
+    borderColor: COLORS.primary,
+    borderBottomRightRadius: RADIUS.md,
   },
   scannerIcon: {
-    fontSize: 60,
+    fontSize: 64,
   },
   scannerInstructions: {
-    fontSize: FONT_SIZES.lg,
+    fontSize: FONT_SIZES.md,
     color: COLORS.white,
     marginTop: SPACING.xl,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     padding: SPACING.md,
-    borderRadius: 8,
+    borderRadius: RADIUS.md,
+    fontWeight: '500',
   },
   simulateButton: {
-    backgroundColor: COLORS.secondary,
+    backgroundColor: COLORS.primary,
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
     marginTop: SPACING.xl,
+    ...SHADOWS.md,
   },
   simulateButtonText: {
     color: COLORS.white,
-    fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
   },
   cancelScanButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
     marginTop: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   cancelScanButtonText: {
     color: COLORS.white,
     fontSize: FONT_SIZES.md,
+    fontWeight: '500',
   },
 
-  // Loading
+  // ========== LOADING ==========
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1622,38 +1715,42 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: FONT_SIZES.md,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral500,
     marginTop: SPACING.md,
+    fontWeight: '500',
   },
 
-  // Empty State
+  // ========== EMPTY STATE ==========
   emptyContainer: {
     padding: SPACING.xxl,
     alignItems: 'center',
   },
   emptyText: {
     fontSize: FONT_SIZES.lg,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral500,
     marginBottom: SPACING.lg,
+    fontWeight: '500',
   },
   retryButton: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
+    ...SHADOWS.sm,
   },
   retryButtonText: {
     color: COLORS.white,
     fontSize: FONT_SIZES.md,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
 
-  // Placeholder
+  // ========== PLACEHOLDER ==========
   contentCenter: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: SPACING.xl,
+    backgroundColor: COLORS.background,
   },
   placeholderIcon: {
     fontSize: 80,
@@ -1661,26 +1758,24 @@ const styles = StyleSheet.create({
   },
   placeholderTitle: {
     fontSize: FONT_SIZES.xl,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    fontWeight: '600',
+    color: COLORS.neutral900,
     marginBottom: SPACING.sm,
   },
   placeholderText: {
     fontSize: FONT_SIZES.md,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral500,
   },
 
-  // Inventory Onhand Styles
+  // ========== INVENTORY ONHAND ==========
   searchSection: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     padding: SPACING.md,
     margin: SPACING.md,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
   },
   searchHeader: {
     flexDirection: 'row',
@@ -1691,11 +1786,11 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.backgroundSecondary,
-    borderRadius: 8,
+    backgroundColor: COLORS.neutral50,
+    borderRadius: RADIUS.md,
     paddingHorizontal: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.neutral200,
   },
   searchIcon: {
     fontSize: FONT_SIZES.md,
@@ -1705,47 +1800,50 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: SPACING.sm,
     fontSize: FONT_SIZES.md,
-    color: COLORS.text,
+    color: COLORS.neutral900,
   },
   clearIcon: {
     fontSize: FONT_SIZES.lg,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral400,
     paddingLeft: SPACING.xs,
   },
   fetchButton: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
-    borderRadius: 8,
+    borderRadius: RADIUS.md,
+    ...SHADOWS.sm,
   },
   fetchButtonText: {
     color: COLORS.white,
     fontSize: FONT_SIZES.sm,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   suggestionsContainer: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 8,
-    marginTop: SPACING.xs,
+    borderColor: COLORS.neutral200,
+    borderRadius: RADIUS.md,
+    marginTop: SPACING.sm,
     maxHeight: 200,
+    ...SHADOWS.md,
   },
   suggestionItem: {
     padding: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: COLORS.neutral100,
   },
   suggestionText: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.text,
+    color: COLORS.neutral700,
   },
   parameterModalContainer: {
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.xl,
     padding: SPACING.xl,
     width: '90%',
     maxWidth: 400,
+    ...SHADOWS.lg,
   },
   modalButtons: {
     flexDirection: 'row',
@@ -1754,54 +1852,58 @@ const styles = StyleSheet.create({
   },
   modalCancelButton: {
     flex: 1,
-    backgroundColor: COLORS.backgroundSecondary,
-    borderRadius: 10,
+    backgroundColor: COLORS.neutral50,
+    borderRadius: RADIUS.md,
     padding: SPACING.md,
     alignItems: 'center',
     marginRight: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.neutral200,
   },
   modalCancelText: {
-    color: COLORS.textSecondary,
+    color: COLORS.neutral600,
     fontSize: FONT_SIZES.md,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   modalFetchButton: {
     flex: 1,
     backgroundColor: COLORS.primary,
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
     padding: SPACING.md,
     alignItems: 'center',
     marginLeft: SPACING.sm,
+    ...SHADOWS.sm,
   },
   modalFetchText: {
     color: COLORS.white,
     fontSize: FONT_SIZES.md,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   resultsContainer: {
     flex: 1,
   },
   resultsHeader: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     padding: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: COLORS.neutral100,
   },
   resultsTitle: {
     fontSize: FONT_SIZES.md,
     fontWeight: '600',
-    color: COLORS.text,
+    color: COLORS.neutral900,
   },
   onhandList: {
     padding: SPACING.md,
   },
   onhandCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
   },
   onhandCardHeader: {
     flexDirection: 'row',
@@ -1810,44 +1912,48 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   onhandItemNumber: {
-    fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral900,
     flex: 1,
   },
   qohBadge: {
     backgroundColor: COLORS.success,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
-    borderRadius: 8,
+    borderRadius: RADIUS.full,
   },
   qohText: {
     color: COLORS.white,
-    fontSize: FONT_SIZES.sm,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '700',
   },
   onhandDescription: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.text,
+    color: COLORS.neutral600,
     fontStyle: 'italic',
     marginBottom: SPACING.sm,
   },
   onhandDetailsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: SPACING.xs,
+    marginTop: SPACING.sm,
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.neutral100,
   },
   onhandDetailItem: {
     flex: 1,
   },
   onhandDetailLabel: {
     fontSize: FONT_SIZES.xs,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral500,
     marginBottom: 2,
+    fontWeight: '500',
   },
   onhandDetailValue: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.text,
+    color: COLORS.neutral900,
     fontWeight: '600',
   },
   emptyStateContainer: {
@@ -1857,7 +1963,7 @@ const styles = StyleSheet.create({
     padding: SPACING.xl,
   },
   emptyStateIcon: {
-    fontSize: 60,
+    fontSize: 64,
     marginBottom: SPACING.md,
   },
   emptyStateText: {
