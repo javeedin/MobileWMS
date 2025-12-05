@@ -144,6 +144,7 @@ export default function App() {
 
   // Scanner state
   const [scanningForItem, setScanningForItem] = useState(null);
+  const [scanningForInventory, setScanningForInventory] = useState(false);
   const [scannedLocator, setScannedLocator] = useState('');
   const [scanned, setScanned] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
@@ -334,6 +335,32 @@ export default function App() {
     setScanned(true);
     Vibration.vibrate(100); // Haptic feedback
     setScannedLocator(data);
+
+    // Handle inventory search scanning
+    if (scanningForInventory) {
+      Alert.alert(
+        'Scan Successful!',
+        `Item Code: ${data}`,
+        [
+          {
+            text: 'Scan Again',
+            onPress: () => setScanned(false),
+          },
+          {
+            text: 'Search',
+            style: 'default',
+            onPress: () => {
+              setSearchQuery(data);
+              setShowSuggestions(false);
+              setScanningForInventory(false);
+              setScanned(false);
+              setCurrentScreen('Inventory');
+            },
+          },
+        ]
+      );
+      return;
+    }
 
     // Update item with scanned locator
     if (scanningForItem) {
@@ -893,14 +920,19 @@ export default function App() {
               style={styles.scannerBackButton}
               onPress={() => {
                 setScanningForItem(null);
+                setScanningForInventory(false);
                 setScanned(false);
-                setCurrentScreen(selectedItem ? 'ItemDetail' : 'Dashboard');
+                setCurrentScreen(
+                  scanningForInventory ? 'Inventory' :
+                  selectedItem ? 'ItemDetail' : 'Dashboard'
+                );
               }}
             >
               <Text style={styles.scannerBackText}>← Back</Text>
             </TouchableOpacity>
             <Text style={styles.scannerTitle}>
-              {scanningForItem ? 'Scan Pallet Locator' : 'Scan Barcode'}
+              {scanningForInventory ? 'Scan Item Code' :
+               scanningForItem ? 'Scan Pallet Locator' : 'Scan Barcode'}
             </Text>
             <TouchableOpacity
               style={styles.torchButton}
@@ -924,12 +956,20 @@ export default function App() {
               )}
             </View>
             <Text style={styles.scannerHint}>
-              {scanned ? 'Barcode scanned!' : 'Position barcode within the frame'}
+              {scanned ? 'Barcode scanned!' :
+               scanningForInventory ? 'Scan item barcode to search' :
+               'Position barcode within the frame'}
             </Text>
           </View>
 
           {/* Bottom Controls */}
           <View style={styles.scannerControls}>
+            {scanningForInventory && (
+              <View style={styles.scannerItemInfo}>
+                <Text style={styles.scannerItemLabel}>Mode:</Text>
+                <Text style={styles.scannerItemValue}>Inventory Search</Text>
+              </View>
+            )}
             {scanningForItem && (
               <View style={styles.scannerItemInfo}>
                 <Text style={styles.scannerItemLabel}>Scanning for:</Text>
@@ -975,7 +1015,11 @@ export default function App() {
           <Text style={styles.screenTitle}>Inventory Onhand</Text>
           <View style={styles.headerSpacer} />
           <View style={styles.headerRight}>
-            <TouchableOpacity onPress={() => setCurrentScreen('Scanner')}>
+            <TouchableOpacity onPress={() => {
+              setScanningForInventory(true);
+              setScanned(false);
+              setCurrentScreen('BarcodeScanner');
+            }}>
               <Text style={styles.notificationIconSmall}>📷</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
@@ -1002,6 +1046,16 @@ export default function App() {
                 </TouchableOpacity>
               )}
             </View>
+            <TouchableOpacity
+              style={styles.scanSearchButton}
+              onPress={() => {
+                setScanningForInventory(true);
+                setScanned(false);
+                setCurrentScreen('BarcodeScanner');
+              }}
+            >
+              <Text style={styles.scanSearchButtonText}>📷</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.fetchButton}
               onPress={() => setShowParameterModal(true)}
@@ -2088,6 +2142,16 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: FONT_SIZES.sm,
     fontWeight: '600',
+  },
+  scanSearchButton: {
+    backgroundColor: COLORS.info,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.md,
+    ...SHADOWS.sm,
+  },
+  scanSearchButtonText: {
+    fontSize: FONT_SIZES.lg,
   },
   suggestionsContainer: {
     backgroundColor: COLORS.surface,
