@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,10 @@ import {
   ActivityIndicator,
   Modal,
   StatusBar,
+  Vibration,
+  Dimensions,
 } from 'react-native';
+import { BarCodeScanner } from 'expo-barcode-scanner';
 
 // Oracle Redwood Design System Constants
 const COLORS = {
@@ -142,6 +145,17 @@ export default function App() {
   // Scanner state
   const [scanningForItem, setScanningForItem] = useState(null);
   const [scannedLocator, setScannedLocator] = useState('');
+  const [hasPermission, setHasPermission] = useState(null);
+  const [scanned, setScanned] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+
+  // Request camera permission on mount
+  useEffect(() => {
+    (async () => {
+      const { status } = await BarCodeScanner.requestPermissionsAsync();
+      setHasPermission(status === 'granted');
+    })();
+  }, []);
 
   // Inventory Onhand state
   const [onhandData, setOnhandData] = useState([]);
@@ -312,35 +326,57 @@ export default function App() {
     vendorname: groupedPOs[docNum].vendorname,
   }));
 
-  // Handle barcode scan
+  // Handle barcode scan - navigate to scanner
   const handleScanLocator = (item) => {
     setScanningForItem(item);
+    setScanned(false); // Reset scan state
     setCurrentScreen('BarcodeScanner');
   };
 
-  const simulateScan = () => {
-    const mockLocator = `LOC-${Math.floor(Math.random() * 1000)}`;
-    setScannedLocator(mockLocator);
+  // Handle actual barcode scanned event
+  const handleBarCodeScanned = ({ type, data }) => {
+    if (scanned) return; // Prevent multiple scans
+
+    setScanned(true);
+    Vibration.vibrate(100); // Haptic feedback
+    setScannedLocator(data);
 
     // Update item with scanned locator
     if (scanningForItem) {
-      const updatedItem = { ...scanningForItem, actualLocator: mockLocator };
+      const updatedItem = { ...scanningForItem, actualLocator: data };
       setSelectedItem(updatedItem);
+
+      // Update the item in poData as well
+      const updatedPoData = poData.map(item =>
+        item.id === scanningForItem.id ? { ...item, actualLocator: data } : item
+      );
+      setPoData(updatedPoData);
     }
 
     Alert.alert(
-      'Scanned Successfully',
-      `Locator: ${mockLocator}`,
+      'Scan Successful!',
+      `Barcode Type: ${type}\nLocator: ${data}`,
       [
         {
-          text: 'OK',
+          text: 'Scan Again',
+          onPress: () => setScanned(false),
+        },
+        {
+          text: 'Confirm',
+          style: 'default',
           onPress: () => {
-            setCurrentScreen('ItemDetail');
+            setCurrentScreen(scanningForItem ? 'ItemDetail' : 'Dashboard');
             setScanningForItem(null);
           },
         },
       ]
     );
+  };
+
+  // Simulate scan for testing (when camera not available)
+  const simulateScan = () => {
+    const mockLocator = `LOC-${Math.floor(Math.random() * 1000)}`;
+    handleBarCodeScanned({ type: 'SIMULATED', data: mockLocator });
   };
 
   // ============= SCREENS =============
@@ -781,37 +817,127 @@ export default function App() {
 
   // Barcode Scanner Screen
   if (currentScreen === 'BarcodeScanner') {
+    // Check permission status
+    if (hasPermission === null) {
+      return (
+        <View style={styles.scannerContainer}>
+          <StatusBar barStyle="light-content" backgroundColor={COLORS.secondary} />
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.scannerInstructions}>Requesting camera permission...</Text>
+        </View>
+      );
+    }
+
+    if (hasPermission === false) {
+      return (
+        <View style={styles.scannerContainer}>
+          <StatusBar barStyle="light-content" backgroundColor={COLORS.secondary} />
+          <Text style={styles.scannerIcon}>🚫</Text>
+          <Text style={styles.scannerInstructions}>Camera permission denied</Text>
+          <Text style={styles.permissionHint}>
+            Please enable camera access in your device settings to scan barcodes.
+          </Text>
+
+          {/* Fallback to simulation */}
+          <TouchableOpacity style={styles.simulateButton} onPress={simulateScan}>
+            <Text style={styles.simulateButtonText}>🎲 Use Simulated Scan</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.cancelScanButton}
+            onPress={() => {
+              setScanningForItem(null);
+              setCurrentScreen(selectedItem ? 'ItemDetail' : 'Dashboard');
+            }}
+          >
+            <Text style={styles.cancelScanButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
     return (
       <View style={styles.scannerContainer}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.dark} />
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-        {/* Scanner Frame */}
-        <View style={styles.scannerFrame}>
-          <View style={styles.scannerCornerTL} />
-          <View style={styles.scannerCornerTR} />
-          <View style={styles.scannerCornerBL} />
-          <View style={styles.scannerCornerBR} />
-          <Text style={styles.scannerIcon}>📷</Text>
+        {/* Full Screen Camera */}
+        <BarCodeScanner
+          onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
+          style={StyleSheet.absoluteFillObject}
+          barCodeTypes={[
+            BarCodeScanner.Constants.BarCodeType.qr,
+            BarCodeScanner.Constants.BarCodeType.code128,
+            BarCodeScanner.Constants.BarCodeType.code39,
+            BarCodeScanner.Constants.BarCodeType.ean13,
+            BarCodeScanner.Constants.BarCodeType.ean8,
+            BarCodeScanner.Constants.BarCodeType.upc_a,
+            BarCodeScanner.Constants.BarCodeType.upc_e,
+            BarCodeScanner.Constants.BarCodeType.datamatrix,
+            BarCodeScanner.Constants.BarCodeType.pdf417,
+          ]}
+        />
+
+        {/* Overlay */}
+        <View style={styles.scannerOverlay}>
+          {/* Top Header */}
+          <View style={styles.scannerHeader}>
+            <TouchableOpacity
+              style={styles.scannerBackButton}
+              onPress={() => {
+                setScanningForItem(null);
+                setScanned(false);
+                setCurrentScreen(selectedItem ? 'ItemDetail' : 'Dashboard');
+              }}
+            >
+              <Text style={styles.scannerBackText}>← Back</Text>
+            </TouchableOpacity>
+            <Text style={styles.scannerTitle}>
+              {scanningForItem ? 'Scan Pallet Locator' : 'Scan Barcode'}
+            </Text>
+            <View style={{ width: 60 }} />
+          </View>
+
+          {/* Scanner Frame */}
+          <View style={styles.scannerFrameContainer}>
+            <View style={styles.scannerFrame}>
+              <View style={styles.scannerCornerTL} />
+              <View style={styles.scannerCornerTR} />
+              <View style={styles.scannerCornerBL} />
+              <View style={styles.scannerCornerBR} />
+              {scanned && (
+                <View style={styles.scannedIndicator}>
+                  <Text style={styles.scannedCheckmark}>✓</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.scannerHint}>
+              {scanned ? 'Barcode scanned!' : 'Position barcode within the frame'}
+            </Text>
+          </View>
+
+          {/* Bottom Controls */}
+          <View style={styles.scannerControls}>
+            {scanningForItem && (
+              <View style={styles.scannerItemInfo}>
+                <Text style={styles.scannerItemLabel}>Scanning for:</Text>
+                <Text style={styles.scannerItemValue}>{scanningForItem.itemnumber}</Text>
+              </View>
+            )}
+
+            {scanned && (
+              <TouchableOpacity
+                style={styles.rescanButton}
+                onPress={() => setScanned(false)}
+              >
+                <Text style={styles.rescanButtonText}>🔄 Scan Again</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={styles.simulateButton} onPress={simulateScan}>
+              <Text style={styles.simulateButtonText}>🎲 Simulate Scan</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-
-        <Text style={styles.scannerInstructions}>
-          {scanningForItem ? 'Scan Pallet Locator' : 'Point camera at barcode'}
-        </Text>
-
-        {/* Simulate Scan Button */}
-        <TouchableOpacity style={styles.simulateButton} onPress={simulateScan}>
-          <Text style={styles.simulateButtonText}>🎲 Simulate Scan (Testing)</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.cancelScanButton}
-          onPress={() => {
-            setScanningForItem(null);
-            setCurrentScreen(selectedItem ? 'ItemDetail' : 'Dashboard');
-          }}
-        >
-          <Text style={styles.cancelScanButtonText}>Cancel</Text>
-        </TouchableOpacity>
       </View>
     );
   }
@@ -1615,9 +1741,40 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  scannerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'transparent',
+  },
+  scannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 50,
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.md,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  scannerBackButton: {
+    padding: SPACING.sm,
+  },
+  scannerBackText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+  },
+  scannerTitle: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '600',
+  },
+  scannerFrameContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   scannerFrame: {
-    width: 260,
-    height: 260,
+    width: 280,
+    height: 280,
     position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
@@ -1626,8 +1783,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     left: 0,
-    width: 50,
-    height: 50,
+    width: 60,
+    height: 60,
     borderTopWidth: 4,
     borderLeftWidth: 4,
     borderColor: COLORS.primary,
@@ -1637,8 +1794,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     right: 0,
-    width: 50,
-    height: 50,
+    width: 60,
+    height: 60,
     borderTopWidth: 4,
     borderRightWidth: 4,
     borderColor: COLORS.primary,
@@ -1648,8 +1805,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     left: 0,
-    width: 50,
-    height: 50,
+    width: 60,
+    height: 60,
     borderBottomWidth: 4,
     borderLeftWidth: 4,
     borderColor: COLORS.primary,
@@ -1659,12 +1816,74 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: 50,
-    height: 50,
+    width: 60,
+    height: 60,
     borderBottomWidth: 4,
     borderRightWidth: 4,
     borderColor: COLORS.primary,
     borderBottomRightRadius: RADIUS.md,
+  },
+  scannedIndicator: {
+    backgroundColor: COLORS.success,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scannedCheckmark: {
+    fontSize: 48,
+    color: COLORS.white,
+  },
+  scannerHint: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.md,
+    marginTop: SPACING.lg,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.full,
+    fontWeight: '500',
+    overflow: 'hidden',
+  },
+  scannerControls: {
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.xl,
+    alignItems: 'center',
+  },
+  scannerItemInfo: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    width: '100%',
+    alignItems: 'center',
+  },
+  scannerItemLabel: {
+    color: COLORS.neutral300,
+    fontSize: FONT_SIZES.sm,
+    marginBottom: SPACING.xs,
+  },
+  scannerItemValue: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+  },
+  rescanButton: {
+    backgroundColor: COLORS.info,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.md,
+    borderRadius: RADIUS.md,
+    marginBottom: SPACING.sm,
+    width: '100%',
+    alignItems: 'center',
+  },
+  rescanButtonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
   },
   scannerIcon: {
     fontSize: 64,
@@ -1677,14 +1896,23 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     borderRadius: RADIUS.md,
     fontWeight: '500',
+    textAlign: 'center',
+  },
+  permissionHint: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral300,
+    marginTop: SPACING.sm,
+    textAlign: 'center',
+    paddingHorizontal: SPACING.xl,
   },
   simulateButton: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.secondaryLight,
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
     borderRadius: RADIUS.md,
-    marginTop: SPACING.xl,
-    ...SHADOWS.md,
+    marginTop: SPACING.sm,
+    width: '100%',
+    alignItems: 'center',
   },
   simulateButtonText: {
     color: COLORS.white,
