@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
   Vibration,
   Dimensions,
 } from 'react-native';
-import { BarCodeScanner } from 'expo-barcode-scanner';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 
 // Oracle Redwood Design System Constants
 const COLORS = {
@@ -145,17 +145,11 @@ export default function App() {
   // Scanner state
   const [scanningForItem, setScanningForItem] = useState(null);
   const [scannedLocator, setScannedLocator] = useState('');
-  const [hasPermission, setHasPermission] = useState(null);
   const [scanned, setScanned] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
 
-  // Request camera permission on mount
-  useEffect(() => {
-    (async () => {
-      const { status } = await BarCodeScanner.requestPermissionsAsync();
-      setHasPermission(status === 'granted');
-    })();
-  }, []);
+  // Camera permission hook
+  const [permission, requestPermission] = useCameraPermissions();
 
   // Inventory Onhand state
   const [onhandData, setOnhandData] = useState([]);
@@ -818,25 +812,30 @@ export default function App() {
   // Barcode Scanner Screen
   if (currentScreen === 'BarcodeScanner') {
     // Check permission status
-    if (hasPermission === null) {
+    if (!permission) {
       return (
         <View style={styles.scannerContainer}>
           <StatusBar barStyle="light-content" backgroundColor={COLORS.secondary} />
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.scannerInstructions}>Requesting camera permission...</Text>
+          <Text style={styles.scannerInstructions}>Loading camera...</Text>
         </View>
       );
     }
 
-    if (hasPermission === false) {
+    if (!permission.granted) {
       return (
         <View style={styles.scannerContainer}>
           <StatusBar barStyle="light-content" backgroundColor={COLORS.secondary} />
-          <Text style={styles.scannerIcon}>🚫</Text>
-          <Text style={styles.scannerInstructions}>Camera permission denied</Text>
+          <Text style={styles.scannerIcon}>📷</Text>
+          <Text style={styles.scannerInstructions}>Camera Permission Required</Text>
           <Text style={styles.permissionHint}>
-            Please enable camera access in your device settings to scan barcodes.
+            We need camera access to scan barcodes and QR codes.
           </Text>
+
+          {/* Request Permission Button */}
+          <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+            <Text style={styles.permissionButtonText}>Grant Camera Access</Text>
+          </TouchableOpacity>
 
           {/* Fallback to simulation */}
           <TouchableOpacity style={styles.simulateButton} onPress={simulateScan}>
@@ -861,20 +860,26 @@ export default function App() {
         <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
         {/* Full Screen Camera */}
-        <BarCodeScanner
-          onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
+        <CameraView
           style={StyleSheet.absoluteFillObject}
-          barCodeTypes={[
-            BarCodeScanner.Constants.BarCodeType.qr,
-            BarCodeScanner.Constants.BarCodeType.code128,
-            BarCodeScanner.Constants.BarCodeType.code39,
-            BarCodeScanner.Constants.BarCodeType.ean13,
-            BarCodeScanner.Constants.BarCodeType.ean8,
-            BarCodeScanner.Constants.BarCodeType.upc_a,
-            BarCodeScanner.Constants.BarCodeType.upc_e,
-            BarCodeScanner.Constants.BarCodeType.datamatrix,
-            BarCodeScanner.Constants.BarCodeType.pdf417,
-          ]}
+          facing="back"
+          enableTorch={torchOn}
+          barcodeScannerSettings={{
+            barcodeTypes: [
+              'qr',
+              'code128',
+              'code39',
+              'ean13',
+              'ean8',
+              'upc_a',
+              'upc_e',
+              'datamatrix',
+              'pdf417',
+            ],
+          }}
+          onBarcodeScanned={scanned ? undefined : (result) => {
+            handleBarCodeScanned({ type: result.type, data: result.data });
+          }}
         />
 
         {/* Overlay */}
@@ -894,7 +899,12 @@ export default function App() {
             <Text style={styles.scannerTitle}>
               {scanningForItem ? 'Scan Pallet Locator' : 'Scan Barcode'}
             </Text>
-            <View style={{ width: 60 }} />
+            <TouchableOpacity
+              style={styles.torchButton}
+              onPress={() => setTorchOn(!torchOn)}
+            >
+              <Text style={styles.torchButtonText}>{torchOn ? '🔦' : '💡'}</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Scanner Frame */}
@@ -1932,6 +1942,31 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: FONT_SIZES.md,
     fontWeight: '500',
+  },
+  permissionButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.md,
+    borderRadius: RADIUS.md,
+    marginTop: SPACING.lg,
+    ...SHADOWS.sm,
+  },
+  permissionButtonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+  },
+  torchButton: {
+    padding: SPACING.sm,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: RADIUS.full,
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  torchButtonText: {
+    fontSize: 24,
   },
 
   // ========== LOADING ==========
