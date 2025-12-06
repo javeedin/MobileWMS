@@ -1694,34 +1694,34 @@ const styles = StyleSheet.create({
   // ========== LOGIN SCREEN ==========
   loginTopSection: {
     backgroundColor: COLORS.primary,
-    paddingTop: 70,
-    paddingBottom: 90,
+    paddingTop: 50,
+    paddingBottom: 60,
     borderBottomLeftRadius: RADIUS.xxl,
     borderBottomRightRadius: RADIUS.xxl,
     alignItems: 'center',
   },
   loginLogoContainer: {
-    width: 88,
-    height: 88,
+    width: 72,
+    height: 72,
     backgroundColor: COLORS.surface,
     borderRadius: RADIUS.full,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.md,
     ...SHADOWS.lg,
   },
   loginLogoIcon: {
-    fontSize: 44,
+    fontSize: 36,
   },
   loginTitle: {
-    fontSize: FONT_SIZES.xxxl,
+    fontSize: FONT_SIZES.xxl,
     fontWeight: '700',
     color: COLORS.white,
     marginBottom: SPACING.xs,
     letterSpacing: -0.5,
   },
   loginSubtitle: {
-    fontSize: FONT_SIZES.md,
+    fontSize: FONT_SIZES.sm,
     color: COLORS.white,
     opacity: 0.9,
     fontWeight: '400',
@@ -1729,7 +1729,7 @@ const styles = StyleSheet.create({
   loginFormContainer: {
     flex: 1,
     paddingHorizontal: SPACING.lg,
-    marginTop: -50,
+    marginTop: -40,
   },
   loginCard: {
     backgroundColor: COLORS.surface,
@@ -1839,9 +1839,9 @@ const styles = StyleSheet.create({
   // ========== DASHBOARD HEADER ==========
   dashboardHeader: {
     backgroundColor: COLORS.primary,
-    paddingTop: 50,
-    paddingBottom: SPACING.lg,
-    paddingHorizontal: SPACING.lg,
+    paddingTop: 44,
+    paddingBottom: SPACING.md,
+    paddingHorizontal: SPACING.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -2022,8 +2022,8 @@ const styles = StyleSheet.create({
   // ========== SCREEN HEADER ==========
   screenHeader: {
     backgroundColor: COLORS.primary,
-    paddingTop: 50,
-    paddingBottom: SPACING.md,
+    paddingTop: 44,
+    paddingBottom: SPACING.sm,
     paddingHorizontal: SPACING.md,
     flexDirection: 'row',
     alignItems: 'center',
@@ -2259,9 +2259,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 50,
+    paddingTop: 44,
     paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.md,
+    paddingBottom: SPACING.sm,
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   scannerBackButton: {
