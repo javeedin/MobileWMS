@@ -172,6 +172,14 @@ export default function App() {
   const [serialLoading, setSerialLoading] = useState(false);
   const [lotsSearchQuery, setLotsSearchQuery] = useState('');
 
+  // Ship Orders state
+  const [shipOrdersData, setShipOrdersData] = useState([]);
+  const [shipOrdersLoading, setShipOrdersLoading] = useState(false);
+  const [groupedShipOrders, setGroupedShipOrders] = useState([]);
+  const [selectedShipOrder, setSelectedShipOrder] = useState(null);
+  const [shipSearchQuery, setShipSearchQuery] = useState('');
+  const [shippingLine, setShippingLine] = useState(null);
+
   // Handle Login
   const handleLogin = () => {
     if (username === 'admin' && password === 'admin123') {
@@ -330,6 +338,89 @@ export default function App() {
       Alert.alert('Error', 'Failed to fetch serial numbers: ' + error.message);
       setSerialLoading(false);
     }
+  };
+
+  // Fetch Ship Orders (Pending Picking Details)
+  const fetchShipOrders = async () => {
+    setShipOrdersLoading(true);
+    try {
+      const response = await fetch(
+        'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/pendingpickingdetails'
+      );
+      const data = await response.json();
+
+      const items = data.items || [];
+      setShipOrdersData(items);
+
+      // Group by source_order_number, account_name, pick_release_date, organization_name
+      const grouped = items.reduce((acc, item) => {
+        const key = `${item.source_order_number}-${item.organization_name}`;
+        if (!acc[key]) {
+          acc[key] = {
+            id: key,
+            source_order_number: item.source_order_number,
+            account_name: item.account_name,
+            pick_release_date: item.pick_release_date,
+            organization_name: item.organization_name,
+            salesrep_name: item.salesrep_name,
+            picker_name: item.picker_name,
+            lines: [],
+            totalQty: 0,
+          };
+        }
+        acc[key].lines.push({
+          ...item,
+          lineId: `${key}-${item.delivery_detail_id}`,
+        });
+        acc[key].totalQty += item.qty || 0;
+        return acc;
+      }, {});
+
+      setGroupedShipOrders(Object.values(grouped));
+      setShipOrdersLoading(false);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to fetch ship orders: ' + error.message);
+      setShipOrdersLoading(false);
+    }
+  };
+
+  // Handle ship single line
+  const handleShipLine = (line) => {
+    Alert.alert(
+      'Confirm Shipment',
+      `Ship ${line.qty} ${line.ordered_uom} of ${line.item_number}?\n\nLot: ${line.lot_number || 'N/A'}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Ship',
+          style: 'default',
+          onPress: () => {
+            // Mark line as shipped (in real app, this would call an API)
+            Alert.alert('Success', `Line shipped successfully!\n\nItem: ${line.item_number}\nQty: ${line.qty}`);
+          },
+        },
+      ]
+    );
+  };
+
+  // Handle ship all lines
+  const handleShipAllLines = (order) => {
+    Alert.alert(
+      'Ship All Lines',
+      `Ship all ${order.lines.length} lines for order ${order.source_order_number}?\n\nTotal Qty: ${order.totalQty}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Ship All',
+          style: 'default',
+          onPress: () => {
+            Alert.alert('Success', `All ${order.lines.length} lines shipped successfully!`);
+            setSelectedShipOrder(null);
+            setCurrentScreen('Ship');
+          },
+        },
+      ]
+    );
   };
 
   // Handle unified search with autocomplete (Amazon-style)
@@ -664,7 +755,10 @@ export default function App() {
             {/* Ship Orders Card */}
             <TouchableOpacity
               style={styles.featureCard}
-              onPress={() => setCurrentScreen('Ship')}
+              onPress={() => {
+                setCurrentScreen('Ship');
+                fetchShipOrders();
+              }}
             >
               <Text style={styles.cardIcon}>📤</Text>
               <Text style={styles.cardTitle}>Ship Orders</Text>
@@ -1314,28 +1408,254 @@ export default function App() {
     );
   }
 
-  // Ship Screen
+  // Filter grouped ship orders
+  const filteredShipOrders = groupedShipOrders.filter(order => {
+    if (!shipSearchQuery) return true;
+    const query = shipSearchQuery.toLowerCase();
+    return (
+      (order.source_order_number && order.source_order_number.toLowerCase().includes(query)) ||
+      (order.account_name && order.account_name.toLowerCase().includes(query)) ||
+      (order.organization_name && order.organization_name.toLowerCase().includes(query))
+    );
+  });
+
+  // Ship Orders Screen (Grouped Orders List)
   if (currentScreen === 'Ship') {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
 
+        {/* Header */}
         <View style={styles.screenHeader}>
-          <TouchableOpacity onPress={() => setCurrentScreen('Dashboard')}>
+          <TouchableOpacity onPress={() => {
+            setCurrentScreen('Dashboard');
+            setShipOrdersData([]);
+            setGroupedShipOrders([]);
+            setShipSearchQuery('');
+          }}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
           <Text style={styles.screenTitle}>Ship Orders</Text>
           <View style={styles.headerSpacer} />
-          <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
-            <Text style={styles.notificationIconSmall}>🔔</Text>
+          <View style={styles.headerRight}>
+            <TouchableOpacity onPress={fetchShipOrders}>
+              <Text style={styles.refreshButton}>🔄</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Search Bar */}
+        <View style={styles.shipSearchContainer}>
+          <View style={styles.searchInputContainer}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search by order, account or org..."
+              value={shipSearchQuery}
+              onChangeText={setShipSearchQuery}
+              autoCapitalize="none"
+            />
+            {shipSearchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setShipSearchQuery('')}>
+                <Text style={styles.clearIcon}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* Stats */}
+        <View style={styles.shipStatsContainer}>
+          <View style={styles.shipStatBox}>
+            <Text style={styles.shipStatValue}>{filteredShipOrders.length}</Text>
+            <Text style={styles.shipStatLabel}>Orders</Text>
+          </View>
+          <View style={styles.shipStatBox}>
+            <Text style={styles.shipStatValue}>
+              {filteredShipOrders.reduce((sum, o) => sum + o.lines.length, 0)}
+            </Text>
+            <Text style={styles.shipStatLabel}>Lines</Text>
+          </View>
+          <View style={styles.shipStatBox}>
+            <Text style={styles.shipStatValue}>
+              {filteredShipOrders.reduce((sum, o) => sum + o.totalQty, 0).toLocaleString()}
+            </Text>
+            <Text style={styles.shipStatLabel}>Total Qty</Text>
+          </View>
+        </View>
+
+        {shipOrdersLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Loading orders...</Text>
+          </View>
+        ) : filteredShipOrders.length > 0 ? (
+          <FlatList
+            data={filteredShipOrders}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.shipOrdersList}
+            renderItem={({ item: order }) => (
+              <TouchableOpacity
+                style={styles.shipOrderCard}
+                onPress={() => {
+                  setSelectedShipOrder(order);
+                  setCurrentScreen('ShipOrderLines');
+                }}
+              >
+                <View style={styles.shipOrderHeader}>
+                  <View style={styles.shipOrderInfo}>
+                    <Text style={styles.shipOrderNumber}>{order.source_order_number}</Text>
+                    <View style={styles.shipBadgeRow}>
+                      <View style={styles.orgBadgeSmall}>
+                        <Text style={styles.orgBadgeSmallText}>{order.organization_name}</Text>
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.shipQtyContainer}>
+                    <Text style={styles.shipTotalQty}>{order.totalQty}</Text>
+                    <Text style={styles.shipQtyLabel}>Qty</Text>
+                  </View>
+                </View>
+
+                <View style={styles.shipAccountRow}>
+                  <Text style={styles.shipAccountIcon}>🏢</Text>
+                  <Text style={styles.shipAccountName} numberOfLines={1}>{order.account_name}</Text>
+                </View>
+
+                <View style={styles.shipOrderDetails}>
+                  <View style={styles.shipDetailItem}>
+                    <Text style={styles.shipDetailLabel}>Pick Date</Text>
+                    <Text style={styles.shipDetailValue}>
+                      {order.pick_release_date ? new Date(order.pick_release_date).toLocaleDateString() : 'N/A'}
+                    </Text>
+                  </View>
+                  <View style={styles.shipDetailItem}>
+                    <Text style={styles.shipDetailLabel}>Picker</Text>
+                    <Text style={styles.shipDetailValue}>{order.picker_name || 'N/A'}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.shipOrderFooter}>
+                  <View style={styles.shipLineCountBadge}>
+                    <Text style={styles.shipLineCountText}>{order.lines.length} line{order.lines.length !== 1 ? 's' : ''}</Text>
+                  </View>
+                  <Text style={styles.drillDownHint}>Tap to view lines →</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          />
+        ) : (
+          <View style={styles.emptyStateContainer}>
+            <Text style={styles.emptyStateIcon}>📤</Text>
+            <Text style={styles.emptyStateText}>No pending orders</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={fetchShipOrders}>
+              <Text style={styles.retryButtonText}>Refresh Orders</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  // Ship Order Lines Screen
+  if (currentScreen === 'ShipOrderLines' && selectedShipOrder) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity onPress={() => {
+            setSelectedShipOrder(null);
+            setCurrentScreen('Ship');
+          }}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.screenTitle}>Order Lines</Text>
+            <Text style={styles.screenSubtitle}>{selectedShipOrder.source_order_number}</Text>
+          </View>
+          <View style={styles.headerSpacer} />
+          <TouchableOpacity
+            style={styles.shipAllButton}
+            onPress={() => handleShipAllLines(selectedShipOrder)}
+          >
+            <Text style={styles.shipAllButtonText}>📦 Ship All</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.contentCenter}>
-          <Text style={styles.placeholderIcon}>📤</Text>
-          <Text style={styles.placeholderTitle}>Ship Orders</Text>
-          <Text style={styles.placeholderText}>Coming soon...</Text>
+        {/* Order Summary Card */}
+        <View style={styles.shipSummaryCard}>
+          <View style={styles.shipSummaryHeader}>
+            <Text style={styles.shipSummaryAccount}>{selectedShipOrder.account_name}</Text>
+            <View style={styles.orgBadgeSmall}>
+              <Text style={styles.orgBadgeSmallText}>{selectedShipOrder.organization_name}</Text>
+            </View>
+          </View>
+          <View style={styles.shipSummaryRow}>
+            <View style={styles.shipSummaryItem}>
+              <Text style={styles.shipSummaryLabel}>Pick Date</Text>
+              <Text style={styles.shipSummaryValue}>
+                {selectedShipOrder.pick_release_date ? new Date(selectedShipOrder.pick_release_date).toLocaleDateString() : 'N/A'}
+              </Text>
+            </View>
+            <View style={styles.shipSummaryItem}>
+              <Text style={styles.shipSummaryLabel}>Picker</Text>
+              <Text style={styles.shipSummaryValue}>{selectedShipOrder.picker_name || 'N/A'}</Text>
+            </View>
+            <View style={styles.shipSummaryItem}>
+              <Text style={styles.shipSummaryLabel}>Total Qty</Text>
+              <Text style={[styles.shipSummaryValue, { color: COLORS.info }]}>
+                {selectedShipOrder.totalQty}
+              </Text>
+            </View>
+          </View>
         </View>
+
+        {/* Lines List Header */}
+        <View style={styles.linesListHeader}>
+          <Text style={styles.linesListTitle}>Lines ({selectedShipOrder.lines.length})</Text>
+        </View>
+
+        {/* Lines List */}
+        <FlatList
+          data={selectedShipOrder.lines}
+          keyExtractor={(item) => item.lineId}
+          contentContainerStyle={styles.shipLinesList}
+          renderItem={({ item: line }) => (
+            <View style={styles.shipLineCard}>
+              <View style={styles.shipLineHeader}>
+                <View style={styles.shipLineInfo}>
+                  <Text style={styles.shipLineItemNumber}>{line.item_number}</Text>
+                  <Text style={styles.shipLineDescription} numberOfLines={2}>
+                    {line.description}
+                  </Text>
+                </View>
+                <View style={styles.shipLineQtyBox}>
+                  <Text style={styles.shipLineQty}>{line.qty}</Text>
+                  <Text style={styles.shipLineUom}>{line.ordered_uom}</Text>
+                </View>
+              </View>
+
+              <View style={styles.shipLineDetails}>
+                <View style={styles.shipLineDetailItem}>
+                  <Text style={styles.shipLineDetailLabel}>Lot</Text>
+                  <Text style={styles.shipLineDetailValue}>{line.lot_number || 'N/A'}</Text>
+                </View>
+                <View style={styles.shipLineDetailItem}>
+                  <Text style={styles.shipLineDetailLabel}>Delivery ID</Text>
+                  <Text style={styles.shipLineDetailValue}>{line.delivery_detail_id}</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.shipLineButton}
+                onPress={() => handleShipLine(line)}
+              >
+                <Text style={styles.shipLineButtonText}>📦 Ship Line</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        />
       </View>
     );
   }
@@ -3082,5 +3402,284 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.xs,
     fontWeight: '600',
     color: COLORS.neutral700,
+  },
+
+  // ========== SHIP ORDERS ==========
+  shipSearchContainer: {
+    backgroundColor: COLORS.surface,
+    padding: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  shipStatsContainer: {
+    backgroundColor: COLORS.surface,
+    padding: SPACING.sm,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  shipStatBox: {
+    alignItems: 'center',
+    paddingHorizontal: SPACING.sm,
+  },
+  shipStatValue: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: COLORS.info,
+  },
+  shipStatLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  shipOrdersList: {
+    padding: SPACING.sm,
+  },
+  shipOrderCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
+  },
+  shipOrderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: SPACING.xs,
+  },
+  shipOrderInfo: {
+    flex: 1,
+  },
+  shipOrderNumber: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '700',
+    color: COLORS.neutral900,
+    marginBottom: 4,
+  },
+  shipBadgeRow: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+  },
+  shipQtyContainer: {
+    alignItems: 'flex-end',
+    backgroundColor: COLORS.infoLight,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: RADIUS.md,
+  },
+  shipTotalQty: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: COLORS.info,
+  },
+  shipQtyLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.info,
+  },
+  shipAccountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  shipAccountIcon: {
+    fontSize: 14,
+    marginRight: SPACING.xs,
+  },
+  shipAccountName: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+    flex: 1,
+  },
+  shipOrderDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+  },
+  shipDetailItem: {
+    flex: 1,
+  },
+  shipDetailLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginBottom: 2,
+  },
+  shipDetailValue: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '500',
+    color: COLORS.neutral700,
+  },
+  shipOrderFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: SPACING.xs,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.neutral100,
+  },
+  shipLineCountBadge: {
+    backgroundColor: COLORS.neutral100,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+  },
+  shipLineCountText: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: COLORS.neutral600,
+  },
+
+  // ========== SHIP ORDER LINES ==========
+  shipAllButton: {
+    backgroundColor: COLORS.success,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    borderRadius: RADIUS.md,
+  },
+  shipAllButtonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+  },
+  shipSummaryCard: {
+    backgroundColor: COLORS.surface,
+    margin: SPACING.sm,
+    padding: SPACING.sm,
+    borderRadius: RADIUS.lg,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.info,
+    ...SHADOWS.sm,
+  },
+  shipSummaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  shipSummaryAccount: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+    flex: 1,
+  },
+  shipSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  shipSummaryItem: {
+    flex: 1,
+  },
+  shipSummaryLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginBottom: 2,
+  },
+  shipSummaryValue: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+  },
+  linesListHeader: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    backgroundColor: COLORS.neutral50,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  linesListTitle: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+  },
+  shipLinesList: {
+    padding: SPACING.sm,
+  },
+  shipLineCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.sm,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
+  },
+  shipLineHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: SPACING.sm,
+  },
+  shipLineInfo: {
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  shipLineItemNumber: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '700',
+    color: COLORS.neutral900,
+    marginBottom: 4,
+  },
+  shipLineDescription: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral600,
+    lineHeight: 16,
+  },
+  shipLineQtyBox: {
+    backgroundColor: COLORS.successLight,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    minWidth: 50,
+  },
+  shipLineQty: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: COLORS.success,
+  },
+  shipLineUom: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.success,
+  },
+  shipLineDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+    paddingTop: SPACING.xs,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.neutral100,
+  },
+  shipLineDetailItem: {
+    flex: 1,
+  },
+  shipLineDetailLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginBottom: 2,
+  },
+  shipLineDetailValue: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '500',
+    color: COLORS.neutral700,
+  },
+  shipLineButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+    alignItems: 'center',
+    ...SHADOWS.sm,
+  },
+  shipLineButtonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
   },
 });
