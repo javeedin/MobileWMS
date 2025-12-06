@@ -3794,10 +3794,11 @@ const styles = StyleSheet.create({
   },
   shipSummaryRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
   },
   shipSummaryItem: {
     flex: 1,
+    alignItems: 'flex-start',
   },
   shipSummaryLabel: {
     fontSize: FONT_SIZES.xs,
