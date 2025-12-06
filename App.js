@@ -180,6 +180,12 @@ export default function App() {
   const [shipSearchQuery, setShipSearchQuery] = useState('');
   const [shippingLine, setShippingLine] = useState(null);
 
+  // Pick Modal state
+  const [showPickModal, setShowPickModal] = useState(false);
+  const [pickingLine, setPickingLine] = useState(null);
+  const [pickedQty, setPickedQty] = useState('');
+  const [serialNumber, setSerialNumber] = useState('');
+
   // Handle Login
   const handleLogin = () => {
     if (username === 'admin' && password === 'admin123') {
@@ -384,23 +390,38 @@ export default function App() {
     }
   };
 
-  // Handle ship single line
-  const handleShipLine = (line) => {
+  // Handle pick line - open modal
+  const handlePickLine = (line) => {
+    setPickingLine(line);
+    setPickedQty(String(line.qty || ''));
+    setSerialNumber('');
+    setShowPickModal(true);
+  };
+
+  // Handle confirm pick
+  const handleConfirmPick = () => {
+    if (!pickedQty || parseInt(pickedQty) <= 0) {
+      Alert.alert('Error', 'Please enter a valid picked quantity');
+      return;
+    }
+
     Alert.alert(
-      'Confirm Shipment',
-      `Ship ${line.qty} ${line.ordered_uom} of ${line.item_number}?\n\nLot: ${line.lot_number || 'N/A'}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Ship',
-          style: 'default',
-          onPress: () => {
-            // Mark line as shipped (in real app, this would call an API)
-            Alert.alert('Success', `Line shipped successfully!\n\nItem: ${line.item_number}\nQty: ${line.qty}`);
-          },
-        },
-      ]
+      'Success',
+      `Pick confirmed!\n\nItem: ${pickingLine.item_number}\nLot: ${pickingLine.lot_number || 'N/A'}\nPicked Qty: ${pickedQty}\nSerial: ${serialNumber || 'N/A'}`,
+      [{ text: 'OK', onPress: () => setShowPickModal(false) }]
     );
+  };
+
+  // Handle scan serial for pick
+  const handleScanSerialForPick = () => {
+    // Open scanner for serial number
+    setShowPickModal(false);
+    setScanningForInventory(false);
+    setScanningForItem(null);
+    setScanned(false);
+    // We'll use a special flag to know we're scanning for pick serial
+    setPickingLine(pickingLine);
+    setCurrentScreen('PickSerialScanner');
   };
 
   // Handle ship all lines
@@ -1642,20 +1663,221 @@ export default function App() {
                   <Text style={styles.shipLineDetailValue}>{line.lot_number || 'N/A'}</Text>
                 </View>
                 <View style={styles.shipLineDetailItem}>
-                  <Text style={styles.shipLineDetailLabel}>Delivery ID</Text>
-                  <Text style={styles.shipLineDetailValue}>{line.delivery_detail_id}</Text>
+                  <Text style={styles.shipLineDetailLabel}>Locator</Text>
+                  <Text style={styles.shipLineDetailValue}>{line.locator || 'N/A'}</Text>
                 </View>
               </View>
 
               <TouchableOpacity
-                style={styles.shipLineButton}
-                onPress={() => handleShipLine(line)}
+                style={styles.pickLineButton}
+                onPress={() => handlePickLine(line)}
               >
-                <Text style={styles.shipLineButtonText}>📦 Ship Line</Text>
+                <Text style={styles.pickLineButtonText}>📋 Pick</Text>
               </TouchableOpacity>
             </View>
           )}
         />
+
+        {/* Pick Modal */}
+        <Modal
+          visible={showPickModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowPickModal(false)}
+        >
+          <View style={styles.pickModalOverlay}>
+            <View style={styles.pickModalContainer}>
+              <View style={styles.pickModalHeader}>
+                <Text style={styles.pickModalTitle}>Pick Item</Text>
+                <TouchableOpacity onPress={() => setShowPickModal(false)}>
+                  <Text style={styles.pickModalClose}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              {pickingLine && (
+                <View style={styles.pickModalContent}>
+                  {/* Item Info */}
+                  <View style={styles.pickItemInfo}>
+                    <Text style={styles.pickItemNumber}>{pickingLine.item_number}</Text>
+                    <Text style={styles.pickItemDesc} numberOfLines={2}>{pickingLine.description}</Text>
+                  </View>
+
+                  {/* Lot Number */}
+                  <View style={styles.pickFieldRow}>
+                    <Text style={styles.pickFieldLabel}>Lot Number</Text>
+                    <View style={styles.pickFieldValueBox}>
+                      <Text style={styles.pickFieldValue}>{pickingLine.lot_number || 'N/A'}</Text>
+                    </View>
+                  </View>
+
+                  {/* Requested Qty */}
+                  <View style={styles.pickFieldRow}>
+                    <Text style={styles.pickFieldLabel}>Requested Qty</Text>
+                    <View style={styles.pickFieldValueBox}>
+                      <Text style={styles.pickFieldValue}>{pickingLine.qty} {pickingLine.ordered_uom}</Text>
+                    </View>
+                  </View>
+
+                  {/* Picked Qty */}
+                  <View style={styles.pickFieldRow}>
+                    <Text style={styles.pickFieldLabel}>Picked Qty</Text>
+                    <TextInput
+                      style={styles.pickQtyInput}
+                      value={pickedQty}
+                      onChangeText={setPickedQty}
+                      keyboardType="numeric"
+                      placeholder="Enter qty"
+                    />
+                  </View>
+
+                  {/* Serial Number */}
+                  <View style={styles.pickFieldRow}>
+                    <Text style={styles.pickFieldLabel}>Serial Number</Text>
+                    <View style={styles.pickSerialRow}>
+                      <TextInput
+                        style={styles.pickSerialInput}
+                        value={serialNumber}
+                        onChangeText={setSerialNumber}
+                        placeholder="Enter or scan serial"
+                      />
+                      <TouchableOpacity
+                        style={styles.pickScanButton}
+                        onPress={handleScanSerialForPick}
+                      >
+                        <Text style={styles.pickScanButtonText}>📷</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Buttons */}
+                  <View style={styles.pickModalButtons}>
+                    <TouchableOpacity
+                      style={styles.pickCancelButton}
+                      onPress={() => setShowPickModal(false)}
+                    >
+                      <Text style={styles.pickCancelButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.pickConfirmButton}
+                      onPress={handleConfirmPick}
+                    >
+                      <Text style={styles.pickConfirmButtonText}>Confirm</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        </Modal>
+      </View>
+    );
+  }
+
+  // Pick Serial Scanner Screen
+  if (currentScreen === 'PickSerialScanner' && pickingLine) {
+    if (!permission) {
+      return (
+        <View style={styles.container}>
+          <Text style={styles.loadingText}>Requesting camera permission...</Text>
+        </View>
+      );
+    }
+
+    if (!permission.granted) {
+      return (
+        <View style={styles.container}>
+          <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+          <View style={styles.screenHeader}>
+            <TouchableOpacity onPress={() => {
+              setShowPickModal(true);
+              setCurrentScreen('ShipOrderLines');
+            }}>
+              <Text style={styles.backButton}>←</Text>
+            </TouchableOpacity>
+            <Text style={styles.screenTitle}>Scan Serial</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+          <View style={styles.contentCenter}>
+            <Text style={styles.placeholderIcon}>📷</Text>
+            <Text style={styles.placeholderTitle}>Camera Permission Required</Text>
+            <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+              <Text style={styles.permissionButtonText}>Grant Permission</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.scannerContainer}>
+        <StatusBar barStyle="light-content" />
+
+        <CameraView
+          style={StyleSheet.absoluteFillObject}
+          facing="back"
+          enableTorch={torchOn}
+          barcodeScannerSettings={{
+            barcodeTypes: ['qr', 'code128', 'code39', 'ean13', 'ean8', 'upc_a', 'upc_e', 'datamatrix', 'pdf417'],
+          }}
+          onBarcodeScanned={scanned ? undefined : (result) => {
+            setScanned(true);
+            Vibration.vibrate(100);
+            setSerialNumber(result.data);
+            Alert.alert(
+              'Serial Scanned',
+              `Serial: ${result.data}`,
+              [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    setShowPickModal(true);
+                    setCurrentScreen('ShipOrderLines');
+                  }
+                }
+              ]
+            );
+          }}
+        />
+
+        <View style={styles.scannerOverlay}>
+          <View style={styles.scannerHeader}>
+            <TouchableOpacity
+              style={styles.scannerBackButton}
+              onPress={() => {
+                setShowPickModal(true);
+                setCurrentScreen('ShipOrderLines');
+              }}
+            >
+              <Text style={styles.scannerBackText}>← Back</Text>
+            </TouchableOpacity>
+            <Text style={styles.scannerTitle}>Scan Serial Number</Text>
+            <TouchableOpacity
+              style={styles.torchButton}
+              onPress={() => setTorchOn(!torchOn)}
+            >
+              <Text style={styles.torchButtonText}>{torchOn ? '🔦' : '💡'}</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.scannerFrameContainer}>
+            <View style={styles.scannerFrame}>
+              <View style={styles.scannerCornerTL} />
+              <View style={styles.scannerCornerTR} />
+              <View style={styles.scannerCornerBL} />
+              <View style={styles.scannerCornerBR} />
+            </View>
+            <Text style={styles.scannerHint}>
+              Scan serial number for {pickingLine.item_number}
+            </Text>
+          </View>
+
+          <View style={styles.scannerControls}>
+            <View style={styles.scannerItemInfo}>
+              <Text style={styles.scannerItemLabel}>Item:</Text>
+              <Text style={styles.scannerItemValue}>{pickingLine.item_number}</Text>
+            </View>
+          </View>
+        </View>
       </View>
     );
   }
@@ -3681,5 +3903,161 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: FONT_SIZES.sm,
     fontWeight: '600',
+  },
+
+  // ========== PICK LINE ==========
+  pickLineButton: {
+    backgroundColor: COLORS.success,
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+    alignItems: 'center',
+    ...SHADOWS.sm,
+  },
+  pickLineButtonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+  },
+
+  // ========== PICK MODAL ==========
+  pickModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.md,
+  },
+  pickModalContainer: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.xl,
+    width: '100%',
+    maxWidth: 400,
+    ...SHADOWS.lg,
+  },
+  pickModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+    backgroundColor: COLORS.primary,
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+  },
+  pickModalTitle: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: COLORS.white,
+  },
+  pickModalClose: {
+    fontSize: FONT_SIZES.xl,
+    color: COLORS.white,
+    fontWeight: '600',
+  },
+  pickModalContent: {
+    padding: SPACING.md,
+  },
+  pickItemInfo: {
+    backgroundColor: COLORS.neutral50,
+    padding: SPACING.sm,
+    borderRadius: RADIUS.md,
+    marginBottom: SPACING.md,
+  },
+  pickItemNumber: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginBottom: 4,
+  },
+  pickItemDesc: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral600,
+  },
+  pickFieldRow: {
+    marginBottom: SPACING.md,
+  },
+  pickFieldLabel: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+    marginBottom: 6,
+  },
+  pickFieldValueBox: {
+    backgroundColor: COLORS.neutral100,
+    padding: SPACING.sm,
+    borderRadius: RADIUS.md,
+  },
+  pickFieldValue: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+  },
+  pickQtyInput: {
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.neutral200,
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+  },
+  pickSerialRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  pickSerialInput: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.neutral200,
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+    fontSize: FONT_SIZES.md,
+    color: COLORS.neutral900,
+  },
+  pickScanButton: {
+    backgroundColor: COLORS.info,
+    padding: SPACING.sm,
+    borderRadius: RADIUS.md,
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pickScanButtonText: {
+    fontSize: 20,
+  },
+  pickModalButtons: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginTop: SPACING.md,
+  },
+  pickCancelButton: {
+    flex: 1,
+    backgroundColor: COLORS.neutral200,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+  },
+  pickCancelButtonText: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+  },
+  pickConfirmButton: {
+    flex: 1,
+    backgroundColor: COLORS.success,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    ...SHADOWS.sm,
+  },
+  pickConfirmButtonText: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.white,
   },
 });
