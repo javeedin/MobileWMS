@@ -3761,13 +3761,15 @@ const styles = StyleSheet.create({
 
   // ========== SHIP ORDER LINES ==========
   shipAllButton: {
-    backgroundColor: COLORS.success,
+    backgroundColor: COLORS.white,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
     borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.success,
   },
   shipAllButtonText: {
-    color: COLORS.white,
+    color: COLORS.success,
     fontSize: FONT_SIZES.xs,
     fontWeight: '600',
   },
@@ -3908,14 +3910,15 @@ const styles = StyleSheet.create({
 
   // ========== PICK LINE ==========
   pickLineButton: {
-    backgroundColor: COLORS.success,
+    backgroundColor: COLORS.white,
     borderRadius: RADIUS.md,
     padding: SPACING.sm,
     alignItems: 'center',
-    ...SHADOWS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.success,
   },
   pickLineButtonText: {
-    color: COLORS.white,
+    color: COLORS.success,
     fontSize: FONT_SIZES.sm,
     fontWeight: '600',
   },
@@ -4050,15 +4053,16 @@ const styles = StyleSheet.create({
   },
   pickConfirmButton: {
     flex: 1,
-    backgroundColor: COLORS.success,
+    backgroundColor: COLORS.white,
     padding: SPACING.md,
     borderRadius: RADIUS.md,
     alignItems: 'center',
-    ...SHADOWS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.success,
   },
   pickConfirmButtonText: {
     fontSize: FONT_SIZES.md,
     fontWeight: '600',
-    color: COLORS.white,
+    color: COLORS.success,
   },
 });
