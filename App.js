@@ -376,7 +376,7 @@ export default function App() {
         }
         acc[key].lines.push({
           ...item,
-          lineId: `${key}-${item.delivery_detail_id}`,
+          lineId: `${key}-${item.id}-${item.delivery_detail_id}`,
         });
         acc[key].totalQty += item.qty || 0;
         return acc;
