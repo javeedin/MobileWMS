@@ -334,26 +334,36 @@ export default function App() {
       console.log('Fetching locator data from:', url);
       const response = await fetch(url);
       const data = await response.json();
-      console.log('Locator API response:', JSON.stringify(data).substring(0, 500));
+      console.log('Locator API response items count:', (data.items || []).length);
       const items = data.items || [];
 
-      // Group by Locator
+      // Group by Locator - using correct field names from API
+      // API fields: locator_id, organizationcode, subinventorycode, itemnumber, itemdescription, primaryquantity
       const byLocator = items.reduce((acc, item) => {
-        const locatorKey = item.locator || 'NO_LOCATOR';
+        const locatorKey = item.locator_id || item.locator || 'NO_LOCATOR';
         if (!acc[locatorKey]) {
           acc[locatorKey] = {
             id: locatorKey,
-            locator: item.locator || 'No Locator',
-            organization_code: item.organization_code,
-            sub_inventory_code: item.sub_inventory_code || item.subinventory_code,
+            locator: item.locator_id || item.locator || 'No Locator',
+            organization_code: item.organizationcode || item.organization_code,
+            sub_inventory_code: item.subinventorycode || item.sub_inventory_code,
             totalQuantity: 0,
             items: [],
           };
         }
-        acc[locatorKey].totalQuantity += item.onhand_quantity || item.primaryquantity || 0;
+        // primaryquantity is a string, need to parse it
+        const qty = parseFloat(item.primaryquantity) || 0;
+        acc[locatorKey].totalQuantity += qty;
         acc[locatorKey].items.push({
           ...item,
-          id: `${locatorKey}-${item.item_number}-${item.lot_number || 'nolot'}-${Math.random()}`,
+          // Normalize field names for display
+          item_number: item.itemnumber || item.item_number,
+          item_description: item.itemdescription || item.item_description,
+          organization_code: item.organizationcode || item.organization_code,
+          sub_inventory_code: item.subinventorycode || item.sub_inventory_code,
+          locator: item.locator_id || item.locator,
+          primaryquantity: qty,
+          id: `${locatorKey}-${item.itemnumber || item.item_number}-${item.lotnumber || 'nolot'}-${Math.random()}`,
         });
         return acc;
       }, {});
@@ -362,6 +372,7 @@ export default function App() {
       setGroupedByLocator(Object.values(byLocator));
       setLocatorLoading(false);
     } catch (error) {
+      console.log('Locator API error:', error);
       Alert.alert('Error', 'Failed to fetch locator data: ' + error.message);
       setLocatorLoading(false);
     }
@@ -2496,13 +2507,13 @@ export default function App() {
                   </View>
                   <View style={styles.lotStatBox}>
                     <Text style={styles.lotStatValue}>
-                      {filteredByLocator.reduce((sum, loc) => sum + (loc.lotCount || 0), 0)}
+                      {filteredByLocator.reduce((sum, loc) => sum + (loc.items?.length || 0), 0)}
                     </Text>
-                    <Text style={styles.lotStatLabel}>Lots</Text>
+                    <Text style={styles.lotStatLabel}>Items</Text>
                   </View>
                   <View style={styles.lotStatBox}>
                     <Text style={styles.lotStatValue}>
-                      {filteredByLocator.reduce((sum, loc) => sum + loc.totalQuantity, 0).toLocaleString()}
+                      {filteredByLocator.reduce((sum, loc) => sum + (loc.totalQuantity || 0), 0).toLocaleString()}
                     </Text>
                     <Text style={styles.lotStatLabel}>Total Qty</Text>
                   </View>
