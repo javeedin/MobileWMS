@@ -2100,10 +2100,11 @@ export default function App() {
           <ScrollView contentContainerStyle={styles.lotsOrgList}>
             {organizationsList.map((org, index) => (
               <TouchableOpacity
-                key={org.organization_code || org.organization_id || `org-${index}`}
+                key={org.warehouse_code || org.subinventory_code || `org-${index}`}
                 style={styles.lotsOrgCard}
                 onPress={() => {
-                  const orgCode = org.organization_code || org.organization_name || org.org_code;
+                  // API uses warehouse_code for organization
+                  const orgCode = org.warehouse_code || org.organization_code;
                   console.log('Selected org:', orgCode, org);
                   setLotsSelectedOrg(orgCode);
                   setLotsOrgFilter(orgCode);
@@ -2118,11 +2119,11 @@ export default function App() {
                 </View>
                 <View style={styles.lotsOrgInfo}>
                   <Text style={styles.lotsOrgName}>
-                    {org.organization_code || org.organization_name || org.org_code || org.name || JSON.stringify(org)}
+                    {org.warehouse_code || org.organization_code}
                   </Text>
-                  {(org.organization_name || org.description) && (
-                    <Text style={styles.lotsOrgCount}>{org.organization_name || org.description}</Text>
-                  )}
+                  <Text style={styles.lotsOrgCount}>
+                    {org.subinventory_code} - {org.subinventory_name}
+                  </Text>
                 </View>
                 <Text style={styles.lotsOrgArrow}>→</Text>
               </TouchableOpacity>
