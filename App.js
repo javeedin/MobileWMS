@@ -1694,54 +1694,52 @@ const styles = StyleSheet.create({
   // ========== LOGIN SCREEN ==========
   loginTopSection: {
     backgroundColor: COLORS.primary,
-    paddingTop: 50,
-    paddingBottom: 60,
-    borderBottomLeftRadius: RADIUS.xxl,
-    borderBottomRightRadius: RADIUS.xxl,
+    paddingTop: 36,
+    paddingBottom: 32,
+    borderBottomLeftRadius: RADIUS.xl,
+    borderBottomRightRadius: RADIUS.xl,
     alignItems: 'center',
   },
   loginLogoContainer: {
-    width: 72,
-    height: 72,
+    width: 48,
+    height: 48,
     backgroundColor: COLORS.surface,
     borderRadius: RADIUS.full,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING.md,
-    ...SHADOWS.lg,
+    marginBottom: SPACING.sm,
+    ...SHADOWS.md,
   },
   loginLogoIcon: {
-    fontSize: 36,
+    fontSize: 24,
   },
   loginTitle: {
-    fontSize: FONT_SIZES.xxl,
+    fontSize: FONT_SIZES.lg,
     fontWeight: '700',
     color: COLORS.white,
-    marginBottom: SPACING.xs,
-    letterSpacing: -0.5,
+    marginBottom: 2,
   },
   loginSubtitle: {
-    fontSize: FONT_SIZES.sm,
+    fontSize: FONT_SIZES.xs,
     color: COLORS.white,
     opacity: 0.9,
-    fontWeight: '400',
   },
   loginFormContainer: {
     flex: 1,
-    paddingHorizontal: SPACING.lg,
-    marginTop: -40,
+    paddingHorizontal: SPACING.md,
+    marginTop: -20,
   },
   loginCard: {
     backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.xl,
-    padding: SPACING.xl,
-    ...SHADOWS.lg,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    ...SHADOWS.md,
   },
   loginCardTitle: {
-    fontSize: FONT_SIZES.xl,
+    fontSize: FONT_SIZES.md,
     fontWeight: '600',
     color: COLORS.neutral900,
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.md,
     textAlign: 'center',
   },
   inputGroup: {
@@ -1839,8 +1837,8 @@ const styles = StyleSheet.create({
   // ========== DASHBOARD HEADER ==========
   dashboardHeader: {
     backgroundColor: COLORS.primary,
-    paddingTop: 44,
-    paddingBottom: SPACING.md,
+    paddingTop: 36,
+    paddingBottom: SPACING.sm,
     paddingHorizontal: SPACING.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2022,15 +2020,15 @@ const styles = StyleSheet.create({
   // ========== SCREEN HEADER ==========
   screenHeader: {
     backgroundColor: COLORS.primary,
-    paddingTop: 44,
-    paddingBottom: SPACING.sm,
+    paddingTop: 36,
+    paddingBottom: 6,
     paddingHorizontal: SPACING.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   backButton: {
-    fontSize: 28,
+    fontSize: 24,
     color: COLORS.white,
     fontWeight: '500',
   },
@@ -2074,7 +2072,7 @@ const styles = StyleSheet.create({
   // ========== STATS CONTAINER ==========
   statsContainer: {
     backgroundColor: COLORS.surface,
-    padding: SPACING.lg,
+    padding: SPACING.sm,
     flexDirection: 'row',
     justifyContent: 'center',
     borderBottomWidth: 1,
@@ -2082,17 +2080,17 @@ const styles = StyleSheet.create({
   },
   statBox: {
     alignItems: 'center',
-    paddingHorizontal: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
   },
   statValue: {
-    fontSize: FONT_SIZES.xxxl,
+    fontSize: FONT_SIZES.xl,
     fontWeight: '700',
     color: COLORS.primary,
   },
   statLabel: {
-    fontSize: FONT_SIZES.sm,
+    fontSize: FONT_SIZES.xs,
     color: COLORS.neutral500,
-    marginTop: SPACING.xs,
+    marginTop: 2,
     fontWeight: '500',
   },
 
@@ -2259,9 +2257,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 44,
+    paddingTop: 36,
     paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.sm,
+    paddingBottom: 6,
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   scannerBackButton: {
@@ -2760,7 +2758,7 @@ const styles = StyleSheet.create({
   },
   lotsStatsContainer: {
     backgroundColor: COLORS.surface,
-    padding: SPACING.md,
+    padding: SPACING.sm,
     flexDirection: 'row',
     justifyContent: 'space-around',
     borderBottomWidth: 1,
@@ -2768,10 +2766,10 @@ const styles = StyleSheet.create({
   },
   lotStatBox: {
     alignItems: 'center',
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.sm,
   },
   lotStatValue: {
-    fontSize: FONT_SIZES.xxl,
+    fontSize: FONT_SIZES.lg,
     fontWeight: '700',
     color: COLORS.primary,
   },
