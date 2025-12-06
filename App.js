@@ -162,6 +162,16 @@ export default function App() {
   const [itemSuggestions, setItemSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
+  // Onhand by Lots state
+  const [lotsData, setLotsData] = useState([]);
+  const [lotsLoading, setLotsLoading] = useState(false);
+  const [groupedLotsData, setGroupedLotsData] = useState([]);
+  const [selectedLotItem, setSelectedLotItem] = useState(null);
+  const [selectedLot, setSelectedLot] = useState(null);
+  const [serialNumbers, setSerialNumbers] = useState([]);
+  const [serialLoading, setSerialLoading] = useState(false);
+  const [lotsSearchQuery, setLotsSearchQuery] = useState('');
+
   // Handle Login
   const handleLogin = () => {
     if (username === 'admin' && password === 'admin123') {
@@ -245,6 +255,80 @@ export default function App() {
     } catch (error) {
       Alert.alert('Error', 'Failed to fetch onhand data: ' + error.message);
       setOnhandLoading(false);
+    }
+  };
+
+  // Fetch Onhand by Lots
+  const fetchLotsData = async () => {
+    setLotsLoading(true);
+    try {
+      const response = await fetch(
+        'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandbylots'
+      );
+      const data = await response.json();
+
+      const items = data.items || [];
+      setLotsData(items);
+
+      // Group by item (organization_code, sub_inventory_code, item_number, item_description)
+      const grouped = items.reduce((acc, item) => {
+        const key = `${item.organization_code}-${item.sub_inventory_code}-${item.item_number}`;
+        if (!acc[key]) {
+          acc[key] = {
+            id: key,
+            organization_code: item.organization_code,
+            sub_inventory_code: item.sub_inventory_code,
+            item_number: item.item_number,
+            item_description: item.item_description,
+            totalQuantity: 0,
+            lots: [],
+          };
+        }
+        acc[key].totalQuantity += item.primaryquantity || 0;
+        acc[key].lots.push({
+          ...item,
+          id: `${key}-${item.lotnumber}-${item.lid}`,
+        });
+        return acc;
+      }, {});
+
+      setGroupedLotsData(Object.values(grouped));
+      setLotsLoading(false);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to fetch lots data: ' + error.message);
+      setLotsLoading(false);
+    }
+  };
+
+  // Fetch Serial Numbers with authentication
+  const fetchSerialNumbers = async (srnoLink) => {
+    if (!srnoLink) {
+      Alert.alert('Info', 'No serial numbers available for this lot');
+      return;
+    }
+
+    setSerialLoading(true);
+    try {
+      const credentials = btoa('javeed:Fusion@1234');
+      const response = await fetch(srnoLink, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Basic ${credentials}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      setSerialNumbers(data.items || []);
+      setSerialLoading(false);
+      setCurrentScreen('SerialNumbers');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to fetch serial numbers: ' + error.message);
+      setSerialLoading(false);
     }
   };
 
@@ -522,6 +606,9 @@ export default function App() {
             <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuOpen(false); setCurrentScreen('Inventory'); }}>
               <Text style={styles.menuItemText}>📦 Inventory</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuOpen(false); setCurrentScreen('OnhandByLots'); fetchLotsData(); }}>
+              <Text style={styles.menuItemText}>🏷️ Onhand by Lots</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
               <Text style={[styles.menuItemText, { color: COLORS.danger }]}>🚪 Logout</Text>
             </TouchableOpacity>
@@ -582,6 +669,19 @@ export default function App() {
               <Text style={styles.cardIcon}>📤</Text>
               <Text style={styles.cardTitle}>Ship Orders</Text>
               <Text style={styles.cardDescription}>Process outgoing orders</Text>
+            </TouchableOpacity>
+
+            {/* Onhand by Lots Card */}
+            <TouchableOpacity
+              style={styles.featureCard}
+              onPress={() => {
+                setCurrentScreen('OnhandByLots');
+                fetchLotsData();
+              }}
+            >
+              <Text style={styles.cardIcon}>🏷️</Text>
+              <Text style={styles.cardTitle}>Onhand by Lots</Text>
+              <Text style={styles.cardDescription}>View inventory by lot numbers</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -1236,6 +1336,345 @@ export default function App() {
           <Text style={styles.placeholderTitle}>Ship Orders</Text>
           <Text style={styles.placeholderText}>Coming soon...</Text>
         </View>
+      </View>
+    );
+  }
+
+  // Filter grouped lots data
+  const filteredGroupedLots = groupedLotsData.filter(item => {
+    if (!lotsSearchQuery) return true;
+    const query = lotsSearchQuery.toLowerCase();
+    return (
+      (item.item_number && item.item_number.toLowerCase().includes(query)) ||
+      (item.item_description && item.item_description.toLowerCase().includes(query)) ||
+      (item.sub_inventory_code && item.sub_inventory_code.toLowerCase().includes(query))
+    );
+  });
+
+  // Onhand by Lots Screen (Grouped View)
+  if (currentScreen === 'OnhandByLots') {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity onPress={() => {
+            setCurrentScreen('Dashboard');
+            setLotsData([]);
+            setGroupedLotsData([]);
+            setLotsSearchQuery('');
+          }}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.screenTitle}>Onhand by Lots</Text>
+          <View style={styles.headerSpacer} />
+          <View style={styles.headerRight}>
+            <TouchableOpacity onPress={fetchLotsData}>
+              <Text style={styles.refreshButton}>🔄</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Search Bar */}
+        <View style={styles.lotsSearchContainer}>
+          <View style={styles.searchInputContainer}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search by item code or description..."
+              value={lotsSearchQuery}
+              onChangeText={setLotsSearchQuery}
+              autoCapitalize="none"
+            />
+            {lotsSearchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setLotsSearchQuery('')}>
+                <Text style={styles.clearIcon}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* Stats */}
+        <View style={styles.lotsStatsContainer}>
+          <View style={styles.lotStatBox}>
+            <Text style={styles.lotStatValue}>{filteredGroupedLots.length}</Text>
+            <Text style={styles.lotStatLabel}>Items</Text>
+          </View>
+          <View style={styles.lotStatBox}>
+            <Text style={styles.lotStatValue}>
+              {filteredGroupedLots.reduce((sum, item) => sum + item.lots.length, 0)}
+            </Text>
+            <Text style={styles.lotStatLabel}>Lots</Text>
+          </View>
+          <View style={styles.lotStatBox}>
+            <Text style={styles.lotStatValue}>
+              {filteredGroupedLots.reduce((sum, item) => sum + item.totalQuantity, 0).toLocaleString()}
+            </Text>
+            <Text style={styles.lotStatLabel}>Total Qty</Text>
+          </View>
+        </View>
+
+        {lotsLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Loading lots data...</Text>
+          </View>
+        ) : filteredGroupedLots.length > 0 ? (
+          <FlatList
+            data={filteredGroupedLots}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.lotsList}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.lotItemCard}
+                onPress={() => {
+                  setSelectedLotItem(item);
+                  setCurrentScreen('LotDetails');
+                }}
+              >
+                <View style={styles.lotItemHeader}>
+                  <View style={styles.lotItemInfo}>
+                    <Text style={styles.lotItemNumber}>{item.item_number}</Text>
+                    <View style={styles.lotBadgeRow}>
+                      <View style={styles.orgBadgeSmall}>
+                        <Text style={styles.orgBadgeSmallText}>{item.organization_code}</Text>
+                      </View>
+                      <View style={styles.subinvBadge}>
+                        <Text style={styles.subinvBadgeText}>{item.sub_inventory_code}</Text>
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.lotQtyContainer}>
+                    <Text style={styles.lotTotalQty}>{item.totalQuantity.toLocaleString()}</Text>
+                    <Text style={styles.lotQtyLabel}>Total Qty</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.lotItemDescription} numberOfLines={2}>
+                  {item.item_description}
+                </Text>
+
+                <View style={styles.lotItemFooter}>
+                  <View style={styles.lotCountBadge}>
+                    <Text style={styles.lotCountText}>{item.lots.length} lot{item.lots.length !== 1 ? 's' : ''}</Text>
+                  </View>
+                  <Text style={styles.drillDownHint}>Tap to view lots →</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          />
+        ) : (
+          <View style={styles.emptyStateContainer}>
+            <Text style={styles.emptyStateIcon}>🏷️</Text>
+            <Text style={styles.emptyStateText}>No lots data found</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={fetchLotsData}>
+              <Text style={styles.retryButtonText}>Fetch Lots Data</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  // Lot Details Screen (Individual Lots)
+  if (currentScreen === 'LotDetails' && selectedLotItem) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity onPress={() => {
+            setSelectedLotItem(null);
+            setCurrentScreen('OnhandByLots');
+          }}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.screenTitle}>Lot Details</Text>
+            <Text style={styles.screenSubtitle}>{selectedLotItem.item_number}</Text>
+          </View>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        {/* Item Summary Card */}
+        <View style={styles.lotSummaryCard}>
+          <Text style={styles.lotSummaryTitle}>{selectedLotItem.item_description}</Text>
+          <View style={styles.lotSummaryRow}>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Organization</Text>
+              <Text style={styles.lotSummaryValue}>{selectedLotItem.organization_code}</Text>
+            </View>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Subinventory</Text>
+              <Text style={styles.lotSummaryValue}>{selectedLotItem.sub_inventory_code}</Text>
+            </View>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Total Qty</Text>
+              <Text style={[styles.lotSummaryValue, { color: COLORS.success }]}>
+                {selectedLotItem.totalQuantity.toLocaleString()}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Lots List */}
+        <View style={styles.lotsListHeader}>
+          <Text style={styles.lotsListTitle}>Lots ({selectedLotItem.lots.length})</Text>
+        </View>
+
+        <FlatList
+          data={selectedLotItem.lots}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.lotDetailsList}
+          renderItem={({ item: lot }) => (
+            <View style={styles.lotDetailCard}>
+              <View style={styles.lotDetailHeader}>
+                <View style={styles.lotNumberContainer}>
+                  <Text style={styles.lotNumberLabel}>Lot #</Text>
+                  <Text style={styles.lotNumberValue}>{lot.lotnumber || 'N/A'}</Text>
+                </View>
+                <View style={[
+                  styles.statusBadge,
+                  { backgroundColor: lot.materialstatus === 'Active' ? COLORS.successLight : COLORS.warningLight }
+                ]}>
+                  <Text style={[
+                    styles.statusBadgeText,
+                    { color: lot.materialstatus === 'Active' ? COLORS.success : COLORS.warning }
+                  ]}>
+                    {lot.materialstatus || 'Unknown'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.lotDetailRow}>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Quantity</Text>
+                  <Text style={styles.lotDetailValue}>{lot.primaryquantity || 0}</Text>
+                </View>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Expiration</Text>
+                  <Text style={styles.lotDetailValue}>
+                    {lot.expirationdate ? new Date(lot.expirationdate).toLocaleDateString() : 'N/A'}
+                  </Text>
+                </View>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Instance</Text>
+                  <Text style={styles.lotDetailValue}>{lot.instance_name || 'N/A'}</Text>
+                </View>
+              </View>
+
+              {lot.trx_number && (
+                <View style={styles.lotExtraInfo}>
+                  <Text style={styles.lotExtraLabel}>Transaction:</Text>
+                  <Text style={styles.lotExtraValue}>{lot.trx_number}</Text>
+                </View>
+              )}
+
+              {/* Serial Numbers Button */}
+              <TouchableOpacity
+                style={[
+                  styles.serialButton,
+                  !lot.srno_link && styles.serialButtonDisabled
+                ]}
+                onPress={() => {
+                  if (lot.srno_link) {
+                    setSelectedLot(lot);
+                    fetchSerialNumbers(lot.srno_link);
+                  } else {
+                    Alert.alert('Info', 'No serial numbers available for this lot');
+                  }
+                }}
+                disabled={serialLoading}
+              >
+                {serialLoading && selectedLot?.id === lot.id ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : (
+                  <>
+                    <Text style={styles.serialButtonText}>
+                      {lot.srno_link ? '🔢 View Serial Numbers' : '🔢 No Serials'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+        />
+      </View>
+    );
+  }
+
+  // Serial Numbers Screen
+  if (currentScreen === 'SerialNumbers' && selectedLot) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity onPress={() => {
+            setSerialNumbers([]);
+            setSelectedLot(null);
+            setCurrentScreen('LotDetails');
+          }}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.screenTitle}>Serial Numbers</Text>
+            <Text style={styles.screenSubtitle}>Lot: {selectedLot.lotnumber}</Text>
+          </View>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        {/* Lot Info */}
+        <View style={styles.serialLotInfo}>
+          <Text style={styles.serialLotItem}>{selectedLotItem?.item_number}</Text>
+          <Text style={styles.serialLotDesc}>{selectedLotItem?.item_description}</Text>
+        </View>
+
+        {serialLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Loading serial numbers...</Text>
+          </View>
+        ) : serialNumbers.length > 0 ? (
+          <FlatList
+            data={serialNumbers}
+            keyExtractor={(item, index) => `serial-${index}`}
+            contentContainerStyle={styles.serialList}
+            renderItem={({ item: serial, index }) => (
+              <View style={styles.serialCard}>
+                <View style={styles.serialCardHeader}>
+                  <View style={styles.serialIndexBadge}>
+                    <Text style={styles.serialIndexText}>{index + 1}</Text>
+                  </View>
+                  <Text style={styles.serialNumber}>
+                    {serial.SerialNumber || serial.serialNumber || serial.serial_number || `Serial ${index + 1}`}
+                  </Text>
+                </View>
+                {serial.Status && (
+                  <View style={styles.serialDetailRow}>
+                    <Text style={styles.serialDetailLabel}>Status:</Text>
+                    <Text style={styles.serialDetailValue}>{serial.Status}</Text>
+                  </View>
+                )}
+                {serial.CurrentOrganizationId && (
+                  <View style={styles.serialDetailRow}>
+                    <Text style={styles.serialDetailLabel}>Org ID:</Text>
+                    <Text style={styles.serialDetailValue}>{serial.CurrentOrganizationId}</Text>
+                  </View>
+                )}
+              </View>
+            )}
+          />
+        ) : (
+          <View style={styles.emptyStateContainer}>
+            <Text style={styles.emptyStateIcon}>🔢</Text>
+            <Text style={styles.emptyStateText}>No serial numbers found</Text>
+            <Text style={styles.emptyStateHint}>This lot may not have serialized items</Text>
+          </View>
+        )}
       </View>
     );
   }
@@ -2310,5 +2749,340 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.sm,
     color: COLORS.textSecondary,
     textAlign: 'center',
+  },
+
+  // ========== ONHAND BY LOTS ==========
+  lotsSearchContainer: {
+    backgroundColor: COLORS.surface,
+    padding: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  lotsStatsContainer: {
+    backgroundColor: COLORS.surface,
+    padding: SPACING.md,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  lotStatBox: {
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+  },
+  lotStatValue: {
+    fontSize: FONT_SIZES.xxl,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  lotStatLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  lotsList: {
+    padding: SPACING.md,
+  },
+  lotItemCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
+  },
+  lotItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: SPACING.sm,
+  },
+  lotItemInfo: {
+    flex: 1,
+  },
+  lotItemNumber: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: COLORS.neutral900,
+    marginBottom: SPACING.xs,
+  },
+  lotBadgeRow: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+  },
+  orgBadgeSmall: {
+    backgroundColor: COLORS.primaryLight,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  orgBadgeSmallText: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  subinvBadge: {
+    backgroundColor: COLORS.infoLight,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  subinvBadgeText: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: COLORS.info,
+  },
+  lotQtyContainer: {
+    alignItems: 'flex-end',
+  },
+  lotTotalQty: {
+    fontSize: FONT_SIZES.xxl,
+    fontWeight: '700',
+    color: COLORS.success,
+  },
+  lotQtyLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+  },
+  lotItemDescription: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral600,
+    marginBottom: SPACING.sm,
+    lineHeight: 18,
+  },
+  lotItemFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.neutral100,
+  },
+  lotCountBadge: {
+    backgroundColor: COLORS.neutral100,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.full,
+  },
+  lotCountText: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: COLORS.neutral600,
+  },
+  drillDownHint: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.primary,
+    fontWeight: '500',
+  },
+
+  // ========== LOT DETAILS ==========
+  lotSummaryCard: {
+    backgroundColor: COLORS.surface,
+    margin: SPACING.md,
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+    ...SHADOWS.sm,
+  },
+  lotSummaryTitle: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+    marginBottom: SPACING.md,
+  },
+  lotSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  lotSummaryItem: {
+    flex: 1,
+  },
+  lotSummaryLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginBottom: 2,
+  },
+  lotSummaryValue: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+  },
+  lotsListHeader: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.neutral50,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  lotsListTitle: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+  },
+  lotDetailsList: {
+    padding: SPACING.md,
+  },
+  lotDetailCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
+  },
+  lotDetailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  lotNumberContainer: {
+    flex: 1,
+  },
+  lotNumberLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginBottom: 2,
+  },
+  lotNumberValue: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: COLORS.neutral900,
+  },
+  statusBadge: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.full,
+  },
+  statusBadgeText: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+  },
+  lotDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.neutral100,
+  },
+  lotDetailItem: {
+    flex: 1,
+  },
+  lotDetailLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginBottom: 2,
+  },
+  lotDetailValue: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+  },
+  lotExtraInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: SPACING.sm,
+  },
+  lotExtraLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginRight: SPACING.xs,
+  },
+  lotExtraValue: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+  },
+  serialButton: {
+    backgroundColor: COLORS.info,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginTop: SPACING.md,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    ...SHADOWS.sm,
+  },
+  serialButtonDisabled: {
+    backgroundColor: COLORS.neutral300,
+  },
+  serialButtonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+  },
+
+  // ========== SERIAL NUMBERS ==========
+  serialLotInfo: {
+    backgroundColor: COLORS.primaryLight,
+    padding: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  serialLotItem: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginBottom: 2,
+  },
+  serialLotDesc: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral600,
+  },
+  serialList: {
+    padding: SPACING.md,
+  },
+  serialCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
+  },
+  serialCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  serialIndexBadge: {
+    backgroundColor: COLORS.primary,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SPACING.sm,
+  },
+  serialIndexText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '700',
+  },
+  serialNumber: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+    flex: 1,
+  },
+  serialDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: SPACING.xs,
+  },
+  serialDetailLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginRight: SPACING.xs,
+  },
+  serialDetailValue: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: COLORS.neutral700,
   },
 });
