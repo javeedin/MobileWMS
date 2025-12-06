@@ -172,6 +172,18 @@ export default function App() {
   const [serialLoading, setSerialLoading] = useState(false);
   const [lotsSearchQuery, setLotsSearchQuery] = useState('');
 
+  // Onhand by Lots - Tab and Filter state
+  const [lotsActiveTab, setLotsActiveTab] = useState('byItem'); // byItem, byLot, byLocator
+  const [lotsSelectedOrg, setLotsSelectedOrg] = useState(null);
+  const [lotsOrgFilter, setLotsOrgFilter] = useState('');
+  const [lotsProductFilter, setLotsProductFilter] = useState('');
+  const [showLotsOrgDropdown, setShowLotsOrgDropdown] = useState(false);
+  const [showLotsProductDropdown, setShowLotsProductDropdown] = useState(false);
+  const [groupedByLot, setGroupedByLot] = useState([]);
+  const [groupedByLocator, setGroupedByLocator] = useState([]);
+  const [selectedLocatorGroup, setSelectedLocatorGroup] = useState(null);
+  const [selectedLotGroup, setSelectedLotGroup] = useState(null);
+
   // Ship Orders state
   const [shipOrdersData, setShipOrdersData] = useState([]);
   const [shipOrdersLoading, setShipOrdersLoading] = useState(false);
@@ -273,7 +285,7 @@ export default function App() {
   };
 
   // Fetch Onhand by Lots
-  const fetchLotsData = async () => {
+  const fetchLotsData = async (orgCode = null) => {
     setLotsLoading(true);
     try {
       const response = await fetch(
@@ -281,11 +293,17 @@ export default function App() {
       );
       const data = await response.json();
 
-      const items = data.items || [];
+      let items = data.items || [];
+
+      // Filter by organization if specified
+      if (orgCode) {
+        items = items.filter(item => item.organization_code === orgCode);
+      }
+
       setLotsData(items);
 
       // Group by item (organization_code, sub_inventory_code, item_number, item_description)
-      const grouped = items.reduce((acc, item) => {
+      const groupedByItem = items.reduce((acc, item) => {
         const key = `${item.organization_code}-${item.sub_inventory_code}-${item.item_number}`;
         if (!acc[key]) {
           acc[key] = {
@@ -294,6 +312,7 @@ export default function App() {
             sub_inventory_code: item.sub_inventory_code,
             item_number: item.item_number,
             item_description: item.item_description,
+            locator: item.locator,
             totalQuantity: 0,
             lots: [],
           };
@@ -305,8 +324,76 @@ export default function App() {
         });
         return acc;
       }, {});
+      setGroupedLotsData(Object.values(groupedByItem));
 
-      setGroupedLotsData(Object.values(grouped));
+      // Group by Lot (lotnumber)
+      const byLot = items.reduce((acc, item) => {
+        const lotKey = item.lotnumber || 'NO_LOT';
+        if (!acc[lotKey]) {
+          acc[lotKey] = {
+            id: lotKey,
+            lotnumber: item.lotnumber || 'No Lot',
+            organization_code: item.organization_code,
+            sub_inventory_code: item.sub_inventory_code,
+            materialstatus: item.materialstatus,
+            expirationdate: item.expirationdate,
+            totalQuantity: 0,
+            items: [],
+          };
+        }
+        acc[lotKey].totalQuantity += item.primaryquantity || 0;
+        acc[lotKey].items.push({
+          ...item,
+          id: `${lotKey}-${item.item_number}-${item.lid}`,
+        });
+        return acc;
+      }, {});
+      setGroupedByLot(Object.values(byLot));
+
+      // Group by Locator
+      const byLocator = items.reduce((acc, item) => {
+        const locatorKey = item.locator || 'NO_LOCATOR';
+        if (!acc[locatorKey]) {
+          acc[locatorKey] = {
+            id: locatorKey,
+            locator: item.locator || 'No Locator',
+            organization_code: item.organization_code,
+            sub_inventory_code: item.sub_inventory_code,
+            totalQuantity: 0,
+            lots: {},
+          };
+        }
+        acc[locatorKey].totalQuantity += item.primaryquantity || 0;
+
+        // Subgroup by lot within locator
+        const lotKey = item.lotnumber || 'NO_LOT';
+        if (!acc[locatorKey].lots[lotKey]) {
+          acc[locatorKey].lots[lotKey] = {
+            id: `${locatorKey}-${lotKey}`,
+            lotnumber: item.lotnumber || 'No Lot',
+            materialstatus: item.materialstatus,
+            expirationdate: item.expirationdate,
+            totalQuantity: 0,
+            items: [],
+          };
+        }
+        acc[locatorKey].lots[lotKey].totalQuantity += item.primaryquantity || 0;
+        acc[locatorKey].lots[lotKey].items.push({
+          ...item,
+          id: `${locatorKey}-${lotKey}-${item.item_number}-${item.lid}`,
+        });
+
+        return acc;
+      }, {});
+
+      // Convert lots object to array for each locator
+      const locatorArray = Object.values(byLocator).map(locator => ({
+        ...locator,
+        lots: Object.values(locator.lots),
+        lotCount: Object.keys(locator.lots).length,
+      }));
+      setGroupedByLocator(locatorArray);
+
       setLotsLoading(false);
     } catch (error) {
       Alert.alert('Error', 'Failed to fetch lots data: ' + error.message);
@@ -718,7 +805,7 @@ export default function App() {
             <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuOpen(false); setCurrentScreen('Inventory'); }}>
               <Text style={styles.menuItemText}>📦 Inventory</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuOpen(false); setCurrentScreen('OnhandByLots'); fetchLotsData(); }}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuOpen(false); setCurrentScreen('LotsOrgSelection'); fetchLotsData(); }}>
               <Text style={styles.menuItemText}>🏷️ Onhand by Lots</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
@@ -1893,8 +1980,44 @@ export default function App() {
     );
   });
 
-  // Onhand by Lots Screen (Grouped View)
-  if (currentScreen === 'OnhandByLots') {
+  // Get unique organizations from lotsData
+  const uniqueOrganizations = [...new Set(lotsData.map(item => item.organization_code))].filter(Boolean);
+
+  // Get unique products for autofill (filtered by selected org if any)
+  const uniqueProducts = [...new Set(
+    lotsData
+      .filter(item => !lotsOrgFilter || item.organization_code === lotsOrgFilter)
+      .map(item => item.item_number)
+  )].filter(Boolean);
+
+  // Filter org suggestions
+  const orgSuggestions = uniqueOrganizations.filter(org =>
+    org.toLowerCase().includes(lotsOrgFilter.toLowerCase())
+  );
+
+  // Filter product suggestions
+  const productSuggestions = uniqueProducts.filter(prod =>
+    prod.toLowerCase().includes(lotsProductFilter.toLowerCase())
+  ).slice(0, 10);
+
+  // Apply filters to all grouped data
+  const applyLotsFilters = (data) => {
+    return data.filter(item => {
+      const matchesOrg = !lotsOrgFilter || item.organization_code === lotsOrgFilter;
+      const matchesProduct = !lotsProductFilter ||
+        (item.item_number && item.item_number.toLowerCase().includes(lotsProductFilter.toLowerCase())) ||
+        (item.item_description && item.item_description.toLowerCase().includes(lotsProductFilter.toLowerCase()));
+      const matchesSearch = !lotsSearchQuery ||
+        (item.item_number && item.item_number.toLowerCase().includes(lotsSearchQuery.toLowerCase())) ||
+        (item.item_description && item.item_description.toLowerCase().includes(lotsSearchQuery.toLowerCase())) ||
+        (item.lotnumber && item.lotnumber.toLowerCase().includes(lotsSearchQuery.toLowerCase())) ||
+        (item.locator && item.locator.toLowerCase().includes(lotsSearchQuery.toLowerCase()));
+      return matchesOrg && matchesProduct && matchesSearch;
+    });
+  };
+
+  // Organization Selection Screen for Lots
+  if (currentScreen === 'LotsOrgSelection') {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
@@ -1905,55 +2028,227 @@ export default function App() {
             setCurrentScreen('Dashboard');
             setLotsData([]);
             setGroupedLotsData([]);
-            setLotsSearchQuery('');
+            setGroupedByLot([]);
+            setGroupedByLocator([]);
           }}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.screenTitle}>Onhand by Lots</Text>
+          <Text style={styles.screenTitle}>Select Organization</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        {lotsLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Loading organizations...</Text>
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={styles.lotsOrgList}>
+            {/* All Organizations Option */}
+            <TouchableOpacity
+              style={styles.lotsOrgCard}
+              onPress={() => {
+                setLotsSelectedOrg(null);
+                setLotsOrgFilter('');
+                setCurrentScreen('OnhandByLots');
+              }}
+            >
+              <View style={styles.lotsOrgIcon}>
+                <Text style={styles.lotsOrgIconText}>🌐</Text>
+              </View>
+              <View style={styles.lotsOrgInfo}>
+                <Text style={styles.lotsOrgName}>All Organizations</Text>
+                <Text style={styles.lotsOrgCount}>{lotsData.length} records</Text>
+              </View>
+              <Text style={styles.lotsOrgArrow}>→</Text>
+            </TouchableOpacity>
+
+            {uniqueOrganizations.map(org => {
+              const orgItems = lotsData.filter(item => item.organization_code === org);
+              return (
+                <TouchableOpacity
+                  key={org}
+                  style={styles.lotsOrgCard}
+                  onPress={() => {
+                    setLotsSelectedOrg(org);
+                    setLotsOrgFilter(org);
+                    setCurrentScreen('OnhandByLots');
+                  }}
+                >
+                  <View style={styles.lotsOrgIcon}>
+                    <Text style={styles.lotsOrgIconText}>🏭</Text>
+                  </View>
+                  <View style={styles.lotsOrgInfo}>
+                    <Text style={styles.lotsOrgName}>{org}</Text>
+                    <Text style={styles.lotsOrgCount}>{orgItems.length} records</Text>
+                  </View>
+                  <Text style={styles.lotsOrgArrow}>→</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
+      </View>
+    );
+  }
+
+  // Onhand by Lots Screen with Tabs (Grouped View)
+  if (currentScreen === 'OnhandByLots') {
+    const filteredByItem = applyLotsFilters(groupedLotsData);
+    const filteredByLot = applyLotsFilters(groupedByLot);
+    const filteredByLocator = applyLotsFilters(groupedByLocator);
+
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity onPress={() => {
+            setCurrentScreen('LotsOrgSelection');
+            setLotsSearchQuery('');
+            setLotsProductFilter('');
+            setLotsActiveTab('byItem');
+          }}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.screenTitle}>Onhand by Lots</Text>
+            {lotsSelectedOrg && <Text style={styles.screenSubtitle}>{lotsSelectedOrg}</Text>}
+          </View>
           <View style={styles.headerSpacer} />
           <View style={styles.headerRight}>
-            <TouchableOpacity onPress={fetchLotsData}>
+            <TouchableOpacity onPress={() => fetchLotsData(lotsSelectedOrg)}>
               <Text style={styles.refreshButton}>🔄</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Search Bar */}
-        <View style={styles.lotsSearchContainer}>
-          <View style={styles.searchInputContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search by item code or description..."
-              value={lotsSearchQuery}
-              onChangeText={setLotsSearchQuery}
-              autoCapitalize="none"
-            />
-            {lotsSearchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setLotsSearchQuery('')}>
-                <Text style={styles.clearIcon}>✕</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+        {/* Tab Navigation */}
+        <View style={styles.lotsTabContainer}>
+          <TouchableOpacity
+            style={[styles.lotsTab, lotsActiveTab === 'byItem' && styles.lotsTabActive]}
+            onPress={() => setLotsActiveTab('byItem')}
+          >
+            <Text style={[styles.lotsTabText, lotsActiveTab === 'byItem' && styles.lotsTabTextActive]}>By Item</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.lotsTab, lotsActiveTab === 'byLot' && styles.lotsTabActive]}
+            onPress={() => setLotsActiveTab('byLot')}
+          >
+            <Text style={[styles.lotsTabText, lotsActiveTab === 'byLot' && styles.lotsTabTextActive]}>By Lot</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.lotsTab, lotsActiveTab === 'byLocator' && styles.lotsTabActive]}
+            onPress={() => setLotsActiveTab('byLocator')}
+          >
+            <Text style={[styles.lotsTabText, lotsActiveTab === 'byLocator' && styles.lotsTabTextActive]}>By Locator</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Stats */}
-        <View style={styles.lotsStatsContainer}>
-          <View style={styles.lotStatBox}>
-            <Text style={styles.lotStatValue}>{filteredGroupedLots.length}</Text>
-            <Text style={styles.lotStatLabel}>Items</Text>
+        {/* Filters */}
+        <View style={styles.lotsFilterContainer}>
+          {/* Organization Filter */}
+          <View style={styles.lotsFilterRow}>
+            <View style={styles.lotsFilterField}>
+              <Text style={styles.lotsFilterLabel}>Organization</Text>
+              <View style={styles.lotsAutocompleteContainer}>
+                <TextInput
+                  style={styles.lotsFilterInput}
+                  placeholder="Filter by org..."
+                  value={lotsOrgFilter}
+                  onChangeText={(text) => {
+                    setLotsOrgFilter(text);
+                    setShowLotsOrgDropdown(text.length > 0);
+                  }}
+                  onFocus={() => setShowLotsOrgDropdown(lotsOrgFilter.length > 0)}
+                />
+                {lotsOrgFilter.length > 0 && (
+                  <TouchableOpacity style={styles.lotsFilterClear} onPress={() => {
+                    setLotsOrgFilter('');
+                    setShowLotsOrgDropdown(false);
+                  }}>
+                    <Text style={styles.lotsFilterClearText}>✕</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              {showLotsOrgDropdown && orgSuggestions.length > 0 && (
+                <View style={styles.lotsDropdown}>
+                  {orgSuggestions.slice(0, 5).map(org => (
+                    <TouchableOpacity
+                      key={org}
+                      style={styles.lotsDropdownItem}
+                      onPress={() => {
+                        setLotsOrgFilter(org);
+                        setShowLotsOrgDropdown(false);
+                      }}
+                    >
+                      <Text style={styles.lotsDropdownText}>{org}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            {/* Product Filter */}
+            <View style={styles.lotsFilterField}>
+              <Text style={styles.lotsFilterLabel}>Product</Text>
+              <View style={styles.lotsAutocompleteContainer}>
+                <TextInput
+                  style={styles.lotsFilterInput}
+                  placeholder="Filter by product..."
+                  value={lotsProductFilter}
+                  onChangeText={(text) => {
+                    setLotsProductFilter(text);
+                    setShowLotsProductDropdown(text.length > 0);
+                  }}
+                  onFocus={() => setShowLotsProductDropdown(lotsProductFilter.length > 0)}
+                />
+                {lotsProductFilter.length > 0 && (
+                  <TouchableOpacity style={styles.lotsFilterClear} onPress={() => {
+                    setLotsProductFilter('');
+                    setShowLotsProductDropdown(false);
+                  }}>
+                    <Text style={styles.lotsFilterClearText}>✕</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              {showLotsProductDropdown && productSuggestions.length > 0 && (
+                <View style={styles.lotsDropdown}>
+                  {productSuggestions.map(prod => (
+                    <TouchableOpacity
+                      key={prod}
+                      style={styles.lotsDropdownItem}
+                      onPress={() => {
+                        setLotsProductFilter(prod);
+                        setShowLotsProductDropdown(false);
+                      }}
+                    >
+                      <Text style={styles.lotsDropdownText}>{prod}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
           </View>
-          <View style={styles.lotStatBox}>
-            <Text style={styles.lotStatValue}>
-              {filteredGroupedLots.reduce((sum, item) => sum + item.lots.length, 0)}
-            </Text>
-            <Text style={styles.lotStatLabel}>Lots</Text>
-          </View>
-          <View style={styles.lotStatBox}>
-            <Text style={styles.lotStatValue}>
-              {filteredGroupedLots.reduce((sum, item) => sum + item.totalQuantity, 0).toLocaleString()}
-            </Text>
-            <Text style={styles.lotStatLabel}>Total Qty</Text>
+
+          {/* Search Bar */}
+          <View style={styles.lotsSearchRow}>
+            <View style={styles.searchInputContainer}>
+              <Text style={styles.searchIcon}>🔍</Text>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search..."
+                value={lotsSearchQuery}
+                onChangeText={setLotsSearchQuery}
+                autoCapitalize="none"
+              />
+              {lotsSearchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setLotsSearchQuery('')}>
+                  <Text style={styles.clearIcon}>✕</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </View>
 
@@ -1962,58 +2257,241 @@ export default function App() {
             <ActivityIndicator size="large" color={COLORS.primary} />
             <Text style={styles.loadingText}>Loading lots data...</Text>
           </View>
-        ) : filteredGroupedLots.length > 0 ? (
-          <FlatList
-            data={filteredGroupedLots}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.lotsList}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.lotItemCard}
-                onPress={() => {
-                  setSelectedLotItem(item);
-                  setCurrentScreen('LotDetails');
-                }}
-              >
-                <View style={styles.lotItemHeader}>
-                  <View style={styles.lotItemInfo}>
-                    <Text style={styles.lotItemNumber}>{item.item_number}</Text>
-                    <View style={styles.lotBadgeRow}>
-                      <View style={styles.orgBadgeSmall}>
-                        <Text style={styles.orgBadgeSmallText}>{item.organization_code}</Text>
-                      </View>
-                      <View style={styles.subinvBadge}>
-                        <Text style={styles.subinvBadgeText}>{item.sub_inventory_code}</Text>
-                      </View>
-                    </View>
-                  </View>
-                  <View style={styles.lotQtyContainer}>
-                    <Text style={styles.lotTotalQty}>{item.totalQuantity.toLocaleString()}</Text>
-                    <Text style={styles.lotQtyLabel}>Total Qty</Text>
-                  </View>
-                </View>
-
-                <Text style={styles.lotItemDescription} numberOfLines={2}>
-                  {item.item_description}
-                </Text>
-
-                <View style={styles.lotItemFooter}>
-                  <View style={styles.lotCountBadge}>
-                    <Text style={styles.lotCountText}>{item.lots.length} lot{item.lots.length !== 1 ? 's' : ''}</Text>
-                  </View>
-                  <Text style={styles.drillDownHint}>Tap to view lots →</Text>
-                </View>
-              </TouchableOpacity>
-            )}
-          />
         ) : (
-          <View style={styles.emptyStateContainer}>
-            <Text style={styles.emptyStateIcon}>🏷️</Text>
-            <Text style={styles.emptyStateText}>No lots data found</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={fetchLotsData}>
-              <Text style={styles.retryButtonText}>Fetch Lots Data</Text>
-            </TouchableOpacity>
-          </View>
+          <>
+            {/* BY ITEM TAB */}
+            {lotsActiveTab === 'byItem' && (
+              <>
+                <View style={styles.lotsStatsContainer}>
+                  <View style={styles.lotStatBox}>
+                    <Text style={styles.lotStatValue}>{filteredByItem.length}</Text>
+                    <Text style={styles.lotStatLabel}>Items</Text>
+                  </View>
+                  <View style={styles.lotStatBox}>
+                    <Text style={styles.lotStatValue}>
+                      {filteredByItem.reduce((sum, item) => sum + item.lots.length, 0)}
+                    </Text>
+                    <Text style={styles.lotStatLabel}>Lots</Text>
+                  </View>
+                  <View style={styles.lotStatBox}>
+                    <Text style={styles.lotStatValue}>
+                      {filteredByItem.reduce((sum, item) => sum + item.totalQuantity, 0).toLocaleString()}
+                    </Text>
+                    <Text style={styles.lotStatLabel}>Total Qty</Text>
+                  </View>
+                </View>
+
+                {filteredByItem.length > 0 ? (
+                  <FlatList
+                    data={filteredByItem}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={styles.lotsList}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.lotItemCard}
+                        onPress={() => {
+                          setSelectedLotItem(item);
+                          setCurrentScreen('LotDetails');
+                        }}
+                      >
+                        <View style={styles.lotItemHeader}>
+                          <View style={styles.lotItemInfo}>
+                            <Text style={styles.lotItemNumber}>{item.item_number}</Text>
+                            <View style={styles.lotBadgeRow}>
+                              <View style={styles.orgBadgeSmall}>
+                                <Text style={styles.orgBadgeSmallText}>{item.organization_code}</Text>
+                              </View>
+                              <View style={styles.subinvBadge}>
+                                <Text style={styles.subinvBadgeText}>{item.sub_inventory_code}</Text>
+                              </View>
+                              {item.locator && (
+                                <View style={styles.locatorBadge}>
+                                  <Text style={styles.locatorBadgeText}>📍 {item.locator}</Text>
+                                </View>
+                              )}
+                            </View>
+                          </View>
+                          <View style={styles.lotQtyContainer}>
+                            <Text style={styles.lotTotalQty}>{item.totalQuantity.toLocaleString()}</Text>
+                            <Text style={styles.lotQtyLabel}>Total Qty</Text>
+                          </View>
+                        </View>
+
+                        <Text style={styles.lotItemDescription} numberOfLines={2}>
+                          {item.item_description}
+                        </Text>
+
+                        <View style={styles.lotItemFooter}>
+                          <View style={styles.lotCountBadge}>
+                            <Text style={styles.lotCountText}>{item.lots.length} lot{item.lots.length !== 1 ? 's' : ''}</Text>
+                          </View>
+                          <Text style={styles.drillDownHint}>Tap to view lots →</Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                  />
+                ) : (
+                  <View style={styles.emptyStateContainer}>
+                    <Text style={styles.emptyStateIcon}>🏷️</Text>
+                    <Text style={styles.emptyStateText}>No items found</Text>
+                  </View>
+                )}
+              </>
+            )}
+
+            {/* BY LOT TAB */}
+            {lotsActiveTab === 'byLot' && (
+              <>
+                <View style={styles.lotsStatsContainer}>
+                  <View style={styles.lotStatBox}>
+                    <Text style={styles.lotStatValue}>{filteredByLot.length}</Text>
+                    <Text style={styles.lotStatLabel}>Lots</Text>
+                  </View>
+                  <View style={styles.lotStatBox}>
+                    <Text style={styles.lotStatValue}>
+                      {filteredByLot.reduce((sum, lot) => sum + lot.items.length, 0)}
+                    </Text>
+                    <Text style={styles.lotStatLabel}>Items</Text>
+                  </View>
+                  <View style={styles.lotStatBox}>
+                    <Text style={styles.lotStatValue}>
+                      {filteredByLot.reduce((sum, lot) => sum + lot.totalQuantity, 0).toLocaleString()}
+                    </Text>
+                    <Text style={styles.lotStatLabel}>Total Qty</Text>
+                  </View>
+                </View>
+
+                {filteredByLot.length > 0 ? (
+                  <FlatList
+                    data={filteredByLot}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={styles.lotsList}
+                    renderItem={({ item: lot }) => (
+                      <TouchableOpacity
+                        style={styles.lotItemCard}
+                        onPress={() => {
+                          setSelectedLotGroup(lot);
+                          setCurrentScreen('LotGroupItems');
+                        }}
+                      >
+                        <View style={styles.lotItemHeader}>
+                          <View style={styles.lotItemInfo}>
+                            <Text style={styles.lotItemNumber}>{lot.lotnumber}</Text>
+                            <View style={styles.lotBadgeRow}>
+                              <View style={[
+                                styles.statusBadgeSmall,
+                                { backgroundColor: lot.materialstatus === 'Active' ? COLORS.successLight : COLORS.warningLight }
+                              ]}>
+                                <Text style={[
+                                  styles.statusBadgeSmallText,
+                                  { color: lot.materialstatus === 'Active' ? COLORS.success : COLORS.warning }
+                                ]}>
+                                  {lot.materialstatus || 'Unknown'}
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+                          <View style={styles.lotQtyContainer}>
+                            <Text style={styles.lotTotalQty}>{lot.totalQuantity.toLocaleString()}</Text>
+                            <Text style={styles.lotQtyLabel}>Total Qty</Text>
+                          </View>
+                        </View>
+
+                        {lot.expirationdate && (
+                          <Text style={styles.lotExpirationText}>
+                            Expires: {new Date(lot.expirationdate).toLocaleDateString()}
+                          </Text>
+                        )}
+
+                        <View style={styles.lotItemFooter}>
+                          <View style={styles.lotCountBadge}>
+                            <Text style={styles.lotCountText}>{lot.items.length} item{lot.items.length !== 1 ? 's' : ''}</Text>
+                          </View>
+                          <Text style={styles.drillDownHint}>Tap to view items →</Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                  />
+                ) : (
+                  <View style={styles.emptyStateContainer}>
+                    <Text style={styles.emptyStateIcon}>🏷️</Text>
+                    <Text style={styles.emptyStateText}>No lots found</Text>
+                  </View>
+                )}
+              </>
+            )}
+
+            {/* BY LOCATOR TAB */}
+            {lotsActiveTab === 'byLocator' && (
+              <>
+                <View style={styles.lotsStatsContainer}>
+                  <View style={styles.lotStatBox}>
+                    <Text style={styles.lotStatValue}>{filteredByLocator.length}</Text>
+                    <Text style={styles.lotStatLabel}>Locators</Text>
+                  </View>
+                  <View style={styles.lotStatBox}>
+                    <Text style={styles.lotStatValue}>
+                      {filteredByLocator.reduce((sum, loc) => sum + (loc.lotCount || 0), 0)}
+                    </Text>
+                    <Text style={styles.lotStatLabel}>Lots</Text>
+                  </View>
+                  <View style={styles.lotStatBox}>
+                    <Text style={styles.lotStatValue}>
+                      {filteredByLocator.reduce((sum, loc) => sum + loc.totalQuantity, 0).toLocaleString()}
+                    </Text>
+                    <Text style={styles.lotStatLabel}>Total Qty</Text>
+                  </View>
+                </View>
+
+                {filteredByLocator.length > 0 ? (
+                  <FlatList
+                    data={filteredByLocator}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={styles.lotsList}
+                    renderItem={({ item: locator }) => (
+                      <TouchableOpacity
+                        style={styles.lotItemCard}
+                        onPress={() => {
+                          setSelectedLocatorGroup(locator);
+                          setCurrentScreen('LocatorLots');
+                        }}
+                      >
+                        <View style={styles.lotItemHeader}>
+                          <View style={styles.lotItemInfo}>
+                            <Text style={styles.lotItemNumber}>📍 {locator.locator}</Text>
+                            <View style={styles.lotBadgeRow}>
+                              <View style={styles.orgBadgeSmall}>
+                                <Text style={styles.orgBadgeSmallText}>{locator.organization_code}</Text>
+                              </View>
+                              <View style={styles.subinvBadge}>
+                                <Text style={styles.subinvBadgeText}>{locator.sub_inventory_code}</Text>
+                              </View>
+                            </View>
+                          </View>
+                          <View style={styles.lotQtyContainer}>
+                            <Text style={styles.lotTotalQty}>{locator.totalQuantity.toLocaleString()}</Text>
+                            <Text style={styles.lotQtyLabel}>Total Qty</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.lotItemFooter}>
+                          <View style={styles.lotCountBadge}>
+                            <Text style={styles.lotCountText}>{locator.lotCount} lot{locator.lotCount !== 1 ? 's' : ''}</Text>
+                          </View>
+                          <Text style={styles.drillDownHint}>Tap to view lots →</Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                  />
+                ) : (
+                  <View style={styles.emptyStateContainer}>
+                    <Text style={styles.emptyStateIcon}>📍</Text>
+                    <Text style={styles.emptyStateText}>No locators found</Text>
+                  </View>
+                )}
+              </>
+            )}
+          </>
         )}
       </View>
     );
@@ -2217,6 +2695,293 @@ export default function App() {
             <Text style={styles.emptyStateHint}>This lot may not have serialized items</Text>
           </View>
         )}
+      </View>
+    );
+  }
+
+  // Lot Group Items Screen (Drill-down from By Lot tab)
+  if (currentScreen === 'LotGroupItems' && selectedLotGroup) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity onPress={() => {
+            setSelectedLotGroup(null);
+            setCurrentScreen('OnhandByLots');
+          }}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.screenTitle}>Lot Items</Text>
+            <Text style={styles.screenSubtitle}>{selectedLotGroup.lotnumber}</Text>
+          </View>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        {/* Lot Summary Card */}
+        <View style={styles.lotSummaryCard}>
+          <View style={styles.lotSummaryRow}>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Status</Text>
+              <Text style={[styles.lotSummaryValue, {
+                color: selectedLotGroup.materialstatus === 'Active' ? COLORS.success : COLORS.warning
+              }]}>
+                {selectedLotGroup.materialstatus || 'Unknown'}
+              </Text>
+            </View>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Expiration</Text>
+              <Text style={styles.lotSummaryValue}>
+                {selectedLotGroup.expirationdate ? new Date(selectedLotGroup.expirationdate).toLocaleDateString() : 'N/A'}
+              </Text>
+            </View>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Total Qty</Text>
+              <Text style={[styles.lotSummaryValue, { color: COLORS.success }]}>
+                {selectedLotGroup.totalQuantity.toLocaleString()}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Items List Header */}
+        <View style={styles.lotsListHeader}>
+          <Text style={styles.lotsListTitle}>Items ({selectedLotGroup.items.length})</Text>
+        </View>
+
+        <FlatList
+          data={selectedLotGroup.items}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.lotDetailsList}
+          renderItem={({ item }) => (
+            <View style={styles.lotDetailCard}>
+              <View style={styles.lotDetailHeader}>
+                <View style={styles.lotNumberContainer}>
+                  <Text style={styles.lotNumberLabel}>Item</Text>
+                  <Text style={styles.lotNumberValue}>{item.item_number}</Text>
+                </View>
+                <View style={styles.lotQtyBox}>
+                  <Text style={styles.lotQtyBoxValue}>{item.primaryquantity || 0}</Text>
+                  <Text style={styles.lotQtyBoxLabel}>Qty</Text>
+                </View>
+              </View>
+
+              <Text style={styles.lotItemDescription} numberOfLines={2}>
+                {item.item_description}
+              </Text>
+
+              <View style={styles.lotDetailRow}>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Organization</Text>
+                  <Text style={styles.lotDetailValue}>{item.organization_code}</Text>
+                </View>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Subinventory</Text>
+                  <Text style={styles.lotDetailValue}>{item.sub_inventory_code}</Text>
+                </View>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Locator</Text>
+                  <Text style={styles.lotDetailValue}>{item.locator || 'N/A'}</Text>
+                </View>
+              </View>
+            </View>
+          )}
+        />
+      </View>
+    );
+  }
+
+  // Locator Lots Screen (Drill-down from By Locator tab - shows lots in locator)
+  if (currentScreen === 'LocatorLots' && selectedLocatorGroup) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity onPress={() => {
+            setSelectedLocatorGroup(null);
+            setCurrentScreen('OnhandByLots');
+          }}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.screenTitle}>Locator Lots</Text>
+            <Text style={styles.screenSubtitle}>📍 {selectedLocatorGroup.locator}</Text>
+          </View>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        {/* Locator Summary Card */}
+        <View style={styles.lotSummaryCard}>
+          <View style={styles.lotSummaryRow}>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Organization</Text>
+              <Text style={styles.lotSummaryValue}>{selectedLocatorGroup.organization_code}</Text>
+            </View>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Subinventory</Text>
+              <Text style={styles.lotSummaryValue}>{selectedLocatorGroup.sub_inventory_code}</Text>
+            </View>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Total Qty</Text>
+              <Text style={[styles.lotSummaryValue, { color: COLORS.success }]}>
+                {selectedLocatorGroup.totalQuantity.toLocaleString()}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Lots List Header */}
+        <View style={styles.lotsListHeader}>
+          <Text style={styles.lotsListTitle}>Lots ({selectedLocatorGroup.lots.length})</Text>
+        </View>
+
+        <FlatList
+          data={selectedLocatorGroup.lots}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.lotDetailsList}
+          renderItem={({ item: lot }) => (
+            <TouchableOpacity
+              style={styles.lotDetailCard}
+              onPress={() => {
+                setSelectedLotGroup(lot);
+                setCurrentScreen('LocatorLotItems');
+              }}
+            >
+              <View style={styles.lotDetailHeader}>
+                <View style={styles.lotNumberContainer}>
+                  <Text style={styles.lotNumberLabel}>Lot #</Text>
+                  <Text style={styles.lotNumberValue}>{lot.lotnumber}</Text>
+                </View>
+                <View style={[
+                  styles.statusBadge,
+                  { backgroundColor: lot.materialstatus === 'Active' ? COLORS.successLight : COLORS.warningLight }
+                ]}>
+                  <Text style={[
+                    styles.statusBadgeText,
+                    { color: lot.materialstatus === 'Active' ? COLORS.success : COLORS.warning }
+                  ]}>
+                    {lot.materialstatus || 'Unknown'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.lotDetailRow}>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Quantity</Text>
+                  <Text style={styles.lotDetailValue}>{lot.totalQuantity.toLocaleString()}</Text>
+                </View>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Expiration</Text>
+                  <Text style={styles.lotDetailValue}>
+                    {lot.expirationdate ? new Date(lot.expirationdate).toLocaleDateString() : 'N/A'}
+                  </Text>
+                </View>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Items</Text>
+                  <Text style={styles.lotDetailValue}>{lot.items.length}</Text>
+                </View>
+              </View>
+
+              <View style={styles.lotItemFooter}>
+                <Text style={styles.drillDownHint}>Tap to view items →</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+        />
+      </View>
+    );
+  }
+
+  // Locator Lot Items Screen (Drill-down from LocatorLots - shows items in a specific lot within locator)
+  if (currentScreen === 'LocatorLotItems' && selectedLotGroup) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity onPress={() => {
+            setSelectedLotGroup(null);
+            setCurrentScreen('LocatorLots');
+          }}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.screenTitle}>Lot Items</Text>
+            <Text style={styles.screenSubtitle}>{selectedLotGroup.lotnumber}</Text>
+          </View>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        {/* Lot Summary Card */}
+        <View style={styles.lotSummaryCard}>
+          <View style={styles.lotSummaryRow}>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Status</Text>
+              <Text style={[styles.lotSummaryValue, {
+                color: selectedLotGroup.materialstatus === 'Active' ? COLORS.success : COLORS.warning
+              }]}>
+                {selectedLotGroup.materialstatus || 'Unknown'}
+              </Text>
+            </View>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Expiration</Text>
+              <Text style={styles.lotSummaryValue}>
+                {selectedLotGroup.expirationdate ? new Date(selectedLotGroup.expirationdate).toLocaleDateString() : 'N/A'}
+              </Text>
+            </View>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Total Qty</Text>
+              <Text style={[styles.lotSummaryValue, { color: COLORS.success }]}>
+                {selectedLotGroup.totalQuantity.toLocaleString()}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Items List Header */}
+        <View style={styles.lotsListHeader}>
+          <Text style={styles.lotsListTitle}>Items ({selectedLotGroup.items.length})</Text>
+        </View>
+
+        <FlatList
+          data={selectedLotGroup.items}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.lotDetailsList}
+          renderItem={({ item }) => (
+            <View style={styles.lotDetailCard}>
+              <View style={styles.lotDetailHeader}>
+                <View style={styles.lotNumberContainer}>
+                  <Text style={styles.lotNumberLabel}>Item</Text>
+                  <Text style={styles.lotNumberValue}>{item.item_number}</Text>
+                </View>
+                <View style={styles.lotQtyBox}>
+                  <Text style={styles.lotQtyBoxValue}>{item.primaryquantity || 0}</Text>
+                  <Text style={styles.lotQtyBoxLabel}>Qty</Text>
+                </View>
+              </View>
+
+              <Text style={styles.lotItemDescription} numberOfLines={2}>
+                {item.item_description}
+              </Text>
+
+              <View style={styles.lotDetailRow}>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Organization</Text>
+                  <Text style={styles.lotDetailValue}>{item.organization_code}</Text>
+                </View>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Subinventory</Text>
+                  <Text style={styles.lotDetailValue}>{item.sub_inventory_code}</Text>
+                </View>
+              </View>
+            </View>
+          )}
+        />
       </View>
     );
   }
@@ -3292,6 +4057,199 @@ const styles = StyleSheet.create({
   },
 
   // ========== ONHAND BY LOTS ==========
+
+  // Organization Selection
+  lotsOrgList: {
+    padding: SPACING.md,
+  },
+  lotsOrgCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
+  },
+  lotsOrgIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SPACING.sm,
+  },
+  lotsOrgIconText: {
+    fontSize: 20,
+  },
+  lotsOrgInfo: {
+    flex: 1,
+  },
+  lotsOrgName: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+  },
+  lotsOrgCount: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginTop: 2,
+  },
+  lotsOrgArrow: {
+    fontSize: FONT_SIZES.lg,
+    color: COLORS.neutral400,
+  },
+
+  // Tab Navigation
+  lotsTabContainer: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  lotsTab: {
+    flex: 1,
+    paddingVertical: SPACING.sm,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  lotsTabActive: {
+    borderBottomColor: COLORS.primary,
+  },
+  lotsTabText: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '500',
+    color: COLORS.neutral500,
+  },
+  lotsTabTextActive: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+
+  // Filters
+  lotsFilterContainer: {
+    backgroundColor: COLORS.surface,
+    padding: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  lotsFilterRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  lotsFilterField: {
+    flex: 1,
+    position: 'relative',
+    zIndex: 10,
+  },
+  lotsFilterLabel: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: COLORS.neutral600,
+    marginBottom: 4,
+  },
+  lotsAutocompleteContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.neutral50,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.neutral200,
+  },
+  lotsFilterInput: {
+    flex: 1,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 8,
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral900,
+  },
+  lotsFilterClear: {
+    paddingHorizontal: SPACING.sm,
+  },
+  lotsFilterClearText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral400,
+  },
+  lotsDropdown: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.neutral200,
+    marginTop: 4,
+    zIndex: 100,
+    ...SHADOWS.md,
+  },
+  lotsDropdownItem: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  lotsDropdownText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral900,
+  },
+  lotsSearchRow: {
+    marginTop: SPACING.sm,
+  },
+
+  // Locator Badge
+  locatorBadge: {
+    backgroundColor: COLORS.infoLight,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  locatorBadgeText: {
+    fontSize: FONT_SIZES.xxs,
+    fontWeight: '600',
+    color: COLORS.info,
+  },
+
+  // Status Badge Small
+  statusBadgeSmall: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  statusBadgeSmallText: {
+    fontSize: FONT_SIZES.xxs,
+    fontWeight: '600',
+  },
+
+  // Expiration Text
+  lotExpirationText: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginVertical: SPACING.xs,
+  },
+
+  // Qty Box
+  lotQtyBox: {
+    backgroundColor: COLORS.successLight,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+  },
+  lotQtyBoxValue: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '700',
+    color: COLORS.success,
+  },
+  lotQtyBoxLabel: {
+    fontSize: FONT_SIZES.xxs,
+    color: COLORS.success,
+  },
+
   lotsSearchContainer: {
     backgroundColor: COLORS.surface,
     padding: SPACING.md,
