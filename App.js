@@ -200,6 +200,10 @@ export default function App() {
   const [showLocatorModal, setShowLocatorModal] = useState(false);
   const [selectedLocatorForView, setSelectedLocatorForView] = useState(null);
 
+  // Global Locator View state
+  const [locatorDrillPath, setLocatorDrillPath] = useState([]); // ['AREA', 'BIN', ...]
+  const [locatorHierarchy, setLocatorHierarchy] = useState(null);
+
   // Ship Orders state
   const [shipOrdersData, setShipOrdersData] = useState([]);
   const [shipOrdersLoading, setShipOrdersLoading] = useState(false);
@@ -393,6 +397,81 @@ export default function App() {
       Alert.alert('Error', 'Failed to fetch locator data: ' + error.message);
       setLocatorLoading(false);
     }
+  };
+
+  // Build hierarchical tree from locator data
+  // Locator format: AREA-BIN-COLUMN-ROW-SHELVING
+  const buildLocatorHierarchy = (data) => {
+    const hierarchy = {
+      level: 'root',
+      name: 'All Locations',
+      children: {},
+      items: [],
+      totalQty: 0,
+      itemCount: 0,
+    };
+
+    const levelNames = ['AREA', 'BIN', 'COLUMN', 'ROW', 'SHELVING'];
+
+    data.forEach(item => {
+      const locator = item.locator_id || item.locator || '';
+      const segments = locator.split('-');
+      let current = hierarchy;
+
+      segments.forEach((segment, idx) => {
+        if (!segment) return;
+
+        if (!current.children[segment]) {
+          current.children[segment] = {
+            level: levelNames[idx] || `LEVEL_${idx}`,
+            name: segment,
+            fullPath: segments.slice(0, idx + 1).join('-'),
+            children: {},
+            items: [],
+            totalQty: 0,
+            itemCount: 0,
+          };
+        }
+        current = current.children[segment];
+      });
+
+      // Add item to the deepest level
+      const qty = parseFloat(item.primaryquantity) || 0;
+      current.items.push({
+        ...item,
+        item_number: item.itemnumber || item.item_number,
+        item_description: item.itemdescription || item.item_description,
+        quantity: qty,
+      });
+      current.totalQty += qty;
+      current.itemCount += 1;
+
+      // Propagate counts up the tree
+      let path = hierarchy;
+      segments.forEach((segment, idx) => {
+        if (!segment) return;
+        path.totalQty += qty;
+        path.itemCount += 1;
+        path = path.children[segment];
+      });
+    });
+
+    return hierarchy;
+  };
+
+  // Get current level data based on drill path
+  const getCurrentLevelData = (hierarchy, path) => {
+    if (!hierarchy) return null;
+
+    let current = hierarchy;
+    for (const segment of path) {
+      if (current.children && current.children[segment]) {
+        current = current.children[segment];
+      } else {
+        return null;
+      }
+    }
+    return current;
   };
 
   // Fetch Onhand by Lots (for By Item and By Lot tabs)
@@ -2268,6 +2347,203 @@ export default function App() {
     );
   }
 
+  // Locator Global View Screen - Hierarchical drill-down
+  if (currentScreen === 'LocatorGlobalView') {
+    const currentLevel = getCurrentLevelData(locatorHierarchy, locatorDrillPath);
+    const levelNames = ['AREA', 'BIN', 'COLUMN', 'ROW', 'SHELVING'];
+    const levelIcons = ['🏢', '📦', '🗂️', '📋', '🔖'];
+    const levelColors = [COLORS.primary, COLORS.info, COLORS.success, COLORS.warning, COLORS.accent];
+    const currentDepth = locatorDrillPath.length;
+    const currentLevelName = currentDepth > 0 ? levelNames[currentDepth - 1] : 'WAREHOUSE';
+    const nextLevelName = levelNames[currentDepth] || 'ITEMS';
+
+    const childrenArray = currentLevel ? Object.values(currentLevel.children) : [];
+    const hasChildren = childrenArray.length > 0;
+    const items = currentLevel?.items || [];
+
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity onPress={() => {
+            if (locatorDrillPath.length > 0) {
+              setLocatorDrillPath(locatorDrillPath.slice(0, -1));
+            } else {
+              setCurrentScreen('OnhandByLots');
+            }
+          }}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.screenTitle}>Global Locator View</Text>
+          </View>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        {/* Breadcrumb Navigation */}
+        <View style={styles.breadcrumbContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <TouchableOpacity
+              style={styles.breadcrumbItem}
+              onPress={() => setLocatorDrillPath([])}
+            >
+              <Text style={styles.breadcrumbIcon}>🏭</Text>
+              <Text style={[styles.breadcrumbText, locatorDrillPath.length === 0 && styles.breadcrumbTextActive]}>
+                All
+              </Text>
+            </TouchableOpacity>
+            {locatorDrillPath.map((segment, idx) => (
+              <View key={idx} style={styles.breadcrumbItemWrapper}>
+                <Text style={styles.breadcrumbSeparator}>›</Text>
+                <TouchableOpacity
+                  style={styles.breadcrumbItem}
+                  onPress={() => setLocatorDrillPath(locatorDrillPath.slice(0, idx + 1))}
+                >
+                  <Text style={styles.breadcrumbIcon}>{levelIcons[idx] || '📍'}</Text>
+                  <Text style={[
+                    styles.breadcrumbText,
+                    idx === locatorDrillPath.length - 1 && styles.breadcrumbTextActive
+                  ]}>
+                    {segment}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Current Level Info */}
+        <View style={styles.levelInfoContainer}>
+          <View style={[styles.levelInfoBadge, { backgroundColor: levelColors[currentDepth] || COLORS.primary }]}>
+            <Text style={styles.levelInfoBadgeText}>
+              {currentDepth === 0 ? 'WAREHOUSE' : currentLevelName}
+            </Text>
+          </View>
+          <View style={styles.levelInfoStats}>
+            <Text style={styles.levelInfoStatsText}>
+              {hasChildren ? `${childrenArray.length} ${nextLevelName}${childrenArray.length !== 1 ? 's' : ''}` : `${items.length} Items`}
+            </Text>
+            <Text style={styles.levelInfoQtyText}>
+              {(currentLevel?.totalQty || 0).toLocaleString()} Total Qty
+            </Text>
+          </View>
+        </View>
+
+        {/* Content */}
+        <ScrollView style={styles.globalViewContent}>
+          {hasChildren ? (
+            /* Show children as cards */
+            <View style={styles.hierarchyGrid}>
+              {childrenArray.map((child, idx) => (
+                <TouchableOpacity
+                  key={child.name}
+                  style={[styles.hierarchyCard, { borderLeftColor: levelColors[currentDepth] || COLORS.primary }]}
+                  onPress={() => setLocatorDrillPath([...locatorDrillPath, child.name])}
+                >
+                  <View style={styles.hierarchyCardHeader}>
+                    <View style={[styles.hierarchyCardIcon, { backgroundColor: levelColors[currentDepth] || COLORS.primary }]}>
+                      <Text style={styles.hierarchyCardIconText}>{levelIcons[currentDepth] || '📍'}</Text>
+                    </View>
+                    <View style={styles.hierarchyCardInfo}>
+                      <Text style={styles.hierarchyCardName}>{child.name}</Text>
+                      <Text style={styles.hierarchyCardLevel}>{child.level}</Text>
+                    </View>
+                    <Text style={styles.hierarchyCardArrow}>→</Text>
+                  </View>
+                  <View style={styles.hierarchyCardStats}>
+                    <View style={styles.hierarchyCardStat}>
+                      <Text style={styles.hierarchyCardStatValue}>
+                        {Object.keys(child.children).length || child.items.length}
+                      </Text>
+                      <Text style={styles.hierarchyCardStatLabel}>
+                        {Object.keys(child.children).length > 0 ? levelNames[currentDepth + 1] || 'Sub' : 'Items'}
+                      </Text>
+                    </View>
+                    <View style={styles.hierarchyCardStat}>
+                      <Text style={styles.hierarchyCardStatValue}>{child.itemCount}</Text>
+                      <Text style={styles.hierarchyCardStatLabel}>Total Items</Text>
+                    </View>
+                    <View style={styles.hierarchyCardStat}>
+                      <Text style={styles.hierarchyCardStatValue}>{child.totalQty.toLocaleString()}</Text>
+                      <Text style={styles.hierarchyCardStatLabel}>Qty</Text>
+                    </View>
+                  </View>
+                  {/* Mini progress bar showing relative quantity */}
+                  <View style={styles.hierarchyProgressBar}>
+                    <View
+                      style={[
+                        styles.hierarchyProgressFill,
+                        {
+                          width: `${Math.min(100, (child.totalQty / (currentLevel?.totalQty || 1)) * 100)}%`,
+                          backgroundColor: levelColors[currentDepth] || COLORS.primary,
+                        }
+                      ]}
+                    />
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : items.length > 0 ? (
+            /* Show items at leaf level */
+            <View style={styles.leafItemsContainer}>
+              <Text style={styles.leafItemsTitle}>Items in {locatorDrillPath[locatorDrillPath.length - 1] || 'Location'}</Text>
+              {items.map((item, idx) => (
+                <View key={idx} style={styles.leafItemCard}>
+                  <View style={styles.leafItemHeader}>
+                    <Text style={styles.leafItemNumber}>{item.item_number}</Text>
+                    <View style={styles.leafItemQtyBadge}>
+                      <Text style={styles.leafItemQtyText}>{item.quantity.toLocaleString()}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.leafItemDescription} numberOfLines={2}>
+                    {item.item_description}
+                  </Text>
+                  <View style={styles.leafItemMeta}>
+                    <Text style={styles.leafItemMetaText}>
+                      {item.subinventorycode || item.sub_inventory_code}
+                    </Text>
+                    {item.primaryuomcode && (
+                      <Text style={styles.leafItemMetaText}>UOM: {item.primaryuomcode}</Text>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyStateContainer}>
+              <Text style={styles.emptyStateIcon}>📍</Text>
+              <Text style={styles.emptyStateText}>No items at this location</Text>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Visual Warehouse Map (simplified 2D view) */}
+        {currentDepth === 0 && childrenArray.length > 0 && (
+          <View style={styles.warehouseMapContainer}>
+            <Text style={styles.warehouseMapTitle}>Warehouse Overview</Text>
+            <View style={styles.warehouseMapGrid}>
+              {childrenArray.slice(0, 8).map((area, idx) => (
+                <TouchableOpacity
+                  key={area.name}
+                  style={[
+                    styles.warehouseMapCell,
+                    { backgroundColor: `${levelColors[0]}${Math.floor(20 + (area.totalQty / (currentLevel?.totalQty || 1)) * 80).toString(16)}` }
+                  ]}
+                  onPress={() => setLocatorDrillPath([area.name])}
+                >
+                  <Text style={styles.warehouseMapCellText}>{area.name}</Text>
+                  <Text style={styles.warehouseMapCellQty}>{area.itemCount}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  }
+
   // Onhand by Lots Screen with Tabs (Grouped View)
   if (currentScreen === 'OnhandByLots') {
     const filteredByItem = applyLotsFilters(groupedLotsData);
@@ -2644,6 +2920,21 @@ export default function App() {
                     <Text style={styles.lotStatLabel}>Total Qty</Text>
                   </View>
                 </View>
+
+                {/* Global View Button */}
+                <TouchableOpacity
+                  style={styles.globalViewButton}
+                  onPress={() => {
+                    const hierarchy = buildLocatorHierarchy(locatorData);
+                    setLocatorHierarchy(hierarchy);
+                    setLocatorDrillPath([]);
+                    setCurrentScreen('LocatorGlobalView');
+                  }}
+                >
+                  <Text style={styles.globalViewButtonIcon}>🌐</Text>
+                  <Text style={styles.globalViewButtonText}>Global View</Text>
+                  <Text style={styles.globalViewButtonHint}>Explore warehouse hierarchy</Text>
+                </TouchableOpacity>
 
                 {filteredByLocator.length > 0 ? (
                   <FlatList
@@ -4529,6 +4820,286 @@ const styles = StyleSheet.create({
     color: COLORS.surface,
     fontSize: FONT_SIZES.md,
     fontWeight: '600',
+  },
+
+  // Global View Button
+  globalViewButton: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginHorizontal: SPACING.md,
+    marginBottom: SPACING.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    borderStyle: 'dashed',
+    ...SHADOWS.sm,
+  },
+  globalViewButtonIcon: {
+    fontSize: 24,
+    marginRight: SPACING.sm,
+  },
+  globalViewButtonText: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.primary,
+    flex: 1,
+  },
+  globalViewButtonHint: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+  },
+
+  // Breadcrumb Navigation
+  breadcrumbContainer: {
+    backgroundColor: COLORS.surface,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  breadcrumbItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+  },
+  breadcrumbItemWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  breadcrumbIcon: {
+    fontSize: 14,
+    marginRight: 4,
+  },
+  breadcrumbText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral500,
+  },
+  breadcrumbTextActive: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  breadcrumbSeparator: {
+    fontSize: FONT_SIZES.lg,
+    color: COLORS.neutral300,
+    marginHorizontal: 4,
+  },
+
+  // Level Info
+  levelInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.neutral50,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  levelInfoBadge: {
+    paddingVertical: 4,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: RADIUS.sm,
+    marginRight: SPACING.sm,
+  },
+  levelInfoBadgeText: {
+    color: COLORS.surface,
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  levelInfoStats: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  levelInfoStatsText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral700,
+    fontWeight: '500',
+  },
+  levelInfoQtyText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral500,
+  },
+
+  // Global View Content
+  globalViewContent: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+
+  // Hierarchy Grid
+  hierarchyGrid: {
+    padding: SPACING.md,
+  },
+  hierarchyCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderLeftWidth: 4,
+    ...SHADOWS.sm,
+  },
+  hierarchyCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  hierarchyCardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SPACING.sm,
+  },
+  hierarchyCardIconText: {
+    fontSize: 18,
+  },
+  hierarchyCardInfo: {
+    flex: 1,
+  },
+  hierarchyCardName: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: COLORS.neutral900,
+  },
+  hierarchyCardLevel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  hierarchyCardArrow: {
+    fontSize: FONT_SIZES.xl,
+    color: COLORS.neutral400,
+  },
+  hierarchyCardStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.neutral100,
+  },
+  hierarchyCardStat: {
+    alignItems: 'center',
+  },
+  hierarchyCardStatValue: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: COLORS.neutral800,
+  },
+  hierarchyCardStatLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+  },
+  hierarchyProgressBar: {
+    height: 4,
+    backgroundColor: COLORS.neutral100,
+    borderRadius: 2,
+    marginTop: SPACING.sm,
+    overflow: 'hidden',
+  },
+  hierarchyProgressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+
+  // Leaf Items (at deepest level)
+  leafItemsContainer: {
+    padding: SPACING.md,
+  },
+  leafItemsTitle: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+    marginBottom: SPACING.sm,
+  },
+  leafItemCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.success,
+    ...SHADOWS.sm,
+  },
+  leafItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
+  leafItemNumber: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+  },
+  leafItemQtyBadge: {
+    backgroundColor: COLORS.successLight,
+    paddingVertical: 2,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: RADIUS.sm,
+  },
+  leafItemQtyText: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '700',
+    color: COLORS.success,
+  },
+  leafItemDescription: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral600,
+    marginBottom: SPACING.xs,
+  },
+  leafItemMeta: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+  },
+  leafItemMetaText: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+  },
+
+  // Warehouse Map
+  warehouseMapContainer: {
+    backgroundColor: COLORS.surface,
+    padding: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.neutral200,
+  },
+  warehouseMapTitle: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+    marginBottom: SPACING.sm,
+    textAlign: 'center',
+  },
+  warehouseMapGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+  },
+  warehouseMapCell: {
+    width: 70,
+    height: 50,
+    borderRadius: RADIUS.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  warehouseMapCellText: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '700',
+    color: COLORS.surface,
+  },
+  warehouseMapCellQty: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.surface,
+    opacity: 0.8,
   },
 
   // Organization Selector (in header)
