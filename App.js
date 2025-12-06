@@ -188,6 +188,10 @@ export default function App() {
   const [organizationsList, setOrganizationsList] = useState([]);
   const [orgsLoading, setOrgsLoading] = useState(false);
 
+  // Selected warehouse and subinventory for org selection
+  const [selectedWarehouse, setSelectedWarehouse] = useState(null);
+  const [selectedSubinventory, setSelectedSubinventory] = useState(null);
+
   // Locator data from separate API
   const [locatorData, setLocatorData] = useState([]);
   const [locatorLoading, setLocatorLoading] = useState(false);
@@ -329,13 +333,20 @@ export default function App() {
     if (!orgCode) return;
 
     setLocatorLoading(true);
+    setGroupedByLocator([]); // Clear previous data
     try {
-      const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandsbylocator?organization_code=${orgCode}`;
+      // Try with organizationcode parameter (no underscore) to match API convention
+      const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandsbylocator?organizationcode=${orgCode}`;
       console.log('Fetching locator data from:', url);
       const response = await fetch(url);
       const data = await response.json();
+      console.log('Locator API raw response:', JSON.stringify(data).substring(0, 500));
       console.log('Locator API response items count:', (data.items || []).length);
       const items = data.items || [];
+
+      if (items.length > 0) {
+        console.log('First locator item:', JSON.stringify(items[0]));
+      }
 
       // Group by Locator - using correct field names from API
       // API fields: locator_id, organizationcode, subinventorycode, itemnumber, itemdescription, primaryquantity
@@ -345,21 +356,21 @@ export default function App() {
           acc[locatorKey] = {
             id: locatorKey,
             locator: item.locator_id || item.locator || 'No Locator',
-            organization_code: item.organizationcode || item.organization_code,
+            organization_code: item.organizationcode || item.organization_code || orgCode,
             sub_inventory_code: item.subinventorycode || item.sub_inventory_code,
             totalQuantity: 0,
             items: [],
           };
         }
         // primaryquantity is a string, need to parse it
-        const qty = parseFloat(item.primaryquantity) || 0;
+        const qty = parseFloat(item.primaryquantity) || parseFloat(item.primary_quantity) || 0;
         acc[locatorKey].totalQuantity += qty;
         acc[locatorKey].items.push({
           ...item,
           // Normalize field names for display
           item_number: item.itemnumber || item.item_number,
           item_description: item.itemdescription || item.item_description,
-          organization_code: item.organizationcode || item.organization_code,
+          organization_code: item.organizationcode || item.organization_code || orgCode,
           sub_inventory_code: item.subinventorycode || item.sub_inventory_code,
           locator: item.locator_id || item.locator,
           primaryquantity: qty,
@@ -368,8 +379,14 @@ export default function App() {
         return acc;
       }, {});
 
+      const groupedData = Object.values(byLocator);
+      console.log('Grouped locator data count:', groupedData.length);
+      if (groupedData.length > 0) {
+        console.log('First grouped locator:', JSON.stringify(groupedData[0]).substring(0, 300));
+      }
+
       setLocatorData(items);
-      setGroupedByLocator(Object.values(byLocator));
+      setGroupedByLocator(groupedData);
       setLocatorLoading(false);
     } catch (error) {
       console.log('Locator API error:', error);
@@ -2054,23 +2071,63 @@ export default function App() {
   ).slice(0, 10);
 
   // Apply filters to all grouped data
-  const applyLotsFilters = (data) => {
+  const applyLotsFilters = (data, isLocatorTab = false) => {
     return data.filter(item => {
-      const matchesOrg = !lotsOrgFilter || item.organization_code === lotsOrgFilter;
-      const matchesProduct = !lotsProductFilter ||
-        (item.item_number && item.item_number.toLowerCase().includes(lotsProductFilter.toLowerCase())) ||
-        (item.item_description && item.item_description.toLowerCase().includes(lotsProductFilter.toLowerCase()));
-      const matchesSearch = !lotsSearchQuery ||
-        (item.item_number && item.item_number.toLowerCase().includes(lotsSearchQuery.toLowerCase())) ||
-        (item.item_description && item.item_description.toLowerCase().includes(lotsSearchQuery.toLowerCase())) ||
-        (item.lotnumber && item.lotnumber.toLowerCase().includes(lotsSearchQuery.toLowerCase())) ||
-        (item.locator && item.locator.toLowerCase().includes(lotsSearchQuery.toLowerCase()));
+      // For locator tab, be more lenient with org matching or skip it since we already filtered by org in API
+      const matchesOrg = !lotsOrgFilter ||
+        item.organization_code === lotsOrgFilter ||
+        (isLocatorTab && true); // Skip org filter for locator tab as API already filters
+
+      // For locator groups, check items array for product match
+      let matchesProduct = !lotsProductFilter;
+      if (!matchesProduct) {
+        if (item.item_number && item.item_number.toLowerCase().includes(lotsProductFilter.toLowerCase())) {
+          matchesProduct = true;
+        } else if (item.item_description && item.item_description.toLowerCase().includes(lotsProductFilter.toLowerCase())) {
+          matchesProduct = true;
+        } else if (item.items && item.items.length > 0) {
+          // Check nested items for locator groups
+          matchesProduct = item.items.some(i =>
+            (i.item_number && i.item_number.toLowerCase().includes(lotsProductFilter.toLowerCase())) ||
+            (i.item_description && i.item_description.toLowerCase().includes(lotsProductFilter.toLowerCase()))
+          );
+        }
+      }
+
+      // For locator groups, check items array for search match
+      let matchesSearch = !lotsSearchQuery;
+      if (!matchesSearch) {
+        const query = lotsSearchQuery.toLowerCase();
+        if (item.item_number && item.item_number.toLowerCase().includes(query)) {
+          matchesSearch = true;
+        } else if (item.item_description && item.item_description.toLowerCase().includes(query)) {
+          matchesSearch = true;
+        } else if (item.lotnumber && item.lotnumber.toLowerCase().includes(query)) {
+          matchesSearch = true;
+        } else if (item.locator && item.locator.toLowerCase().includes(query)) {
+          matchesSearch = true;
+        } else if (item.items && item.items.length > 0) {
+          // Check nested items for locator groups
+          matchesSearch = item.items.some(i =>
+            (i.item_number && i.item_number.toLowerCase().includes(query)) ||
+            (i.item_description && i.item_description.toLowerCase().includes(query))
+          );
+        }
+      }
       return matchesOrg && matchesProduct && matchesSearch;
     });
   };
 
   // Organization Selection Screen for Lots
   if (currentScreen === 'LotsOrgSelection') {
+    // Get distinct warehouses
+    const distinctWarehouses = [...new Set(organizationsList.map(org => org.warehouse_code))].filter(Boolean);
+
+    // Get subinventories for selected warehouse
+    const warehouseSubinventories = selectedWarehouse
+      ? organizationsList.filter(org => org.warehouse_code === selectedWarehouse)
+      : [];
+
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
@@ -2084,6 +2141,8 @@ export default function App() {
             setGroupedByLot([]);
             setGroupedByLocator([]);
             setLocatorData([]);
+            setSelectedWarehouse(null);
+            setSelectedSubinventory(null);
           }}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
@@ -2098,14 +2157,85 @@ export default function App() {
           </View>
         ) : organizationsList.length > 0 ? (
           <ScrollView contentContainerStyle={styles.lotsOrgList}>
-            {organizationsList.map((org, index) => (
+            {/* Warehouse Selection */}
+            <View style={styles.orgSectionContainer}>
+              <Text style={styles.orgSectionTitle}>Warehouse</Text>
+              <View style={styles.orgChipsContainer}>
+                {distinctWarehouses.map((warehouse, index) => (
+                  <TouchableOpacity
+                    key={warehouse || `wh-${index}`}
+                    style={[
+                      styles.orgChip,
+                      selectedWarehouse === warehouse && styles.orgChipSelected
+                    ]}
+                    onPress={() => {
+                      setSelectedWarehouse(warehouse);
+                      setSelectedSubinventory(null);
+                    }}
+                  >
+                    <Text style={[
+                      styles.orgChipText,
+                      selectedWarehouse === warehouse && styles.orgChipTextSelected
+                    ]}>
+                      {warehouse}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Subinventory Selection - Only show when warehouse is selected */}
+            {selectedWarehouse && warehouseSubinventories.length > 0 && (
+              <View style={styles.orgSectionContainer}>
+                <Text style={styles.orgSectionTitle}>Subinventory</Text>
+                <View style={styles.orgChipsContainer}>
+                  {warehouseSubinventories.map((org, index) => (
+                    <TouchableOpacity
+                      key={org.subinventory_code || `sub-${index}`}
+                      style={[
+                        styles.orgChip,
+                        selectedSubinventory === org.subinventory_code && styles.orgChipSelected
+                      ]}
+                      onPress={() => setSelectedSubinventory(org.subinventory_code)}
+                    >
+                      <Text style={[
+                        styles.orgChipText,
+                        selectedSubinventory === org.subinventory_code && styles.orgChipTextSelected
+                      ]}>
+                        {org.subinventory_code}
+                      </Text>
+                      {org.subinventory_name && (
+                        <Text style={[
+                          styles.orgChipSubtext,
+                          selectedSubinventory === org.subinventory_code && styles.orgChipSubtextSelected
+                        ]}>
+                          {org.subinventory_name}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Selection Summary */}
+            {selectedWarehouse && (
+              <View style={styles.orgSelectionSummary}>
+                <Text style={styles.orgSelectionLabel}>Selected:</Text>
+                <Text style={styles.orgSelectionValue}>
+                  {selectedWarehouse}
+                  {selectedSubinventory ? ` / ${selectedSubinventory}` : ' (All Subinventories)'}
+                </Text>
+              </View>
+            )}
+
+            {/* Get Data Button */}
+            {selectedWarehouse && (
               <TouchableOpacity
-                key={org.warehouse_code || org.subinventory_code || `org-${index}`}
-                style={styles.lotsOrgCard}
+                style={styles.getDataButton}
                 onPress={() => {
-                  // API uses warehouse_code for organization
-                  const orgCode = org.warehouse_code || org.organization_code;
-                  console.log('Selected org:', orgCode, org);
+                  const orgCode = selectedWarehouse;
+                  console.log('Get Data for org:', orgCode, 'subinv:', selectedSubinventory);
                   setLotsSelectedOrg(orgCode);
                   setLotsOrgFilter(orgCode);
                   // Fetch both APIs with selected org
@@ -2114,20 +2244,9 @@ export default function App() {
                   setCurrentScreen('OnhandByLots');
                 }}
               >
-                <View style={styles.lotsOrgIcon}>
-                  <Text style={styles.lotsOrgIconText}>🏭</Text>
-                </View>
-                <View style={styles.lotsOrgInfo}>
-                  <Text style={styles.lotsOrgName}>
-                    {org.warehouse_code || org.organization_code}
-                  </Text>
-                  <Text style={styles.lotsOrgCount}>
-                    {org.subinventory_code} - {org.subinventory_name}
-                  </Text>
-                </View>
-                <Text style={styles.lotsOrgArrow}>→</Text>
+                <Text style={styles.getDataButtonText}>Get Data</Text>
               </TouchableOpacity>
-            ))}
+            )}
           </ScrollView>
         ) : (
           <View style={styles.emptyStateContainer}>
@@ -2153,7 +2272,7 @@ export default function App() {
   if (currentScreen === 'OnhandByLots') {
     const filteredByItem = applyLotsFilters(groupedLotsData);
     const filteredByLot = applyLotsFilters(groupedByLot);
-    const filteredByLocator = applyLotsFilters(groupedByLocator);
+    const filteredByLocator = applyLotsFilters(groupedByLocator, true);
 
     return (
       <View style={styles.container}>
@@ -2500,6 +2619,12 @@ export default function App() {
 
             {/* BY LOCATOR TAB */}
             {lotsActiveTab === 'byLocator' && (
+              locatorLoading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color={COLORS.primary} />
+                  <Text style={styles.loadingText}>Loading locator data...</Text>
+                </View>
+              ) : (
               <>
                 <View style={styles.lotsStatsContainer}>
                   <View style={styles.lotStatBox}>
@@ -2583,6 +2708,7 @@ export default function App() {
                   </View>
                 )}
               </>
+              )
             )}
           </>
         )}
@@ -4321,6 +4447,88 @@ const styles = StyleSheet.create({
   lotsOrgArrow: {
     fontSize: FONT_SIZES.lg,
     color: COLORS.neutral400,
+  },
+
+  // Organization Section Styles
+  orgSectionContainer: {
+    marginBottom: SPACING.lg,
+  },
+  orgSectionTitle: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+    marginBottom: SPACING.sm,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  orgChipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+  },
+  orgChip: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.neutral200,
+    minWidth: 80,
+    alignItems: 'center',
+    ...SHADOWS.sm,
+  },
+  orgChipSelected: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  orgChipText: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+  },
+  orgChipTextSelected: {
+    color: COLORS.surface,
+  },
+  orgChipSubtext: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginTop: 2,
+  },
+  orgChipSubtextSelected: {
+    color: COLORS.neutral100,
+  },
+  orgSelectionSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primaryLight,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.sm,
+  },
+  orgSelectionLabel: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral600,
+    marginRight: SPACING.xs,
+  },
+  orgSelectionValue: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.primary,
+    flex: 1,
+  },
+  getDataButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.md,
+    alignItems: 'center',
+    marginTop: SPACING.md,
+    ...SHADOWS.md,
+  },
+  getDataButtonText: {
+    color: COLORS.surface,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
   },
 
   // Organization Selector (in header)
