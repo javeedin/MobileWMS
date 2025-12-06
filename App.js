@@ -184,6 +184,18 @@ export default function App() {
   const [selectedLocatorGroup, setSelectedLocatorGroup] = useState(null);
   const [selectedLotGroup, setSelectedLotGroup] = useState(null);
 
+  // Organizations list (cached)
+  const [organizationsList, setOrganizationsList] = useState([]);
+  const [orgsLoading, setOrgsLoading] = useState(false);
+
+  // Locator data from separate API
+  const [locatorData, setLocatorData] = useState([]);
+  const [locatorLoading, setLocatorLoading] = useState(false);
+
+  // Locator visualization modal
+  const [showLocatorModal, setShowLocatorModal] = useState(false);
+  const [selectedLocatorForView, setSelectedLocatorForView] = useState(null);
+
   // Ship Orders state
   const [shipOrdersData, setShipOrdersData] = useState([]);
   const [shipOrdersLoading, setShipOrdersLoading] = useState(false);
@@ -284,22 +296,84 @@ export default function App() {
     }
   };
 
-  // Fetch Onhand by Lots
+  // Fetch Organizations List (cached)
+  const fetchOrganizationsList = async () => {
+    // Don't fetch if already loaded
+    if (organizationsList.length > 0) {
+      setCurrentScreen('LotsOrgSelection');
+      return;
+    }
+
+    setOrgsLoading(true);
+    try {
+      const response = await fetch(
+        'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getorgnizationslist'
+      );
+      const data = await response.json();
+      const orgs = data.items || [];
+      setOrganizationsList(orgs);
+      setOrgsLoading(false);
+      setCurrentScreen('LotsOrgSelection');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to fetch organizations: ' + error.message);
+      setOrgsLoading(false);
+    }
+  };
+
+  // Fetch Locator Data from separate API
+  const fetchLocatorData = async (orgCode) => {
+    if (!orgCode) return;
+
+    setLocatorLoading(true);
+    try {
+      const response = await fetch(
+        `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandsbylocator?organization_code=${orgCode}`
+      );
+      const data = await response.json();
+      const items = data.items || [];
+
+      // Group by Locator
+      const byLocator = items.reduce((acc, item) => {
+        const locatorKey = item.locator || 'NO_LOCATOR';
+        if (!acc[locatorKey]) {
+          acc[locatorKey] = {
+            id: locatorKey,
+            locator: item.locator || 'No Locator',
+            organization_code: item.organization_code,
+            sub_inventory_code: item.sub_inventory_code || item.subinventory_code,
+            totalQuantity: 0,
+            items: [],
+          };
+        }
+        acc[locatorKey].totalQuantity += item.onhand_quantity || item.primaryquantity || 0;
+        acc[locatorKey].items.push({
+          ...item,
+          id: `${locatorKey}-${item.item_number}-${item.lot_number || 'nolot'}-${Math.random()}`,
+        });
+        return acc;
+      }, {});
+
+      setLocatorData(items);
+      setGroupedByLocator(Object.values(byLocator));
+      setLocatorLoading(false);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to fetch locator data: ' + error.message);
+      setLocatorLoading(false);
+    }
+  };
+
+  // Fetch Onhand by Lots (for By Item and By Lot tabs)
   const fetchLotsData = async (orgCode = null) => {
     setLotsLoading(true);
     try {
-      const response = await fetch(
-        'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandbylots'
-      );
+      let url = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandbylots';
+      if (orgCode) {
+        url += `?organization_code=${orgCode}`;
+      }
+      const response = await fetch(url);
       const data = await response.json();
 
-      let items = data.items || [];
-
-      // Filter by organization if specified
-      if (orgCode) {
-        items = items.filter(item => item.organization_code === orgCode);
-      }
-
+      const items = data.items || [];
       setLotsData(items);
 
       // Group by item (organization_code, sub_inventory_code, item_number, item_description)
@@ -349,50 +423,6 @@ export default function App() {
         return acc;
       }, {});
       setGroupedByLot(Object.values(byLot));
-
-      // Group by Locator
-      const byLocator = items.reduce((acc, item) => {
-        const locatorKey = item.locator || 'NO_LOCATOR';
-        if (!acc[locatorKey]) {
-          acc[locatorKey] = {
-            id: locatorKey,
-            locator: item.locator || 'No Locator',
-            organization_code: item.organization_code,
-            sub_inventory_code: item.sub_inventory_code,
-            totalQuantity: 0,
-            lots: {},
-          };
-        }
-        acc[locatorKey].totalQuantity += item.primaryquantity || 0;
-
-        // Subgroup by lot within locator
-        const lotKey = item.lotnumber || 'NO_LOT';
-        if (!acc[locatorKey].lots[lotKey]) {
-          acc[locatorKey].lots[lotKey] = {
-            id: `${locatorKey}-${lotKey}`,
-            lotnumber: item.lotnumber || 'No Lot',
-            materialstatus: item.materialstatus,
-            expirationdate: item.expirationdate,
-            totalQuantity: 0,
-            items: [],
-          };
-        }
-        acc[locatorKey].lots[lotKey].totalQuantity += item.primaryquantity || 0;
-        acc[locatorKey].lots[lotKey].items.push({
-          ...item,
-          id: `${locatorKey}-${lotKey}-${item.item_number}-${item.lid}`,
-        });
-
-        return acc;
-      }, {});
-
-      // Convert lots object to array for each locator
-      const locatorArray = Object.values(byLocator).map(locator => ({
-        ...locator,
-        lots: Object.values(locator.lots),
-        lotCount: Object.keys(locator.lots).length,
-      }));
-      setGroupedByLocator(locatorArray);
 
       setLotsLoading(false);
     } catch (error) {
@@ -805,7 +835,7 @@ export default function App() {
             <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuOpen(false); setCurrentScreen('Inventory'); }}>
               <Text style={styles.menuItemText}>📦 Inventory</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuOpen(false); setCurrentScreen('LotsOrgSelection'); fetchLotsData(); }}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuOpen(false); fetchOrganizationsList(); }}>
               <Text style={styles.menuItemText}>🏷️ Onhand by Lots</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
@@ -1983,21 +2013,28 @@ export default function App() {
   // Get unique organizations from lotsData
   const uniqueOrganizations = [...new Set(lotsData.map(item => item.organization_code))].filter(Boolean);
 
-  // Get unique products for autofill (filtered by selected org if any)
-  const uniqueProducts = [...new Set(
-    lotsData
-      .filter(item => !lotsOrgFilter || item.organization_code === lotsOrgFilter)
-      .map(item => item.item_number)
-  )].filter(Boolean);
+  // Get unique products for autofill (filtered by selected org if any) - use item_description
+  const uniqueProductDescriptions = lotsData
+    .filter(item => !lotsOrgFilter || item.organization_code === lotsOrgFilter)
+    .reduce((acc, item) => {
+      if (item.item_description && !acc.find(p => p.description === item.item_description)) {
+        acc.push({
+          item_number: item.item_number,
+          description: item.item_description,
+        });
+      }
+      return acc;
+    }, []);
 
   // Filter org suggestions
   const orgSuggestions = uniqueOrganizations.filter(org =>
     org.toLowerCase().includes(lotsOrgFilter.toLowerCase())
   );
 
-  // Filter product suggestions
-  const productSuggestions = uniqueProducts.filter(prod =>
-    prod.toLowerCase().includes(lotsProductFilter.toLowerCase())
+  // Filter product suggestions by description
+  const productSuggestions = uniqueProductDescriptions.filter(prod =>
+    prod.description.toLowerCase().includes(lotsProductFilter.toLowerCase()) ||
+    prod.item_number.toLowerCase().includes(lotsProductFilter.toLowerCase())
   ).slice(0, 10);
 
   // Apply filters to all grouped data
@@ -2030,6 +2067,7 @@ export default function App() {
             setGroupedLotsData([]);
             setGroupedByLot([]);
             setGroupedByLocator([]);
+            setLocatorData([]);
           }}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
@@ -2037,55 +2075,39 @@ export default function App() {
           <View style={styles.headerSpacer} />
         </View>
 
-        {lotsLoading ? (
+        {orgsLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={COLORS.primary} />
             <Text style={styles.loadingText}>Loading organizations...</Text>
           </View>
         ) : (
           <ScrollView contentContainerStyle={styles.lotsOrgList}>
-            {/* All Organizations Option */}
-            <TouchableOpacity
-              style={styles.lotsOrgCard}
-              onPress={() => {
-                setLotsSelectedOrg(null);
-                setLotsOrgFilter('');
-                setCurrentScreen('OnhandByLots');
-              }}
-            >
-              <View style={styles.lotsOrgIcon}>
-                <Text style={styles.lotsOrgIconText}>🌐</Text>
-              </View>
-              <View style={styles.lotsOrgInfo}>
-                <Text style={styles.lotsOrgName}>All Organizations</Text>
-                <Text style={styles.lotsOrgCount}>{lotsData.length} records</Text>
-              </View>
-              <Text style={styles.lotsOrgArrow}>→</Text>
-            </TouchableOpacity>
-
-            {uniqueOrganizations.map(org => {
-              const orgItems = lotsData.filter(item => item.organization_code === org);
-              return (
-                <TouchableOpacity
-                  key={org}
-                  style={styles.lotsOrgCard}
-                  onPress={() => {
-                    setLotsSelectedOrg(org);
-                    setLotsOrgFilter(org);
-                    setCurrentScreen('OnhandByLots');
-                  }}
-                >
-                  <View style={styles.lotsOrgIcon}>
-                    <Text style={styles.lotsOrgIconText}>🏭</Text>
-                  </View>
-                  <View style={styles.lotsOrgInfo}>
-                    <Text style={styles.lotsOrgName}>{org}</Text>
-                    <Text style={styles.lotsOrgCount}>{orgItems.length} records</Text>
-                  </View>
-                  <Text style={styles.lotsOrgArrow}>→</Text>
-                </TouchableOpacity>
-              );
-            })}
+            {organizationsList.map(org => (
+              <TouchableOpacity
+                key={org.organization_code || org.organization_id}
+                style={styles.lotsOrgCard}
+                onPress={() => {
+                  const orgCode = org.organization_code || org.organization_name;
+                  setLotsSelectedOrg(orgCode);
+                  setLotsOrgFilter(orgCode);
+                  // Fetch both APIs with selected org
+                  fetchLotsData(orgCode);
+                  fetchLocatorData(orgCode);
+                  setCurrentScreen('OnhandByLots');
+                }}
+              >
+                <View style={styles.lotsOrgIcon}>
+                  <Text style={styles.lotsOrgIconText}>🏭</Text>
+                </View>
+                <View style={styles.lotsOrgInfo}>
+                  <Text style={styles.lotsOrgName}>{org.organization_code || org.organization_name}</Text>
+                  {org.organization_name && org.organization_code && (
+                    <Text style={styles.lotsOrgCount}>{org.organization_name}</Text>
+                  )}
+                </View>
+                <Text style={styles.lotsOrgArrow}>→</Text>
+              </TouchableOpacity>
+            ))}
           </ScrollView>
         )}
       </View>
@@ -2133,13 +2155,12 @@ export default function App() {
         <TouchableOpacity
           style={styles.lotsOrgSelector}
           onPress={() => {
-            fetchLotsData(); // Re-fetch all data without org filter
             setCurrentScreen('LotsOrgSelection');
           }}
         >
           <Text style={styles.lotsOrgSelectorIcon}>🏭</Text>
           <Text style={styles.lotsOrgSelectorText}>
-            {lotsSelectedOrg || 'All Organizations'}
+            {lotsSelectedOrg || 'Select Organization'}
           </Text>
           <Text style={styles.lotsOrgSelectorArrow}>▼</Text>
         </TouchableOpacity>
@@ -2237,14 +2258,15 @@ export default function App() {
                 <View style={styles.lotsDropdown}>
                   {productSuggestions.map(prod => (
                     <TouchableOpacity
-                      key={prod}
+                      key={prod.item_number}
                       style={styles.lotsDropdownItem}
                       onPress={() => {
-                        setLotsProductFilter(prod);
+                        setLotsProductFilter(prod.description);
                         setShowLotsProductDropdown(false);
                       }}
                     >
-                      <Text style={styles.lotsDropdownText}>{prod}</Text>
+                      <Text style={styles.lotsDropdownText} numberOfLines={1}>{prod.description}</Text>
+                      <Text style={styles.lotsDropdownSubtext}>{prod.item_number}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -2469,38 +2491,54 @@ export default function App() {
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.lotsList}
                     renderItem={({ item: locator }) => (
-                      <TouchableOpacity
-                        style={styles.lotItemCard}
-                        onPress={() => {
-                          setSelectedLocatorGroup(locator);
-                          setCurrentScreen('LocatorLots');
-                        }}
-                      >
-                        <View style={styles.lotItemHeader}>
-                          <View style={styles.lotItemInfo}>
-                            <Text style={styles.lotItemNumber}>📍 {locator.locator}</Text>
-                            <View style={styles.lotBadgeRow}>
-                              <View style={styles.orgBadgeSmall}>
-                                <Text style={styles.orgBadgeSmallText}>{locator.organization_code}</Text>
-                              </View>
-                              <View style={styles.subinvBadge}>
-                                <Text style={styles.subinvBadgeText}>{locator.sub_inventory_code}</Text>
+                      <View style={styles.lotItemCard}>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setSelectedLocatorGroup(locator);
+                            setCurrentScreen('LocatorLots');
+                          }}
+                        >
+                          <View style={styles.lotItemHeader}>
+                            <View style={styles.lotItemInfo}>
+                              <Text style={styles.lotItemNumber}>📍 {locator.locator}</Text>
+                              <View style={styles.lotBadgeRow}>
+                                <View style={styles.orgBadgeSmall}>
+                                  <Text style={styles.orgBadgeSmallText}>{locator.organization_code}</Text>
+                                </View>
+                                <View style={styles.subinvBadge}>
+                                  <Text style={styles.subinvBadgeText}>{locator.sub_inventory_code}</Text>
+                                </View>
                               </View>
                             </View>
+                            <View style={styles.lotQtyContainer}>
+                              <Text style={styles.lotTotalQty}>{locator.totalQuantity.toLocaleString()}</Text>
+                              <Text style={styles.lotQtyLabel}>Total Qty</Text>
+                            </View>
                           </View>
-                          <View style={styles.lotQtyContainer}>
-                            <Text style={styles.lotTotalQty}>{locator.totalQuantity.toLocaleString()}</Text>
-                            <Text style={styles.lotQtyLabel}>Total Qty</Text>
-                          </View>
-                        </View>
+                        </TouchableOpacity>
 
-                        <View style={styles.lotItemFooter}>
-                          <View style={styles.lotCountBadge}>
-                            <Text style={styles.lotCountText}>{locator.lotCount} lot{locator.lotCount !== 1 ? 's' : ''}</Text>
-                          </View>
-                          <Text style={styles.drillDownHint}>Tap to view lots →</Text>
+                        <View style={styles.locatorFooterRow}>
+                          <TouchableOpacity
+                            onPress={() => {
+                              setSelectedLocatorGroup(locator);
+                              setCurrentScreen('LocatorLots');
+                            }}
+                          >
+                            <View style={styles.lotCountBadge}>
+                              <Text style={styles.lotCountText}>{locator.items?.length || 0} item{(locator.items?.length || 0) !== 1 ? 's' : ''}</Text>
+                            </View>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.locatorViewButton}
+                            onPress={() => {
+                              setSelectedLocatorForView(locator.locator);
+                              setShowLocatorModal(true);
+                            }}
+                          >
+                            <Text style={styles.locatorViewButtonText}>🗺️ View</Text>
+                          </TouchableOpacity>
                         </View>
-                      </TouchableOpacity>
+                      </View>
                     )}
                   />
                 ) : (
@@ -2513,6 +2551,133 @@ export default function App() {
             )}
           </>
         )}
+
+        {/* Locator Visualization Modal */}
+        <Modal
+          visible={showLocatorModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowLocatorModal(false)}
+        >
+          <View style={styles.locatorModalOverlay}>
+            <View style={styles.locatorModalContainer}>
+              <View style={styles.locatorModalHeader}>
+                <Text style={styles.locatorModalTitle}>Locator View</Text>
+                <TouchableOpacity onPress={() => setShowLocatorModal(false)}>
+                  <Text style={styles.locatorModalClose}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.locatorModalContent}>
+                <Text style={styles.locatorModalLocatorName}>📍 {selectedLocatorForView}</Text>
+
+                {/* Parse locator segments: AREA-BIN-COLUMN-ROW-SHELVING */}
+                {selectedLocatorForView && (() => {
+                  const segments = selectedLocatorForView.split('-');
+                  const segmentLabels = ['AREA', 'BIN', 'COLUMN', 'ROW', 'SHELVING'];
+                  return (
+                    <View style={styles.locatorSegmentsContainer}>
+                      {segments.map((segment, index) => (
+                        <View key={index} style={styles.locatorSegmentBox}>
+                          <Text style={styles.locatorSegmentLabel}>
+                            {segmentLabels[index] || `SEG ${index + 1}`}
+                          </Text>
+                          <Text style={styles.locatorSegmentValue}>{segment}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  );
+                })()}
+
+                {/* 2D Visualization */}
+                <View style={styles.locatorVisualization}>
+                  <Text style={styles.locatorVisTitle}>2D Location Map</Text>
+                  <View style={styles.locatorGrid}>
+                    {selectedLocatorForView && (() => {
+                      const segments = selectedLocatorForView.split('-');
+                      const area = segments[0] || 'A';
+                      const bin = segments[1] || '1';
+                      const col = parseInt(segments[2]) || 1;
+                      const row = parseInt(segments[3]) || 1;
+                      const shelf = parseInt(segments[4]) || 1;
+
+                      return (
+                        <View style={styles.locatorGridInner}>
+                          {/* Grid representation */}
+                          <View style={styles.locatorGridRow}>
+                            {[1, 2, 3, 4, 5].map((c) => (
+                              <View
+                                key={c}
+                                style={[
+                                  styles.locatorGridCell,
+                                  c === col && styles.locatorGridCellActive
+                                ]}
+                              >
+                                <Text style={[
+                                  styles.locatorGridCellText,
+                                  c === col && styles.locatorGridCellTextActive
+                                ]}>
+                                  {c === col ? `${area}-${bin}` : ''}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+                          <View style={styles.locatorShelfIndicator}>
+                            <Text style={styles.locatorShelfText}>
+                              Row {row} • Shelf {shelf}
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    })()}
+                  </View>
+                </View>
+
+                {/* 3D Representation */}
+                <View style={styles.locator3DContainer}>
+                  <Text style={styles.locatorVisTitle}>3D Shelf View</Text>
+                  {selectedLocatorForView && (() => {
+                    const segments = selectedLocatorForView.split('-');
+                    const shelf = parseInt(segments[4]) || 1;
+                    const totalShelves = 5;
+
+                    return (
+                      <View style={styles.locator3DShelf}>
+                        {[...Array(totalShelves)].map((_, i) => {
+                          const shelfNum = totalShelves - i;
+                          const isActive = shelfNum === shelf;
+                          return (
+                            <View
+                              key={i}
+                              style={[
+                                styles.locator3DShelfLevel,
+                                isActive && styles.locator3DShelfLevelActive
+                              ]}
+                            >
+                              <Text style={[
+                                styles.locator3DShelfText,
+                                isActive && styles.locator3DShelfTextActive
+                              ]}>
+                                {isActive ? `📦 Shelf ${shelfNum}` : `Shelf ${shelfNum}`}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    );
+                  })()}
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.locatorModalCloseButton}
+                onPress={() => setShowLocatorModal(false)}
+              >
+                <Text style={styles.locatorModalCloseButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </View>
     );
   }
@@ -4243,6 +4408,11 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.sm,
     color: COLORS.neutral900,
   },
+  lotsDropdownSubtext: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginTop: 2,
+  },
   lotsSearchRow: {
     marginTop: SPACING.sm,
   },
@@ -5068,5 +5238,199 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.md,
     fontWeight: '600',
     color: COLORS.success,
+  },
+
+  // ========== LOCATOR VISUALIZATION ==========
+  locatorFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: SPACING.sm,
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.neutral100,
+  },
+  locatorViewButton: {
+    backgroundColor: COLORS.white,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.info,
+  },
+  locatorViewButtonText: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: COLORS.info,
+  },
+  locatorModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.md,
+  },
+  locatorModalContainer: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.xl,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '90%',
+    ...SHADOWS.lg,
+  },
+  locatorModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+    backgroundColor: COLORS.info,
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+  },
+  locatorModalTitle: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: COLORS.white,
+  },
+  locatorModalClose: {
+    fontSize: FONT_SIZES.xl,
+    color: COLORS.white,
+    fontWeight: '600',
+  },
+  locatorModalContent: {
+    padding: SPACING.md,
+  },
+  locatorModalLocatorName: {
+    fontSize: FONT_SIZES.xl,
+    fontWeight: '700',
+    color: COLORS.neutral900,
+    textAlign: 'center',
+    marginBottom: SPACING.md,
+  },
+  locatorSegmentsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginBottom: SPACING.md,
+  },
+  locatorSegmentBox: {
+    backgroundColor: COLORS.neutral50,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    minWidth: 60,
+  },
+  locatorSegmentLabel: {
+    fontSize: FONT_SIZES.xxs,
+    color: COLORS.neutral500,
+    fontWeight: '600',
+  },
+  locatorSegmentValue: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  locatorVisualization: {
+    backgroundColor: COLORS.neutral50,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  locatorVisTitle: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+    marginBottom: SPACING.sm,
+    textAlign: 'center',
+  },
+  locatorGrid: {
+    alignItems: 'center',
+  },
+  locatorGridInner: {
+    alignItems: 'center',
+  },
+  locatorGridRow: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+  },
+  locatorGridCell: {
+    width: 50,
+    height: 50,
+    backgroundColor: COLORS.neutral200,
+    borderRadius: RADIUS.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  locatorGridCellActive: {
+    backgroundColor: COLORS.success,
+  },
+  locatorGridCellText: {
+    fontSize: FONT_SIZES.xxs,
+    color: COLORS.neutral500,
+    fontWeight: '600',
+  },
+  locatorGridCellTextActive: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.xs,
+  },
+  locatorShelfIndicator: {
+    marginTop: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    backgroundColor: COLORS.infoLight,
+    borderRadius: RADIUS.md,
+  },
+  locatorShelfText: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.info,
+  },
+  locator3DContainer: {
+    backgroundColor: COLORS.neutral50,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+  },
+  locator3DShelf: {
+    alignItems: 'center',
+  },
+  locator3DShelfLevel: {
+    width: '80%',
+    height: 36,
+    backgroundColor: COLORS.neutral200,
+    marginBottom: 4,
+    borderRadius: RADIUS.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.neutral300,
+  },
+  locator3DShelfLevelActive: {
+    backgroundColor: COLORS.success,
+    borderColor: COLORS.success,
+  },
+  locator3DShelfText: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    fontWeight: '500',
+  },
+  locator3DShelfTextActive: {
+    color: COLORS.white,
+    fontWeight: '700',
+  },
+  locatorModalCloseButton: {
+    backgroundColor: COLORS.neutral100,
+    padding: SPACING.md,
+    alignItems: 'center',
+    borderBottomLeftRadius: RADIUS.xl,
+    borderBottomRightRadius: RADIUS.xl,
+  },
+  locatorModalCloseButtonText: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral700,
   },
 });
