@@ -2527,10 +2527,7 @@ export default function App() {
               {childrenArray.slice(0, 8).map((area, idx) => (
                 <TouchableOpacity
                   key={area.name}
-                  style={[
-                    styles.warehouseMapCell,
-                    { backgroundColor: `${levelColors[0]}${Math.floor(20 + (area.totalQty / (currentLevel?.totalQty || 1)) * 80).toString(16)}` }
-                  ]}
+                  style={styles.warehouseMapCell}
                   onPress={() => setLocatorDrillPath([area.name])}
                 >
                   <Text style={styles.warehouseMapCellText}>{area.name}</Text>
@@ -5090,16 +5087,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.primary,
+    backgroundColor: COLORS.primaryLight,
   },
   warehouseMapCellText: {
     fontSize: FONT_SIZES.sm,
     fontWeight: '700',
-    color: COLORS.surface,
+    color: COLORS.neutral900,
   },
   warehouseMapCellQty: {
     fontSize: FONT_SIZES.xs,
-    color: COLORS.surface,
-    opacity: 0.8,
+    fontWeight: '600',
+    color: COLORS.neutral900,
   },
 
   // Organization Selector (in header)
