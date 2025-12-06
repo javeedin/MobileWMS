@@ -2105,16 +2105,21 @@ export default function App() {
         {/* Header */}
         <View style={styles.screenHeader}>
           <TouchableOpacity onPress={() => {
-            setCurrentScreen('LotsOrgSelection');
+            setCurrentScreen('Dashboard');
+            setLotsData([]);
+            setGroupedLotsData([]);
+            setGroupedByLot([]);
+            setGroupedByLocator([]);
             setLotsSearchQuery('');
             setLotsProductFilter('');
+            setLotsOrgFilter('');
             setLotsActiveTab('byItem');
+            setLotsSelectedOrg(null);
           }}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             <Text style={styles.screenTitle}>Onhand by Lots</Text>
-            {lotsSelectedOrg && <Text style={styles.screenSubtitle}>{lotsSelectedOrg}</Text>}
           </View>
           <View style={styles.headerSpacer} />
           <View style={styles.headerRight}>
@@ -2123,6 +2128,18 @@ export default function App() {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Organization Selector */}
+        <TouchableOpacity
+          style={styles.lotsOrgSelector}
+          onPress={() => setCurrentScreen('LotsOrgSelection')}
+        >
+          <Text style={styles.lotsOrgSelectorIcon}>🏭</Text>
+          <Text style={styles.lotsOrgSelectorText}>
+            {lotsSelectedOrg || 'All Organizations'}
+          </Text>
+          <Text style={styles.lotsOrgSelectorArrow}>▼</Text>
+        </TouchableOpacity>
 
         {/* Tab Navigation */}
         <View style={styles.lotsTabContainer}>
@@ -4101,6 +4118,32 @@ const styles = StyleSheet.create({
   lotsOrgArrow: {
     fontSize: FONT_SIZES.lg,
     color: COLORS.neutral400,
+  },
+
+  // Organization Selector (in header)
+  lotsOrgSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primaryLight,
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  lotsOrgSelectorIcon: {
+    fontSize: 14,
+    marginRight: SPACING.xs,
+  },
+  lotsOrgSelectorText: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  lotsOrgSelectorArrow: {
+    fontSize: 10,
+    color: COLORS.primary,
+    marginLeft: SPACING.xs,
   },
 
   // Tab Navigation
