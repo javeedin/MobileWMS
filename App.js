@@ -2132,7 +2132,10 @@ export default function App() {
         {/* Organization Selector */}
         <TouchableOpacity
           style={styles.lotsOrgSelector}
-          onPress={() => setCurrentScreen('LotsOrgSelection')}
+          onPress={() => {
+            fetchLotsData(); // Re-fetch all data without org filter
+            setCurrentScreen('LotsOrgSelection');
+          }}
         >
           <Text style={styles.lotsOrgSelectorIcon}>🏭</Text>
           <Text style={styles.lotsOrgSelectorText}>
