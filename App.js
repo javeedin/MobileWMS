@@ -310,13 +310,17 @@ export default function App() {
         'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getorgnizationslist'
       );
       const data = await response.json();
+      console.log('Organizations API response:', JSON.stringify(data));
       const orgs = data.items || [];
       setOrganizationsList(orgs);
       setOrgsLoading(false);
       setCurrentScreen('LotsOrgSelection');
     } catch (error) {
+      console.log('Organizations API error:', error);
       Alert.alert('Error', 'Failed to fetch organizations: ' + error.message);
       setOrgsLoading(false);
+      // Still navigate to show empty state
+      setCurrentScreen('LotsOrgSelection');
     }
   };
 
@@ -326,10 +330,11 @@ export default function App() {
 
     setLocatorLoading(true);
     try {
-      const response = await fetch(
-        `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandsbylocator?organization_code=${orgCode}`
-      );
+      const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandsbylocator?organization_code=${orgCode}`;
+      console.log('Fetching locator data from:', url);
+      const response = await fetch(url);
       const data = await response.json();
+      console.log('Locator API response:', JSON.stringify(data).substring(0, 500));
       const items = data.items || [];
 
       // Group by Locator
@@ -2080,14 +2085,15 @@ export default function App() {
             <ActivityIndicator size="large" color={COLORS.primary} />
             <Text style={styles.loadingText}>Loading organizations...</Text>
           </View>
-        ) : (
+        ) : organizationsList.length > 0 ? (
           <ScrollView contentContainerStyle={styles.lotsOrgList}>
-            {organizationsList.map(org => (
+            {organizationsList.map((org, index) => (
               <TouchableOpacity
-                key={org.organization_code || org.organization_id}
+                key={org.organization_code || org.organization_id || `org-${index}`}
                 style={styles.lotsOrgCard}
                 onPress={() => {
-                  const orgCode = org.organization_code || org.organization_name;
+                  const orgCode = org.organization_code || org.organization_name || org.org_code;
+                  console.log('Selected org:', orgCode, org);
                   setLotsSelectedOrg(orgCode);
                   setLotsOrgFilter(orgCode);
                   // Fetch both APIs with selected org
@@ -2100,15 +2106,32 @@ export default function App() {
                   <Text style={styles.lotsOrgIconText}>🏭</Text>
                 </View>
                 <View style={styles.lotsOrgInfo}>
-                  <Text style={styles.lotsOrgName}>{org.organization_code || org.organization_name}</Text>
-                  {org.organization_name && org.organization_code && (
-                    <Text style={styles.lotsOrgCount}>{org.organization_name}</Text>
+                  <Text style={styles.lotsOrgName}>
+                    {org.organization_code || org.organization_name || org.org_code || org.name || JSON.stringify(org)}
+                  </Text>
+                  {(org.organization_name || org.description) && (
+                    <Text style={styles.lotsOrgCount}>{org.organization_name || org.description}</Text>
                   )}
                 </View>
                 <Text style={styles.lotsOrgArrow}>→</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
+        ) : (
+          <View style={styles.emptyStateContainer}>
+            <Text style={styles.emptyStateIcon}>🏭</Text>
+            <Text style={styles.emptyStateText}>No organizations found</Text>
+            <Text style={styles.emptyStateHint}>Check your network connection or API</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => {
+                setOrganizationsList([]);
+                fetchOrganizationsList();
+              }}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
     );
