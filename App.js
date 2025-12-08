@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,23 +11,41 @@ import {
   ActivityIndicator,
   Modal,
   StatusBar,
+  Dimensions,
+  RefreshControl,
 } from 'react-native';
+
+const { width } = Dimensions.get('window');
 
 // Constants
 const COLORS = {
   primary: '#2563eb',
+  primaryDark: '#1d4ed8',
+  primaryLight: '#3b82f6',
   secondary: '#7c3aed',
+  secondaryLight: '#8b5cf6',
   success: '#10b981',
+  successLight: '#34d399',
   warning: '#f59e0b',
+  warningLight: '#fbbf24',
   danger: '#ef4444',
+  dangerLight: '#f87171',
   dark: '#1f2937',
   light: '#f3f4f6',
   white: '#ffffff',
   text: '#111827',
   textSecondary: '#6b7280',
+  textLight: '#9ca3af',
   border: '#e5e7eb',
   background: '#ffffff',
   backgroundSecondary: '#f9fafb',
+  backgroundDark: '#f3f4f6',
+  gradientStart: '#667eea',
+  gradientEnd: '#764ba2',
+  inventoryColor: '#3b82f6',
+  receiveColor: '#10b981',
+  shipColor: '#f59e0b',
+  scanColor: '#8b5cf6',
 };
 
 const SPACING = {
@@ -46,10 +64,12 @@ const FONT_SIZES = {
   lg: 18,
   xl: 24,
   xxl: 32,
+  xxxl: 40,
 };
 
 // API Configuration
-const API_URL = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/PUTAWAYDETAILS?PICKER_NAME=PICKER1';
+const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
+const API_URL = `${API_BASE}/PUTAWAYDETAILS?PICKER_NAME=PICKER1`;
 
 export default function App() {
   // Authentication state
@@ -66,6 +86,16 @@ export default function App() {
   // Navigation state
   const [currentScreen, setCurrentScreen] = useState('Login');
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // KPI state
+  const [kpiData, setKpiData] = useState({
+    totalPOs: 0,
+    pendingItems: 0,
+    inventoryItems: 0,
+    lowStock: 0,
+  });
+  const [kpiLoading, setKpiLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Purchase Orders state
   const [poData, setPoData] = useState([]);
@@ -87,12 +117,66 @@ export default function App() {
   const [itemSuggestions, setItemSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
+  // Fetch KPIs when organization is selected
+  useEffect(() => {
+    if (selectedOrg && isLoggedIn) {
+      fetchKPIs();
+    }
+  }, [selectedOrg, isLoggedIn]);
+
+  // Fetch KPI data from web services
+  const fetchKPIs = async () => {
+    setKpiLoading(true);
+    try {
+      // Fetch PO data for KPIs
+      const poResponse = await fetch(API_URL);
+      const poJson = await poResponse.json();
+      const poItems = poJson.items || [];
+
+      // Calculate PO KPIs
+      const uniquePOs = [...new Set(poItems.map(item => item.documentnumber))];
+
+      // Fetch Inventory data for KPIs
+      let inventoryCount = 0;
+      let lowStockCount = 0;
+
+      try {
+        const invUrl = `${API_BASE}/getonhand?orgainzation_code=${selectedOrg}`;
+        const invResponse = await fetch(invUrl);
+        const invJson = await invResponse.json();
+        const invItems = invJson.items || [];
+        inventoryCount = invItems.length;
+        lowStockCount = invItems.filter(item => (item.qoh || 0) < 10).length;
+      } catch (e) {
+        console.log('Inventory fetch error:', e);
+      }
+
+      setKpiData({
+        totalPOs: uniquePOs.length,
+        pendingItems: poItems.length,
+        inventoryItems: inventoryCount,
+        lowStock: lowStockCount,
+      });
+    } catch (error) {
+      console.log('KPI fetch error:', error);
+    } finally {
+      setKpiLoading(false);
+    }
+  };
+
+  // Pull to refresh handler
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchKPIs();
+    setRefreshing(false);
+  };
+
   // Handle Login
   const handleLogin = () => {
     if (username === 'admin' && password === 'admin123') {
       setUser({ name: username, username: username });
       setIsLoggedIn(true);
-      setShowOrgModal(true); // Show organization selection after login
+      setShowOrgModal(true);
     } else {
       Alert.alert('Error', 'Invalid credentials');
     }
@@ -102,7 +186,7 @@ export default function App() {
   const handleOrgSelection = (org) => {
     setSelectedOrg(org);
     setShowOrgModal(false);
-    setCurrentScreen('Dashboard');
+    setCurrentScreen('Home');
   };
 
   // Handle Logout
@@ -113,6 +197,7 @@ export default function App() {
     setCurrentScreen('Login');
     setUsername('admin');
     setPassword('admin123');
+    setKpiData({ totalPOs: 0, pendingItems: 0, inventoryItems: 0, lowStock: 0 });
   };
 
   // Fetch Purchase Orders
@@ -122,7 +207,6 @@ export default function App() {
       const response = await fetch(API_URL);
       const data = await response.json();
 
-      // Transform data
       const transformedData = data.items.map((item, index) => ({
         ...item,
         id: index.toString(),
@@ -148,8 +232,7 @@ export default function App() {
 
     setOnhandLoading(true);
     try {
-      // Note: Using the typo from user's URL "orgainzation_code"
-      let url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhand?orgainzation_code=${searchOrgCode}`;
+      let url = `${API_BASE}/getonhand?orgainzation_code=${searchOrgCode}`;
 
       if (searchSubinventory) {
         url += `&subinventory=${searchSubinventory}`;
@@ -158,7 +241,6 @@ export default function App() {
       const response = await fetch(url);
       const data = await response.json();
 
-      // Transform data
       const transformedData = (data.items || []).map((item, index) => ({
         ...item,
         id: index.toString(),
@@ -173,16 +255,14 @@ export default function App() {
     }
   };
 
-  // Handle unified search with autocomplete (Amazon-style)
+  // Handle unified search with autocomplete
   const handleSearchChange = (text) => {
     setSearchQuery(text);
     if (text.length > 1 && onhandData.length > 0) {
-      // Search both item code and description
       const suggestions = [];
       const seen = new Set();
 
       onhandData.forEach(item => {
-        // Add item code matches
         if (item.itemnumber && item.itemnumber.toLowerCase().includes(text.toLowerCase()) && !seen.has(item.itemnumber)) {
           suggestions.push({
             type: 'code',
@@ -191,7 +271,6 @@ export default function App() {
           });
           seen.add(item.itemnumber);
         }
-        // Add description matches
         else if (item.itemdescription && item.itemdescription.toLowerCase().includes(text.toLowerCase()) && !seen.has(item.itemdescription)) {
           suggestions.push({
             type: 'description',
@@ -209,13 +288,11 @@ export default function App() {
     }
   };
 
-  // Select autocomplete suggestion
   const selectSuggestion = (suggestion) => {
     setSearchQuery(suggestion.value);
     setShowSuggestions(false);
   };
 
-  // Filter onhand data (searches both item code and description)
   const filteredOnhandData = onhandData.filter(item => {
     if (!searchQuery) return true;
 
@@ -256,7 +333,6 @@ export default function App() {
     const mockLocator = `LOC-${Math.floor(Math.random() * 1000)}`;
     setScannedLocator(mockLocator);
 
-    // Update item with scanned locator
     if (scanningForItem) {
       const updatedItem = { ...scanningForItem, actualLocator: mockLocator };
       setSelectedItem(updatedItem);
@@ -363,115 +439,326 @@ export default function App() {
     );
   }
 
-  // Dashboard Screen
-  if (currentScreen === 'Dashboard') {
+  // ============= NEW HOME PAGE =============
+  if (currentScreen === 'Home') {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
 
-        {/* Header */}
-        <View style={styles.dashboardHeader}>
-          <View style={styles.headerLeft}>
-            <TouchableOpacity onPress={() => setMenuOpen(!menuOpen)}>
-              <Text style={styles.menuIcon}>☰</Text>
-            </TouchableOpacity>
-            <View style={styles.headerTitleContainer}>
-              <Text style={styles.dashboardGreeting}>Welcome back,</Text>
-              <Text style={styles.dashboardUserName}>{user?.name || 'User'}</Text>
+        {/* Beautiful Header */}
+        <View style={styles.homeHeader}>
+          <View style={styles.homeHeaderContent}>
+            <View style={styles.homeHeaderLeft}>
+              <Text style={styles.homeGreeting}>Welcome back,</Text>
+              <Text style={styles.homeUserName}>{user?.name || 'User'}</Text>
+              <View style={styles.homeOrgBadge}>
+                <Text style={styles.homeOrgText}>{selectedOrg}</Text>
+              </View>
+            </View>
+            <View style={styles.homeHeaderRight}>
+              <TouchableOpacity
+                style={styles.homeHeaderIcon}
+                onPress={() => Alert.alert('Notifications', 'No new notifications')}
+              >
+                <Text style={styles.headerIconText}>🔔</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.homeHeaderIcon}
+                onPress={handleLogout}
+              >
+                <Text style={styles.headerIconText}>🚪</Text>
+              </TouchableOpacity>
             </View>
           </View>
+        </View>
+
+        <ScrollView
+          style={styles.homeContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+          }
+        >
+          {/* KPI Section */}
+          <View style={styles.kpiSection}>
+            <Text style={styles.sectionTitle}>Dashboard Overview</Text>
+
+            {kpiLoading ? (
+              <View style={styles.kpiLoadingContainer}>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+                <Text style={styles.kpiLoadingText}>Loading KPIs...</Text>
+              </View>
+            ) : (
+              <View style={styles.kpiGrid}>
+                <View style={[styles.kpiCard, { backgroundColor: COLORS.inventoryColor }]}>
+                  <View style={styles.kpiIconContainer}>
+                    <Text style={styles.kpiIcon}>📋</Text>
+                  </View>
+                  <Text style={styles.kpiValue}>{kpiData.totalPOs}</Text>
+                  <Text style={styles.kpiLabel}>Purchase Orders</Text>
+                </View>
+
+                <View style={[styles.kpiCard, { backgroundColor: COLORS.receiveColor }]}>
+                  <View style={styles.kpiIconContainer}>
+                    <Text style={styles.kpiIcon}>📦</Text>
+                  </View>
+                  <Text style={styles.kpiValue}>{kpiData.pendingItems}</Text>
+                  <Text style={styles.kpiLabel}>Pending Items</Text>
+                </View>
+
+                <View style={[styles.kpiCard, { backgroundColor: COLORS.secondary }]}>
+                  <View style={styles.kpiIconContainer}>
+                    <Text style={styles.kpiIcon}>🏭</Text>
+                  </View>
+                  <Text style={styles.kpiValue}>{kpiData.inventoryItems}</Text>
+                  <Text style={styles.kpiLabel}>Inventory Items</Text>
+                </View>
+
+                <View style={[styles.kpiCard, { backgroundColor: COLORS.warning }]}>
+                  <View style={styles.kpiIconContainer}>
+                    <Text style={styles.kpiIcon}>⚠️</Text>
+                  </View>
+                  <Text style={styles.kpiValue}>{kpiData.lowStock}</Text>
+                  <Text style={styles.kpiLabel}>Low Stock Alerts</Text>
+                </View>
+              </View>
+            )}
+          </View>
+
+          {/* Modules Section */}
+          <View style={styles.modulesSection}>
+            <Text style={styles.sectionTitle}>Modules</Text>
+
+            <View style={styles.modulesGrid}>
+              {/* Inventory Module */}
+              <TouchableOpacity
+                style={styles.moduleCard}
+                onPress={() => setCurrentScreen('InventoryModule')}
+              >
+                <View style={[styles.moduleIconContainer, { backgroundColor: COLORS.inventoryColor }]}>
+                  <Text style={styles.moduleIcon}>📦</Text>
+                </View>
+                <Text style={styles.moduleTitle}>Inventory</Text>
+                <Text style={styles.moduleDescription}>Manage stock, view onhand quantities, and track items</Text>
+                <View style={styles.moduleArrow}>
+                  <Text style={styles.moduleArrowText}>→</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Receiving Module */}
+              <TouchableOpacity
+                style={styles.moduleCard}
+                onPress={() => {
+                  setCurrentScreen('ReceiveGoods');
+                  fetchPOData();
+                }}
+              >
+                <View style={[styles.moduleIconContainer, { backgroundColor: COLORS.receiveColor }]}>
+                  <Text style={styles.moduleIcon}>📥</Text>
+                </View>
+                <Text style={styles.moduleTitle}>Receiving</Text>
+                <Text style={styles.moduleDescription}>Process incoming shipments and putaway operations</Text>
+                <View style={styles.moduleArrow}>
+                  <Text style={styles.moduleArrowText}>→</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Shipping Module */}
+              <TouchableOpacity
+                style={styles.moduleCard}
+                onPress={() => setCurrentScreen('Ship')}
+              >
+                <View style={[styles.moduleIconContainer, { backgroundColor: COLORS.shipColor }]}>
+                  <Text style={styles.moduleIcon}>📤</Text>
+                </View>
+                <Text style={styles.moduleTitle}>Shipping</Text>
+                <Text style={styles.moduleDescription}>Process outgoing orders and manage shipments</Text>
+                <View style={styles.moduleArrow}>
+                  <Text style={styles.moduleArrowText}>→</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Quick Actions Section */}
+          <View style={styles.quickActionsSection}>
+            <Text style={styles.sectionTitle}>Quick Actions</Text>
+
+            <View style={styles.quickActionsGrid}>
+              <TouchableOpacity
+                style={styles.quickActionButton}
+                onPress={() => setCurrentScreen('Scanner')}
+              >
+                <Text style={styles.quickActionIcon}>📷</Text>
+                <Text style={styles.quickActionText}>Scan Item</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickActionButton}
+                onPress={() => {
+                  setSearchOrgCode(selectedOrg || '');
+                  setCurrentScreen('Inventory');
+                }}
+              >
+                <Text style={styles.quickActionIcon}>🔍</Text>
+                <Text style={styles.quickActionText}>Search</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickActionButton}
+                onPress={onRefresh}
+              >
+                <Text style={styles.quickActionIcon}>🔄</Text>
+                <Text style={styles.quickActionText}>Refresh</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickActionButton}
+                onPress={() => Alert.alert('Settings', 'Settings coming soon')}
+              >
+                <Text style={styles.quickActionIcon}>⚙️</Text>
+                <Text style={styles.quickActionText}>Settings</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={{ height: 100 }} />
+        </ScrollView>
+
+        {/* Bottom Navigation */}
+        <View style={styles.bottomNav}>
+          <TouchableOpacity style={[styles.navItem, styles.navItemActive]} onPress={() => setCurrentScreen('Home')}>
+            <Text style={styles.navIcon}>🏠</Text>
+            <Text style={[styles.navText, styles.navTextActive]}>Home</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('InventoryModule')}>
+            <Text style={styles.navIcon}>📦</Text>
+            <Text style={styles.navText}>Inventory</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => { setCurrentScreen('ReceiveGoods'); fetchPOData(); }}>
+            <Text style={styles.navIcon}>📥</Text>
+            <Text style={styles.navText}>Receive</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('Scanner')}>
+            <Text style={styles.navIcon}>📷</Text>
+            <Text style={styles.navText}>Scan</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // ============= INVENTORY MODULE (Contains the old menu) =============
+  if (currentScreen === 'InventoryModule') {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.inventoryColor} />
+
+        {/* Header */}
+        <View style={[styles.moduleHeader, { backgroundColor: COLORS.inventoryColor }]}>
+          <TouchableOpacity onPress={() => setCurrentScreen('Home')}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.moduleHeaderCenter}>
+            <Text style={styles.moduleHeaderTitle}>Inventory Module</Text>
+            <Text style={styles.moduleHeaderSubtitle}>{selectedOrg}</Text>
+          </View>
           <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
-            <Text style={styles.notificationIcon}>🔔</Text>
+            <Text style={styles.notificationIconSmall}>🔔</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Hamburger Menu */}
-        {menuOpen && (
-          <View style={styles.hamburgerMenu}>
-            <View style={styles.menuHeader}>
-              <Text style={styles.menuUserName}>{user?.name || 'User'}</Text>
-              <Text style={styles.menuUserRole}>Warehouse Staff</Text>
-              {selectedOrg && <Text style={styles.menuOrgText}>Org: {selectedOrg}</Text>}
-            </View>
-            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuOpen(false); setCurrentScreen('Dashboard'); }}>
-              <Text style={styles.menuItemText}>🏠 Dashboard</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuOpen(false); setCurrentScreen('Inventory'); }}>
-              <Text style={styles.menuItemText}>📦 Inventory</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
-              <Text style={[styles.menuItemText, { color: COLORS.danger }]}>🚪 Logout</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <ScrollView style={styles.dashboardContent}>
-          {/* Organization Display */}
-          {selectedOrg && (
-            <View style={styles.orgDisplayContainer}>
-              <Text style={styles.orgDisplayLabel}>Organization:</Text>
-              <Text style={styles.orgDisplayValue}>{selectedOrg}</Text>
-            </View>
-          )}
-
-          <View style={styles.cardGrid}>
-            {/* Inventory Card */}
+        <ScrollView style={styles.moduleContent}>
+          {/* Module Menu Cards */}
+          <View style={styles.moduleMenuGrid}>
+            {/* Inventory Onhand */}
             <TouchableOpacity
-              style={styles.featureCard}
+              style={styles.moduleMenuCard}
               onPress={() => {
                 setSearchOrgCode(selectedOrg || '');
                 setCurrentScreen('Inventory');
               }}
             >
-              <Text style={styles.cardIcon}>📦</Text>
-              <Text style={styles.cardTitle}>Inventory</Text>
-              <Text style={styles.cardDescription}>View and manage inventory</Text>
+              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#e0f2fe' }]}>
+                <Text style={styles.moduleMenuIcon}>📦</Text>
+              </View>
+              <Text style={styles.moduleMenuTitle}>Inventory Onhand</Text>
+              <Text style={styles.moduleMenuDescription}>View and search inventory quantities</Text>
             </TouchableOpacity>
 
-            {/* Scanner Card */}
+            {/* Scan Item */}
             <TouchableOpacity
-              style={styles.featureCard}
+              style={styles.moduleMenuCard}
               onPress={() => setCurrentScreen('Scanner')}
             >
-              <Text style={styles.cardIcon}>📷</Text>
-              <Text style={styles.cardTitle}>Scan Item</Text>
-              <Text style={styles.cardDescription}>Scan barcode to view item</Text>
+              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#f3e8ff' }]}>
+                <Text style={styles.moduleMenuIcon}>📷</Text>
+              </View>
+              <Text style={styles.moduleMenuTitle}>Scan Item</Text>
+              <Text style={styles.moduleMenuDescription}>Scan barcode to view item details</Text>
             </TouchableOpacity>
 
-            {/* Receive Goods Card */}
+            {/* Stock Counts */}
             <TouchableOpacity
-              style={styles.featureCard}
+              style={styles.moduleMenuCard}
+              onPress={() => Alert.alert('Coming Soon', 'Stock Counts feature coming soon')}
+            >
+              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#dcfce7' }]}>
+                <Text style={styles.moduleMenuIcon}>📊</Text>
+              </View>
+              <Text style={styles.moduleMenuTitle}>Stock Counts</Text>
+              <Text style={styles.moduleMenuDescription}>Perform cycle counts and adjustments</Text>
+            </TouchableOpacity>
+
+            {/* Transfer Orders */}
+            <TouchableOpacity
+              style={styles.moduleMenuCard}
+              onPress={() => Alert.alert('Coming Soon', 'Transfer Orders feature coming soon')}
+            >
+              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#fef3c7' }]}>
+                <Text style={styles.moduleMenuIcon}>🔄</Text>
+              </View>
+              <Text style={styles.moduleMenuTitle}>Transfer Orders</Text>
+              <Text style={styles.moduleMenuDescription}>Move inventory between locations</Text>
+            </TouchableOpacity>
+
+            {/* Item Inquiry */}
+            <TouchableOpacity
+              style={styles.moduleMenuCard}
               onPress={() => {
-                setCurrentScreen('ReceiveGoods');
-                fetchPOData();
+                setSearchOrgCode(selectedOrg || '');
+                setCurrentScreen('Inventory');
               }}
             >
-              <Text style={styles.cardIcon}>📥</Text>
-              <Text style={styles.cardTitle}>Receive Goods</Text>
-              <Text style={styles.cardDescription}>Process incoming shipments</Text>
+              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#fee2e2' }]}>
+                <Text style={styles.moduleMenuIcon}>🔍</Text>
+              </View>
+              <Text style={styles.moduleMenuTitle}>Item Inquiry</Text>
+              <Text style={styles.moduleMenuDescription}>Search and view item information</Text>
             </TouchableOpacity>
 
-            {/* Ship Orders Card */}
+            {/* Reports */}
             <TouchableOpacity
-              style={styles.featureCard}
-              onPress={() => setCurrentScreen('Ship')}
+              style={styles.moduleMenuCard}
+              onPress={() => Alert.alert('Coming Soon', 'Reports feature coming soon')}
             >
-              <Text style={styles.cardIcon}>📤</Text>
-              <Text style={styles.cardTitle}>Ship Orders</Text>
-              <Text style={styles.cardDescription}>Process outgoing orders</Text>
+              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#e0e7ff' }]}>
+                <Text style={styles.moduleMenuIcon}>📈</Text>
+              </View>
+              <Text style={styles.moduleMenuTitle}>Reports</Text>
+              <Text style={styles.moduleMenuDescription}>View inventory reports and analytics</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
 
         {/* Bottom Navigation */}
         <View style={styles.bottomNav}>
-          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('Dashboard')}>
+          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('Home')}>
             <Text style={styles.navIcon}>🏠</Text>
             <Text style={styles.navText}>Home</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={() => { setSearchOrgCode(selectedOrg || ''); setCurrentScreen('Inventory'); }}>
+          <TouchableOpacity style={[styles.navItem, styles.navItemActive]} onPress={() => setCurrentScreen('InventoryModule')}>
             <Text style={styles.navIcon}>📦</Text>
-            <Text style={styles.navText}>Inventory</Text>
+            <Text style={[styles.navText, styles.navTextActive]}>Inventory</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.navItem} onPress={() => { setCurrentScreen('ReceiveGoods'); fetchPOData(); }}>
             <Text style={styles.navIcon}>📥</Text>
@@ -490,19 +777,16 @@ export default function App() {
   if (currentScreen === 'ReceiveGoods' && !selectedPO) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.receiveColor} />
 
         {/* Header */}
-        <View style={styles.screenHeader}>
-          <TouchableOpacity onPress={() => setCurrentScreen('Dashboard')}>
+        <View style={[styles.screenHeader, { backgroundColor: COLORS.receiveColor }]}>
+          <TouchableOpacity onPress={() => setCurrentScreen('Home')}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
           <Text style={styles.screenTitle}>Purchase Orders</Text>
           <View style={styles.headerRight}>
             {selectedOrg && <Text style={styles.headerOrgText}>{selectedOrg}</Text>}
-            <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
-              <Text style={styles.notificationIconSmall}>🔔</Text>
-            </TouchableOpacity>
             <TouchableOpacity onPress={fetchPOData}>
               <Text style={styles.refreshButton}>🔄</Text>
             </TouchableOpacity>
@@ -523,7 +807,7 @@ export default function App() {
 
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
+            <ActivityIndicator size="large" color={COLORS.receiveColor} />
             <Text style={styles.loadingText}>Loading Purchase Orders...</Text>
           </View>
         ) : (
@@ -541,7 +825,7 @@ export default function App() {
               >
                 <View style={styles.poCardHeader}>
                   <Text style={styles.poNumber}>PO: {item.documentnumber}</Text>
-                  <View style={styles.itemCountBadge}>
+                  <View style={[styles.itemCountBadge, { backgroundColor: COLORS.receiveColor }]}>
                     <Text style={styles.itemCountText}>{item.itemCount} items</Text>
                   </View>
                 </View>
@@ -551,13 +835,33 @@ export default function App() {
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>No purchase orders found</Text>
-                <TouchableOpacity style={styles.retryButton} onPress={fetchPOData}>
+                <TouchableOpacity style={[styles.retryButton, { backgroundColor: COLORS.receiveColor }]} onPress={fetchPOData}>
                   <Text style={styles.retryButtonText}>Fetch Purchase Orders</Text>
                 </TouchableOpacity>
               </View>
             }
           />
         )}
+
+        {/* Bottom Navigation */}
+        <View style={styles.bottomNav}>
+          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('Home')}>
+            <Text style={styles.navIcon}>🏠</Text>
+            <Text style={styles.navText}>Home</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('InventoryModule')}>
+            <Text style={styles.navIcon}>📦</Text>
+            <Text style={styles.navText}>Inventory</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.navItem, styles.navItemActive]} onPress={() => { setCurrentScreen('ReceiveGoods'); fetchPOData(); }}>
+            <Text style={styles.navIcon}>📥</Text>
+            <Text style={[styles.navText, styles.navTextActive]}>Receive</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('Scanner')}>
+            <Text style={styles.navIcon}>📷</Text>
+            <Text style={styles.navText}>Scan</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -566,10 +870,10 @@ export default function App() {
   if (currentScreen === 'POItems' && selectedPO) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.receiveColor} />
 
         {/* Header */}
-        <View style={styles.screenHeader}>
+        <View style={[styles.screenHeader, { backgroundColor: COLORS.receiveColor }]}>
           <TouchableOpacity onPress={() => { setSelectedPO(null); setCurrentScreen('ReceiveGoods'); }}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
@@ -579,9 +883,6 @@ export default function App() {
           </View>
           <View style={styles.headerRight}>
             {selectedOrg && <Text style={styles.headerOrgText}>{selectedOrg}</Text>}
-            <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
-              <Text style={styles.notificationIconSmall}>🔔</Text>
-            </TouchableOpacity>
           </View>
         </View>
 
@@ -741,7 +1042,7 @@ export default function App() {
           style={styles.cancelScanButton}
           onPress={() => {
             setScanningForItem(null);
-            setCurrentScreen(selectedItem ? 'ItemDetail' : 'Dashboard');
+            setCurrentScreen(selectedItem ? 'ItemDetail' : 'Home');
           }}
         >
           <Text style={styles.cancelScanButtonText}>Cancel</Text>
@@ -754,12 +1055,12 @@ export default function App() {
   if (currentScreen === 'Inventory') {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.inventoryColor} />
 
         {/* Header */}
-        <View style={styles.screenHeader}>
+        <View style={[styles.screenHeader, { backgroundColor: COLORS.inventoryColor }]}>
           <TouchableOpacity onPress={() => {
-            setCurrentScreen('Dashboard');
+            setCurrentScreen('InventoryModule');
             setOnhandData([]);
             setSearchOrgCode('');
             setSearchSubinventory('');
@@ -797,7 +1098,7 @@ export default function App() {
               )}
             </View>
             <TouchableOpacity
-              style={styles.fetchButton}
+              style={[styles.fetchButton, { backgroundColor: COLORS.inventoryColor }]}
               onPress={() => setShowParameterModal(true)}
             >
               <Text style={styles.fetchButtonText}>📥 Fetch</Text>
@@ -862,7 +1163,7 @@ export default function App() {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.modalFetchButton}
+                  style={[styles.modalFetchButton, { backgroundColor: COLORS.inventoryColor }]}
                   onPress={fetchOnhandData}
                 >
                   <Text style={styles.modalFetchText}>Fetch Data</Text>
@@ -875,7 +1176,7 @@ export default function App() {
         {/* Results */}
         {onhandLoading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
+            <ActivityIndicator size="large" color={COLORS.inventoryColor} />
             <Text style={styles.loadingText}>Loading inventory data...</Text>
           </View>
         ) : onhandData.length > 0 ? (
@@ -921,7 +1222,7 @@ export default function App() {
           <View style={styles.emptyStateContainer}>
             <Text style={styles.emptyStateIcon}>📦</Text>
             <Text style={styles.emptyStateText}>No data found</Text>
-            <Text style={styles.emptyStateHint}>Enter search parameters above and tap Search</Text>
+            <Text style={styles.emptyStateHint}>Enter search parameters above and tap Fetch</Text>
           </View>
         )}
       </View>
@@ -932,10 +1233,10 @@ export default function App() {
   if (currentScreen === 'Scanner') {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.scanColor} />
 
-        <View style={styles.screenHeader}>
-          <TouchableOpacity onPress={() => setCurrentScreen('Dashboard')}>
+        <View style={[styles.screenHeader, { backgroundColor: COLORS.scanColor }]}>
+          <TouchableOpacity onPress={() => setCurrentScreen('Home')}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
           <Text style={styles.screenTitle}>Scanner</Text>
@@ -957,10 +1258,10 @@ export default function App() {
   if (currentScreen === 'Ship') {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.shipColor} />
 
-        <View style={styles.screenHeader}>
-          <TouchableOpacity onPress={() => setCurrentScreen('Dashboard')}>
+        <View style={[styles.screenHeader, { backgroundColor: COLORS.shipColor }]}>
+          <TouchableOpacity onPress={() => setCurrentScreen('Home')}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
           <Text style={styles.screenTitle}>Ship Orders</Text>
@@ -1129,164 +1430,274 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.md,
   },
 
-  // Dashboard Styles
-  dashboardHeader: {
+  // ============= NEW HOME PAGE STYLES =============
+  homeHeader: {
     backgroundColor: COLORS.primary,
-    paddingTop: 40,
-    paddingBottom: SPACING.lg,
+    paddingTop: 50,
+    paddingBottom: SPACING.xl,
     paddingHorizontal: SPACING.lg,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+  },
+  homeHeaderContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  homeHeaderLeft: {
     flex: 1,
   },
-  headerTitleContainer: {
-    marginLeft: SPACING.md,
-  },
-  menuIcon: {
-    fontSize: 28,
-    color: COLORS.white,
-  },
-  dashboardGreeting: {
-    fontSize: FONT_SIZES.xs,
+  homeGreeting: {
+    fontSize: FONT_SIZES.sm,
     color: COLORS.white,
     opacity: 0.9,
   },
-  dashboardUserName: {
-    fontSize: FONT_SIZES.md,
+  homeUserName: {
+    fontSize: FONT_SIZES.xl,
     fontWeight: 'bold',
     color: COLORS.white,
+    marginBottom: SPACING.xs,
   },
-  orgBadge: {
+  homeOrgBadge: {
     backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: SPACING.sm,
+    paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
-    borderRadius: 8,
-    marginTop: SPACING.xs,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
   },
-  orgBadgeText: {
+  homeOrgText: {
     color: COLORS.white,
-    fontSize: FONT_SIZES.xs,
+    fontSize: FONT_SIZES.sm,
     fontWeight: '600',
   },
-  notificationIcon: {
-    fontSize: 24,
-    color: COLORS.white,
+  homeHeaderRight: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
   },
-  notificationIconSmall: {
+  homeHeaderIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerIconText: {
     fontSize: 20,
-    color: COLORS.white,
-    marginLeft: SPACING.sm,
+  },
+  homeContent: {
+    flex: 1,
   },
 
-  // Hamburger Menu
-  hamburgerMenu: {
-    position: 'absolute',
-    top: 100,
-    left: 0,
-    backgroundColor: COLORS.white,
-    width: 250,
-    borderTopRightRadius: 20,
-    borderBottomRightRadius: 20,
+  // KPI Section
+  kpiSection: {
     padding: SPACING.lg,
-    zIndex: 1000,
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 10,
   },
-  menuHeader: {
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    paddingBottom: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  menuUserName: {
+  sectionTitle: {
     fontSize: FONT_SIZES.lg,
     fontWeight: 'bold',
     color: COLORS.text,
+    marginBottom: SPACING.md,
   },
-  menuUserRole: {
-    fontSize: FONT_SIZES.sm,
-    color: COLORS.textSecondary,
-  },
-  menuOrgText: {
-    fontSize: FONT_SIZES.xs,
-    color: COLORS.primary,
-    marginTop: SPACING.xs,
-    fontWeight: '600',
-  },
-  menuItem: {
-    paddingVertical: SPACING.md,
-  },
-  menuItemText: {
-    fontSize: FONT_SIZES.md,
-    color: COLORS.text,
-  },
-
-  // Dashboard Content
-  dashboardContent: {
-    flex: 1,
-  },
-  orgDisplayContainer: {
-    backgroundColor: COLORS.white,
-    marginHorizontal: SPACING.md,
-    marginTop: SPACING.md,
-    marginBottom: SPACING.xs,
-    padding: SPACING.md,
-    borderRadius: 8,
+  kpiLoadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.primary,
+    justifyContent: 'center',
+    padding: SPACING.lg,
   },
-  orgDisplayLabel: {
-    fontSize: FONT_SIZES.sm,
+  kpiLoadingText: {
+    marginLeft: SPACING.sm,
     color: COLORS.textSecondary,
-    marginRight: SPACING.sm,
   },
-  orgDisplayValue: {
-    fontSize: FONT_SIZES.md,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-  },
-  cardGrid: {
-    padding: SPACING.md,
+  kpiGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
-  featureCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: SPACING.lg,
-    marginBottom: SPACING.md,
+  kpiCard: {
     width: '48%',
-    minHeight: 150,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderRadius: 16,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    minHeight: 120,
   },
-  cardIcon: {
-    fontSize: 40,
+  kpiIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: SPACING.sm,
   },
-  cardTitle: {
+  kpiIcon: {
+    fontSize: 20,
+  },
+  kpiValue: {
+    fontSize: FONT_SIZES.xxl,
+    fontWeight: 'bold',
+    color: COLORS.white,
+  },
+  kpiLabel: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.white,
+    opacity: 0.9,
+    marginTop: SPACING.xs,
+  },
+
+  // Modules Section
+  modulesSection: {
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.lg,
+  },
+  modulesGrid: {
+    gap: SPACING.md,
+  },
+  moduleCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: SPACING.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    marginBottom: SPACING.md,
+  },
+  moduleIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SPACING.md,
+  },
+  moduleIcon: {
+    fontSize: 28,
+  },
+  moduleTitle: {
     fontSize: FONT_SIZES.lg,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    flex: 1,
+  },
+  moduleDescription: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textSecondary,
+    flex: 2,
+    marginRight: SPACING.sm,
+  },
+  moduleArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.backgroundSecondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  moduleArrowText: {
+    fontSize: FONT_SIZES.lg,
+    color: COLORS.textSecondary,
+  },
+
+  // Quick Actions Section
+  quickActionsSection: {
+    paddingHorizontal: SPACING.lg,
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  quickActionButton: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: SPACING.md,
+    alignItems: 'center',
+    width: '23%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  quickActionIcon: {
+    fontSize: 24,
+    marginBottom: SPACING.xs,
+  },
+  quickActionText: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+
+  // ============= INVENTORY MODULE STYLES =============
+  moduleHeader: {
+    paddingTop: 50,
+    paddingBottom: SPACING.lg,
+    paddingHorizontal: SPACING.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  moduleHeaderCenter: {
+    flex: 1,
+    marginLeft: SPACING.md,
+  },
+  moduleHeaderTitle: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: 'bold',
+    color: COLORS.white,
+  },
+  moduleHeaderSubtitle: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.white,
+    opacity: 0.9,
+  },
+  moduleContent: {
+    flex: 1,
+    padding: SPACING.lg,
+  },
+  moduleMenuGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  moduleMenuCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: SPACING.lg,
+    width: '48%',
+    marginBottom: SPACING.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    minHeight: 140,
+  },
+  moduleMenuIconBg: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  moduleMenuIcon: {
+    fontSize: 24,
+  },
+  moduleMenuTitle: {
+    fontSize: FONT_SIZES.md,
     fontWeight: 'bold',
     color: COLORS.text,
     marginBottom: SPACING.xs,
   },
-  cardDescription: {
-    fontSize: FONT_SIZES.sm,
+  moduleMenuDescription: {
+    fontSize: FONT_SIZES.xs,
     color: COLORS.textSecondary,
+    lineHeight: 16,
   },
 
   // Bottom Navigation
@@ -1296,11 +1707,16 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     paddingVertical: SPACING.sm,
+    paddingBottom: SPACING.md,
   },
   navItem: {
     flex: 1,
     alignItems: 'center',
     paddingVertical: SPACING.xs,
+  },
+  navItemActive: {
+    borderTopWidth: 2,
+    borderTopColor: COLORS.primary,
   },
   navIcon: {
     fontSize: 24,
@@ -1310,11 +1726,15 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: SPACING.xs,
   },
+  navTextActive: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
 
   // Screen Header
   screenHeader: {
     backgroundColor: COLORS.primary,
-    paddingTop: 40,
+    paddingTop: 50,
     paddingBottom: SPACING.md,
     paddingHorizontal: SPACING.md,
     flexDirection: 'row',
@@ -1357,6 +1777,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   refreshButton: {
+    fontSize: 20,
+    color: COLORS.white,
+    marginLeft: SPACING.sm,
+  },
+  notificationIconSmall: {
     fontSize: 20,
     color: COLORS.white,
     marginLeft: SPACING.sm,
