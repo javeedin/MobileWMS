@@ -1746,8 +1746,8 @@ export default function App() {
         <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
-          <Text style={styles.screenTitle}>Inventory Onhand</Text>
+        <View style={{ backgroundColor: '#fff', paddingTop: 40, paddingBottom: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#ddd', alignItems: 'center' }}>
+          <Text style={{ fontSize: 16, fontWeight: 'bold', color: 'gray' }}>Inventory Onhand</Text>
         </View>
 
         {/* Search Section */}
