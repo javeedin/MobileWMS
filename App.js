@@ -14,6 +14,7 @@ import {
   Vibration,
   Dimensions,
   RefreshControl,
+  BackHandler,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 
@@ -330,6 +331,26 @@ export default function App() {
       onRefresh();
     }
   }, [isLoggedIn]);
+
+  // Handle Android hardware back button
+  useEffect(() => {
+    const backAction = () => {
+      if (currentScreen === 'Login' || currentScreen === 'Home') {
+        // Exit app or do nothing on Login/Home screen
+        Alert.alert('Exit App', 'Are you sure you want to exit?', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Exit', onPress: () => BackHandler.exitApp() }
+        ]);
+        return true;
+      }
+      // Go back to previous screen
+      goBack();
+      return true;
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+    return () => backHandler.remove();
+  }, [currentScreen, navigationHistory]);
 
   // Fetch Purchase Orders
   const fetchPOData = async () => {
@@ -1170,16 +1191,8 @@ export default function App() {
         <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={styles.moduleHeader}>
-          <TouchableOpacity onPress={goBack}>
-            <Text style={styles.backButton}>←</Text>
-          </TouchableOpacity>
-          <View style={styles.moduleHeaderCenter}>
-            <Text style={styles.moduleHeaderTitle}>Inventory Module</Text>
-          </View>
-          <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
-            <Text style={styles.notificationIconSmall}>🔔</Text>
-          </TouchableOpacity>
+        <View style={[styles.moduleHeader, { justifyContent: 'center' }]}>
+          <Text style={styles.moduleHeaderTitle}>Inventory</Text>
         </View>
 
         {/* Hamburger Menu */}
@@ -1223,7 +1236,10 @@ export default function App() {
             {/* Inventory by Lots */}
             <TouchableOpacity
               style={styles.compactMenuCard}
-              onPress={() => fetchOrganizationsList()}
+              onPress={() => {
+                setCurrentScreen('OnhandByLots');
+                fetchLotsData();
+              }}
             >
               <View style={[styles.compactMenuIconBg, { backgroundColor: '#dbeafe' }]}>
                 <Text style={styles.compactMenuIcon}>🏷️</Text>
@@ -1247,7 +1263,7 @@ export default function App() {
 
             {/* Ship Orders */}
             <TouchableOpacity
-              style={styles.featureCard}
+              style={styles.compactMenuCard}
               onPress={() => {
                 setCurrentScreen('Ship');
                 fetchShipOrders();
@@ -1317,18 +1333,6 @@ export default function App() {
               <Text style={styles.compactMenuTitle}>Reports</Text>
             </TouchableOpacity>
 
-            {/* Onhand by Lots Card */}
-            <TouchableOpacity
-              style={styles.featureCard}
-              onPress={() => {
-                setCurrentScreen('OnhandByLots');
-                fetchLotsData();
-              }}
-            >
-              <Text style={styles.cardIcon}>🏷️</Text>
-              <Text style={styles.cardTitle}>Onhand by Lots</Text>
-              <Text style={styles.cardDescription}>View inventory by lot numbers</Text>
-            </TouchableOpacity>
           </View>
         </ScrollView>
 
