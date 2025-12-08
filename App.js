@@ -127,6 +127,9 @@ const SHADOWS = {
   },
 };
 
+// App Version
+const APP_VERSION = 'v1.0.1';
+
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
 const API_URL = `${API_BASE}/PUTAWAYDETAILS?PICKER_NAME=PICKER1`;
@@ -1018,7 +1021,7 @@ export default function App() {
         <View style={{ backgroundColor: COLORS.primary, paddingTop: 40, paddingBottom: 16, paddingHorizontal: 16 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <View>
-              <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>MobileWMS</Text>
+              <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>MobileWMS {APP_VERSION}</Text>
               <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>Welcome, {user?.name || 'User'}</Text>
             </View>
             <TouchableOpacity onPress={handleLogout} style={{ padding: 8 }}>
@@ -1192,7 +1195,7 @@ export default function App() {
 
         {/* Header */}
         <View style={[styles.moduleHeader, { justifyContent: 'space-between' }]}>
-          <View style={{ width: 40 }} />
+          <Text style={{ fontSize: 10, color: '#999' }}>{APP_VERSION}</Text>
           <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#C74634' }}>Inventory</Text>
           <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
             <Text style={{ fontSize: 20 }}>🔔</Text>
