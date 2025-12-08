@@ -1366,18 +1366,8 @@ export default function App() {
         <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={styles.screenHeader}>
-          <TouchableOpacity onPress={goBack}>
-            <Text style={styles.backButton}>←</Text>
-          </TouchableOpacity>
+        <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
           <Text style={styles.screenTitle}>Purchase Orders</Text>
-          <View style={styles.headerSpacer} />
-          <View style={styles.headerRight}>
-            {selectedOrg && <Text style={styles.headerOrgText}>{selectedOrg}</Text>}
-            <TouchableOpacity onPress={fetchPOData}>
-              <Text style={styles.refreshButton}>🔄</Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
         {/* Stats */}
@@ -1460,18 +1450,8 @@ export default function App() {
         <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={styles.screenHeader}>
-          <TouchableOpacity onPress={() => { setSelectedPO(null); setCurrentScreen('ReceiveGoods'); }}>
-            <Text style={styles.backButton}>←</Text>
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.screenTitle}>PO Items</Text>
-            <Text style={styles.screenSubtitle}>PO: {selectedPO.documentnumber}</Text>
-          </View>
-          <View style={styles.headerSpacer} />
-          <View style={styles.headerRight}>
-            {selectedOrg && <Text style={styles.headerOrgText}>{selectedOrg}</Text>}
-          </View>
+        <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
+          <Text style={styles.screenTitle}>PO Items - {selectedPO.documentnumber}</Text>
         </View>
 
         {/* Items List */}
@@ -1509,18 +1489,11 @@ export default function App() {
   if (currentScreen === 'ItemDetail' && selectedItem) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={styles.screenHeader}>
-          <TouchableOpacity onPress={() => setCurrentScreen('POItems')}>
-            <Text style={styles.backButton}>←</Text>
-          </TouchableOpacity>
+        <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
           <Text style={styles.screenTitle}>Item Details</Text>
-          <View style={styles.headerSpacer} />
-          <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
-            <Text style={styles.notificationIconSmall}>🔔</Text>
-          </TouchableOpacity>
         </View>
 
         <ScrollView style={styles.detailContainer}>
@@ -1766,30 +1739,8 @@ export default function App() {
         <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={styles.screenHeader}>
-          <TouchableOpacity onPress={() => {
-            setCurrentScreen('InventoryModule');
-            setOnhandData([]);
-            setSearchOrgCode('');
-            setSearchSubinventory('');
-            setSearchQuery('');
-          }}>
-            <Text style={styles.backButton}>←</Text>
-          </TouchableOpacity>
+        <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
           <Text style={styles.screenTitle}>Inventory Onhand</Text>
-          <View style={styles.headerSpacer} />
-          <View style={styles.headerRight}>
-            <TouchableOpacity onPress={() => {
-              setScanningForInventory(true);
-              setScanned(false);
-              setCurrentScreen('BarcodeScanner');
-            }}>
-              <Text style={styles.notificationIconSmall}>📷</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
-              <Text style={styles.notificationIconSmall}>🔔</Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
         {/* Search Section */}
@@ -2101,22 +2052,8 @@ export default function App() {
         <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={styles.screenHeader}>
-          <TouchableOpacity onPress={() => {
-            setCurrentScreen('Dashboard');
-            setShipOrdersData([]);
-            setGroupedShipOrders([]);
-            setShipSearchQuery('');
-          }}>
-            <Text style={styles.backButton}>←</Text>
-          </TouchableOpacity>
+        <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
           <Text style={styles.screenTitle}>Ship Orders</Text>
-          <View style={styles.headerSpacer} />
-          <View style={styles.headerRight}>
-            <TouchableOpacity onPress={fetchShipOrders}>
-              <Text style={styles.refreshButton}>🔄</Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
         {/* Search Bar */}
@@ -2235,27 +2172,11 @@ export default function App() {
   if (currentScreen === 'ShipOrderLines' && selectedShipOrder) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={styles.screenHeader}>
-          <TouchableOpacity onPress={() => {
-            setSelectedShipOrder(null);
-            setCurrentScreen('Ship');
-          }}>
-            <Text style={styles.backButton}>←</Text>
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.screenTitle}>Order Lines</Text>
-            <Text style={styles.screenSubtitle}>{selectedShipOrder.source_order_number}</Text>
-          </View>
-          <View style={styles.headerSpacer} />
-          <TouchableOpacity
-            style={styles.shipAllButton}
-            onPress={() => handleShipAllLines(selectedShipOrder)}
-          >
-            <Text style={styles.shipAllButtonText}>📦 Ship All</Text>
-          </TouchableOpacity>
+        <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
+          <Text style={styles.screenTitle}>Order Lines - {selectedShipOrder.source_order_number}</Text>
         </View>
 
         {/* Order Summary Card */}
@@ -2440,16 +2361,9 @@ export default function App() {
     if (!permission.granted) {
       return (
         <View style={styles.container}>
-          <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
-          <View style={styles.screenHeader}>
-            <TouchableOpacity onPress={() => {
-              setShowPickModal(true);
-              setCurrentScreen('ShipOrderLines');
-            }}>
-              <Text style={styles.backButton}>←</Text>
-            </TouchableOpacity>
+          <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+          <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
             <Text style={styles.screenTitle}>Scan Serial</Text>
-            <View style={styles.headerSpacer} />
           </View>
           <View style={styles.contentCenter}>
             <Text style={styles.placeholderIcon}>📷</Text>
@@ -2634,24 +2548,11 @@ export default function App() {
 
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={styles.screenHeader}>
-          <TouchableOpacity onPress={() => {
-            setCurrentScreen('Dashboard');
-            setLotsData([]);
-            setGroupedLotsData([]);
-            setGroupedByLot([]);
-            setGroupedByLocator([]);
-            setLocatorData([]);
-            setSelectedWarehouse(null);
-            setSelectedSubinventory(null);
-          }}>
-            <Text style={styles.backButton}>←</Text>
-          </TouchableOpacity>
+        <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
           <Text style={styles.screenTitle}>Select Organization</Text>
-          <View style={styles.headerSpacer} />
         </View>
 
         {orgsLoading ? (
@@ -2788,23 +2689,11 @@ export default function App() {
 
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={styles.screenHeader}>
-          <TouchableOpacity onPress={() => {
-            if (locatorDrillPath.length > 0) {
-              setLocatorDrillPath(locatorDrillPath.slice(0, -1));
-            } else {
-              setCurrentScreen('OnhandByLots');
-            }
-          }}>
-            <Text style={styles.backButton}>←</Text>
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.screenTitle}>Global Locator View</Text>
-          </View>
-          <View style={styles.headerSpacer} />
+        <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
+          <Text style={styles.screenTitle}>Global Locator View</Text>
         </View>
 
         {/* Breadcrumb Navigation */}
@@ -2974,33 +2863,11 @@ export default function App() {
 
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={styles.screenHeader}>
-          <TouchableOpacity onPress={() => {
-            setCurrentScreen('Dashboard');
-            setLotsData([]);
-            setGroupedLotsData([]);
-            setGroupedByLot([]);
-            setGroupedByLocator([]);
-            setLotsSearchQuery('');
-            setLotsProductFilter('');
-            setLotsOrgFilter('');
-            setLotsActiveTab('byItem');
-            setLotsSelectedOrg(null);
-          }}>
-            <Text style={styles.backButton}>←</Text>
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.screenTitle}>Onhand by Lots</Text>
-          </View>
-          <View style={styles.headerSpacer} />
-          <View style={styles.headerRight}>
-            <TouchableOpacity onPress={() => fetchLotsData(lotsSelectedOrg)}>
-              <Text style={styles.refreshButton}>🔄</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
+          <Text style={styles.screenTitle}>Onhand by Lots</Text>
         </View>
 
         {/* Organization Selector */}
@@ -3560,21 +3427,11 @@ export default function App() {
   if (currentScreen === 'LotDetails' && selectedLotItem) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={styles.screenHeader}>
-          <TouchableOpacity onPress={() => {
-            setSelectedLotItem(null);
-            setCurrentScreen('OnhandByLots');
-          }}>
-            <Text style={styles.backButton}>←</Text>
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.screenTitle}>Lot Details</Text>
-            <Text style={styles.screenSubtitle}>{selectedLotItem.item_number}</Text>
-          </View>
-          <View style={styles.headerSpacer} />
+        <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
+          <Text style={styles.screenTitle}>Lot Details - {selectedLotItem.item_number}</Text>
         </View>
 
         {/* Item Summary Card */}
@@ -3688,22 +3545,11 @@ export default function App() {
   if (currentScreen === 'SerialNumbers' && selectedLot) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={styles.screenHeader}>
-          <TouchableOpacity onPress={() => {
-            setSerialNumbers([]);
-            setSelectedLot(null);
-            setCurrentScreen('LotDetails');
-          }}>
-            <Text style={styles.backButton}>←</Text>
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.screenTitle}>Serial Numbers</Text>
-            <Text style={styles.screenSubtitle}>Lot: {selectedLot.lotnumber}</Text>
-          </View>
-          <View style={styles.headerSpacer} />
+        <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
+          <Text style={styles.screenTitle}>Serial Numbers - Lot: {selectedLot.lotnumber}</Text>
         </View>
 
         {/* Lot Info */}
@@ -3762,21 +3608,11 @@ export default function App() {
   if (currentScreen === 'LotGroupItems' && selectedLotGroup) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={styles.screenHeader}>
-          <TouchableOpacity onPress={() => {
-            setSelectedLotGroup(null);
-            setCurrentScreen('OnhandByLots');
-          }}>
-            <Text style={styles.backButton}>←</Text>
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.screenTitle}>Lot Items</Text>
-            <Text style={styles.screenSubtitle}>{selectedLotGroup.lotnumber}</Text>
-          </View>
-          <View style={styles.headerSpacer} />
+        <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
+          <Text style={styles.screenTitle}>Lot Items - {selectedLotGroup.lotnumber}</Text>
         </View>
 
         {/* Lot Summary Card */}
@@ -3856,21 +3692,11 @@ export default function App() {
   if (currentScreen === 'LocatorLots' && selectedLocatorGroup) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={styles.screenHeader}>
-          <TouchableOpacity onPress={() => {
-            setSelectedLocatorGroup(null);
-            setCurrentScreen('OnhandByLots');
-          }}>
-            <Text style={styles.backButton}>←</Text>
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.screenTitle}>Locator Lots</Text>
-            <Text style={styles.screenSubtitle}>📍 {selectedLocatorGroup.locator}</Text>
-          </View>
-          <View style={styles.headerSpacer} />
+        <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
+          <Text style={styles.screenTitle}>Locator Lots - {selectedLocatorGroup.locator}</Text>
         </View>
 
         {/* Locator Summary Card */}
@@ -3959,21 +3785,11 @@ export default function App() {
   if (currentScreen === 'LocatorLotItems' && selectedLotGroup) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={styles.screenHeader}>
-          <TouchableOpacity onPress={() => {
-            setSelectedLotGroup(null);
-            setCurrentScreen('LocatorLots');
-          }}>
-            <Text style={styles.backButton}>←</Text>
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.screenTitle}>Lot Items</Text>
-            <Text style={styles.screenSubtitle}>{selectedLotGroup.lotnumber}</Text>
-          </View>
-          <View style={styles.headerSpacer} />
+        <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
+          <Text style={styles.screenTitle}>Lot Items - {selectedLotGroup.lotnumber}</Text>
         </View>
 
         {/* Lot Summary Card */}
@@ -4052,16 +3868,8 @@ export default function App() {
         <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={styles.moduleHeader}>
-          <TouchableOpacity onPress={goBack}>
-            <Text style={styles.backButton}>←</Text>
-          </TouchableOpacity>
-          <View style={styles.moduleHeaderCenter}>
-            <Text style={styles.moduleHeaderTitle}>Order Management</Text>
-          </View>
-          <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
-            <Text style={styles.notificationIconSmall}>🔔</Text>
-          </TouchableOpacity>
+        <View style={[styles.moduleHeader, { justifyContent: 'center' }]}>
+          <Text style={styles.moduleHeaderTitle}>Order Management</Text>
         </View>
 
         <ScrollView style={styles.moduleContent}>
@@ -4174,16 +3982,8 @@ export default function App() {
         <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={styles.moduleHeader}>
-          <TouchableOpacity onPress={goBack}>
-            <Text style={styles.backButton}>←</Text>
-          </TouchableOpacity>
-          <View style={styles.moduleHeaderCenter}>
-            <Text style={styles.moduleHeaderTitle}>CRM</Text>
-          </View>
-          <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
-            <Text style={styles.notificationIconSmall}>🔔</Text>
-          </TouchableOpacity>
+        <View style={[styles.moduleHeader, { justifyContent: 'center' }]}>
+          <Text style={styles.moduleHeaderTitle}>CRM</Text>
         </View>
 
         <ScrollView style={styles.moduleContent}>
