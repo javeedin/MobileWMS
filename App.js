@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,45 +11,56 @@ import {
   ActivityIndicator,
   Modal,
   StatusBar,
+  Vibration,
   Dimensions,
-  RefreshControl,
 } from 'react-native';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 
-const { width } = Dimensions.get('window');
-
-// Oracle Redwood Theme Colors
+// Oracle Redwood Design System Constants
 const COLORS = {
-  // Primary Redwood colors
-  primary: '#C74634',
-  primaryDark: '#A33A2B',
-  primaryLight: '#D4634F',
-  secondary: '#4A4A4A',
-  secondaryLight: '#6B6B6B',
-  // Status colors
-  success: '#0D7C3F',
-  successLight: '#1A9E52',
-  warning: '#C45500',
-  warningLight: '#E06A00',
-  danger: '#C74634',
-  dangerLight: '#D4634F',
-  // Neutrals
-  dark: '#161513',
-  light: '#FAF9F8',
+  // Primary Brand Colors
+  primary: '#C74634',           // Oracle Red
+  primaryHover: '#A33B2C',      // Darker Oracle Red
+  primaryLight: '#FEF1EF',      // Light red tint
+
+  // Secondary/Neutral Colors
+  secondary: '#312D2A',         // Charcoal
+  secondaryLight: '#4A4541',    // Lighter charcoal
+
+  // Semantic Colors
+  success: '#107F47',           // Redwood Green
+  successLight: '#E8F5ED',      // Light green background
+  warning: '#D4820A',           // Redwood Amber
+  warningLight: '#FEF6E7',      // Light amber background
+  danger: '#C74634',            // Redwood Red
+  dangerLight: '#FEF1EF',       // Light red background
+  info: '#0572CE',              // Redwood Blue
+  infoLight: '#E8F4FC',         // Light blue background
+
+  // Neutral Colors
+  neutral900: '#201E1C',        // Darkest text
+  neutral700: '#403B36',        // Dark text
+  neutral600: '#524C47',        // Medium-dark text
+  neutral500: '#6B6560',        // Secondary text
+  neutral400: '#8C8680',        // Placeholder text
+  neutral300: '#B8B3AE',        // Disabled text
+  neutral200: '#D9D5D2',        // Borders
+  neutral100: '#E8E5E2',        // Light borders
+  neutral50: '#F4F2F0',         // Light background
+
+  // Background Colors
+  background: '#FAF9F8',        // Warm off-white (main background)
+  surface: '#FFFFFF',           // White surface (cards)
+  surfaceHover: '#F7F5F3',      // Hover state for surfaces
+
+  // Legacy mappings for compatibility
+  dark: '#312D2A',
+  light: '#F4F2F0',
   white: '#FFFFFF',
-  text: '#161513',
-  textSecondary: '#6B6B6B',
-  textLight: '#8C8C8C',
-  border: '#E5E2DF',
-  background: '#FFFFFF',
-  backgroundSecondary: '#FAF9F8',
-  backgroundDark: '#F0EFED',
-  // Module colors (Redwood palette)
-  inventoryColor: '#0572CE',
-  receiveColor: '#0D7C3F',
-  shipColor: '#C45500',
-  scanColor: '#7C3E91',
-  orderColor: '#C74634',
-  crmColor: '#0572CE',
+  text: '#201E1C',
+  textSecondary: '#6B6560',
+  border: '#E8E5E2',
+  backgroundSecondary: '#F4F2F0',
 };
 
 const SPACING = {
@@ -62,13 +73,48 @@ const SPACING = {
 };
 
 const FONT_SIZES = {
-  xs: 10,
-  sm: 12,
-  md: 14,
-  lg: 16,
-  xl: 20,
+  xs: 11,
+  sm: 13,
+  md: 15,
+  lg: 17,
+  xl: 22,
+  xxl: 28,
+  xxxl: 34,
+};
+
+// Redwood border radius
+const RADIUS = {
+  sm: 4,
+  md: 8,
+  lg: 12,
+  xl: 16,
   xxl: 24,
-  xxxl: 32,
+  full: 9999,
+};
+
+// Redwood shadows
+const SHADOWS = {
+  sm: {
+    shadowColor: '#201E1C',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  md: {
+    shadowColor: '#201E1C',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  lg: {
+    shadowColor: '#201E1C',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
+  },
 };
 
 // API Configuration
@@ -109,7 +155,13 @@ export default function App() {
 
   // Scanner state
   const [scanningForItem, setScanningForItem] = useState(null);
+  const [scanningForInventory, setScanningForInventory] = useState(false);
   const [scannedLocator, setScannedLocator] = useState('');
+  const [scanned, setScanned] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+
+  // Camera permission hook
+  const [permission, requestPermission] = useCameraPermissions();
 
   // Inventory Onhand state
   const [onhandData, setOnhandData] = useState([]);
@@ -121,59 +173,61 @@ export default function App() {
   const [itemSuggestions, setItemSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  // Fetch KPIs when organization is selected
-  useEffect(() => {
-    if (selectedOrg && isLoggedIn) {
-      fetchKPIs();
-    }
-  }, [selectedOrg, isLoggedIn]);
+  // Onhand by Lots state
+  const [lotsData, setLotsData] = useState([]);
+  const [lotsLoading, setLotsLoading] = useState(false);
+  const [groupedLotsData, setGroupedLotsData] = useState([]);
+  const [selectedLotItem, setSelectedLotItem] = useState(null);
+  const [selectedLot, setSelectedLot] = useState(null);
+  const [serialNumbers, setSerialNumbers] = useState([]);
+  const [serialLoading, setSerialLoading] = useState(false);
+  const [lotsSearchQuery, setLotsSearchQuery] = useState('');
 
-  // Fetch KPI data from web services
-  const fetchKPIs = async () => {
-    setKpiLoading(true);
-    try {
-      // Fetch PO data for KPIs
-      const poResponse = await fetch(API_URL);
-      const poJson = await poResponse.json();
-      const poItems = poJson.items || [];
+  // Onhand by Lots - Tab and Filter state
+  const [lotsActiveTab, setLotsActiveTab] = useState('byItem'); // byItem, byLot, byLocator
+  const [lotsSelectedOrg, setLotsSelectedOrg] = useState(null);
+  const [lotsOrgFilter, setLotsOrgFilter] = useState('');
+  const [lotsProductFilter, setLotsProductFilter] = useState('');
+  const [showLotsOrgDropdown, setShowLotsOrgDropdown] = useState(false);
+  const [showLotsProductDropdown, setShowLotsProductDropdown] = useState(false);
+  const [groupedByLot, setGroupedByLot] = useState([]);
+  const [groupedByLocator, setGroupedByLocator] = useState([]);
+  const [selectedLocatorGroup, setSelectedLocatorGroup] = useState(null);
+  const [selectedLotGroup, setSelectedLotGroup] = useState(null);
 
-      // Calculate PO KPIs
-      const uniquePOs = [...new Set(poItems.map(item => item.documentnumber))];
+  // Organizations list (cached)
+  const [organizationsList, setOrganizationsList] = useState([]);
+  const [orgsLoading, setOrgsLoading] = useState(false);
 
-      // Fetch Inventory data for KPIs
-      let inventoryCount = 0;
-      let lowStockCount = 0;
+  // Selected warehouse and subinventory for org selection
+  const [selectedWarehouse, setSelectedWarehouse] = useState(null);
+  const [selectedSubinventory, setSelectedSubinventory] = useState(null);
 
-      try {
-        const invUrl = `${API_BASE}/getonhand?orgainzation_code=${selectedOrg}`;
-        const invResponse = await fetch(invUrl);
-        const invJson = await invResponse.json();
-        const invItems = invJson.items || [];
-        inventoryCount = invItems.length;
-        lowStockCount = invItems.filter(item => (item.qoh || 0) < 10).length;
-      } catch (e) {
-        console.log('Inventory fetch error:', e);
-      }
+  // Locator data from separate API
+  const [locatorData, setLocatorData] = useState([]);
+  const [locatorLoading, setLocatorLoading] = useState(false);
 
-      setKpiData({
-        totalPOs: uniquePOs.length,
-        pendingItems: poItems.length,
-        inventoryItems: inventoryCount,
-        lowStock: lowStockCount,
-      });
-    } catch (error) {
-      console.log('KPI fetch error:', error);
-    } finally {
-      setKpiLoading(false);
-    }
-  };
+  // Locator visualization modal
+  const [showLocatorModal, setShowLocatorModal] = useState(false);
+  const [selectedLocatorForView, setSelectedLocatorForView] = useState(null);
 
-  // Pull to refresh handler
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchKPIs();
-    setRefreshing(false);
-  };
+  // Global Locator View state
+  const [locatorDrillPath, setLocatorDrillPath] = useState([]); // ['AREA', 'BIN', ...]
+  const [locatorHierarchy, setLocatorHierarchy] = useState(null);
+
+  // Ship Orders state
+  const [shipOrdersData, setShipOrdersData] = useState([]);
+  const [shipOrdersLoading, setShipOrdersLoading] = useState(false);
+  const [groupedShipOrders, setGroupedShipOrders] = useState([]);
+  const [selectedShipOrder, setSelectedShipOrder] = useState(null);
+  const [shipSearchQuery, setShipSearchQuery] = useState('');
+  const [shippingLine, setShippingLine] = useState(null);
+
+  // Pick Modal state
+  const [showPickModal, setShowPickModal] = useState(false);
+  const [pickingLine, setPickingLine] = useState(null);
+  const [pickedQty, setPickedQty] = useState('');
+  const [serialNumber, setSerialNumber] = useState('');
 
   // Handle Login
   const handleLogin = () => {
@@ -259,7 +313,376 @@ export default function App() {
     }
   };
 
-  // Handle unified search with autocomplete
+  // Fetch Organizations List (cached)
+  const fetchOrganizationsList = async () => {
+    // Don't fetch if already loaded
+    if (organizationsList.length > 0) {
+      setCurrentScreen('LotsOrgSelection');
+      return;
+    }
+
+    setOrgsLoading(true);
+    try {
+      const response = await fetch(
+        'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getorgnizationslist'
+      );
+      const data = await response.json();
+      console.log('Organizations API response:', JSON.stringify(data));
+      const orgs = data.items || [];
+      setOrganizationsList(orgs);
+      setOrgsLoading(false);
+      setCurrentScreen('LotsOrgSelection');
+    } catch (error) {
+      console.log('Organizations API error:', error);
+      Alert.alert('Error', 'Failed to fetch organizations: ' + error.message);
+      setOrgsLoading(false);
+      // Still navigate to show empty state
+      setCurrentScreen('LotsOrgSelection');
+    }
+  };
+
+  // Fetch Locator Data from separate API
+  const fetchLocatorData = async (orgCode) => {
+    if (!orgCode) return;
+
+    setLocatorLoading(true);
+    setGroupedByLocator([]); // Clear previous data
+    try {
+      // Try with organizationcode parameter (no underscore) to match API convention
+      const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandsbylocator?organizationcode=${orgCode}`;
+      console.log('Fetching locator data from:', url);
+      const response = await fetch(url);
+      const data = await response.json();
+      console.log('Locator API raw response:', JSON.stringify(data).substring(0, 500));
+      console.log('Locator API response items count:', (data.items || []).length);
+      const items = data.items || [];
+
+      if (items.length > 0) {
+        console.log('First locator item:', JSON.stringify(items[0]));
+      }
+
+      // Group by Locator - using correct field names from API
+      // API fields: locator_id, organizationcode, subinventorycode, itemnumber, itemdescription, primaryquantity
+      const byLocator = items.reduce((acc, item) => {
+        const locatorKey = item.locator_id || item.locator || 'NO_LOCATOR';
+        if (!acc[locatorKey]) {
+          acc[locatorKey] = {
+            id: locatorKey,
+            locator: item.locator_id || item.locator || 'No Locator',
+            organization_code: item.organizationcode || item.organization_code || orgCode,
+            sub_inventory_code: item.subinventorycode || item.sub_inventory_code,
+            totalQuantity: 0,
+            items: [],
+          };
+        }
+        // primaryquantity is a string, need to parse it
+        const qty = parseFloat(item.primaryquantity) || parseFloat(item.primary_quantity) || 0;
+        acc[locatorKey].totalQuantity += qty;
+        acc[locatorKey].items.push({
+          ...item,
+          // Normalize field names for display
+          item_number: item.itemnumber || item.item_number,
+          item_description: item.itemdescription || item.item_description,
+          organization_code: item.organizationcode || item.organization_code || orgCode,
+          sub_inventory_code: item.subinventorycode || item.sub_inventory_code,
+          locator: item.locator_id || item.locator,
+          primaryquantity: qty,
+          id: `${locatorKey}-${item.itemnumber || item.item_number}-${item.lotnumber || 'nolot'}-${Math.random()}`,
+        });
+        return acc;
+      }, {});
+
+      const groupedData = Object.values(byLocator);
+      console.log('Grouped locator data count:', groupedData.length);
+      if (groupedData.length > 0) {
+        console.log('First grouped locator:', JSON.stringify(groupedData[0]).substring(0, 300));
+      }
+
+      setLocatorData(items);
+      setGroupedByLocator(groupedData);
+      setLocatorLoading(false);
+    } catch (error) {
+      console.log('Locator API error:', error);
+      Alert.alert('Error', 'Failed to fetch locator data: ' + error.message);
+      setLocatorLoading(false);
+    }
+  };
+
+  // Build hierarchical tree from locator data
+  // Locator format: AREA-BIN-COLUMN-ROW-SHELVING
+  const buildLocatorHierarchy = (data) => {
+    const hierarchy = {
+      level: 'root',
+      name: 'All Locations',
+      children: {},
+      items: [],
+      totalQty: 0,
+      itemCount: 0,
+    };
+
+    const levelNames = ['AREA', 'BIN', 'COLUMN', 'ROW', 'SHELVING'];
+
+    data.forEach(item => {
+      const locator = item.locator_id || item.locator || '';
+      const segments = locator.split('-');
+      let current = hierarchy;
+
+      segments.forEach((segment, idx) => {
+        if (!segment) return;
+
+        if (!current.children[segment]) {
+          current.children[segment] = {
+            level: levelNames[idx] || `LEVEL_${idx}`,
+            name: segment,
+            fullPath: segments.slice(0, idx + 1).join('-'),
+            children: {},
+            items: [],
+            totalQty: 0,
+            itemCount: 0,
+          };
+        }
+        current = current.children[segment];
+      });
+
+      // Add item to the deepest level
+      const qty = parseFloat(item.primaryquantity) || 0;
+      current.items.push({
+        ...item,
+        item_number: item.itemnumber || item.item_number,
+        item_description: item.itemdescription || item.item_description,
+        quantity: qty,
+      });
+      current.totalQty += qty;
+      current.itemCount += 1;
+
+      // Propagate counts up the tree
+      let path = hierarchy;
+      segments.forEach((segment, idx) => {
+        if (!segment) return;
+        path.totalQty += qty;
+        path.itemCount += 1;
+        path = path.children[segment];
+      });
+    });
+
+    return hierarchy;
+  };
+
+  // Get current level data based on drill path
+  const getCurrentLevelData = (hierarchy, path) => {
+    if (!hierarchy) return null;
+
+    let current = hierarchy;
+    for (const segment of path) {
+      if (current.children && current.children[segment]) {
+        current = current.children[segment];
+      } else {
+        return null;
+      }
+    }
+    return current;
+  };
+
+  // Fetch Onhand by Lots (for By Item and By Lot tabs)
+  const fetchLotsData = async (orgCode = null) => {
+    setLotsLoading(true);
+    try {
+      let url = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandbylots';
+      if (orgCode) {
+        url += `?organization_code=${orgCode}`;
+      }
+      const response = await fetch(url);
+      const data = await response.json();
+
+      const items = data.items || [];
+      setLotsData(items);
+
+      // Group by item (organization_code, sub_inventory_code, item_number, item_description)
+      const groupedByItem = items.reduce((acc, item) => {
+        const key = `${item.organization_code}-${item.sub_inventory_code}-${item.item_number}`;
+        if (!acc[key]) {
+          acc[key] = {
+            id: key,
+            organization_code: item.organization_code,
+            sub_inventory_code: item.sub_inventory_code,
+            item_number: item.item_number,
+            item_description: item.item_description,
+            locator: item.locator,
+            totalQuantity: 0,
+            lots: [],
+          };
+        }
+        acc[key].totalQuantity += item.primaryquantity || 0;
+        acc[key].lots.push({
+          ...item,
+          id: `${key}-${item.lotnumber}-${item.lid}`,
+        });
+        return acc;
+      }, {});
+      setGroupedLotsData(Object.values(groupedByItem));
+
+      // Group by Lot (lotnumber)
+      const byLot = items.reduce((acc, item) => {
+        const lotKey = item.lotnumber || 'NO_LOT';
+        if (!acc[lotKey]) {
+          acc[lotKey] = {
+            id: lotKey,
+            lotnumber: item.lotnumber || 'No Lot',
+            organization_code: item.organization_code,
+            sub_inventory_code: item.sub_inventory_code,
+            materialstatus: item.materialstatus,
+            expirationdate: item.expirationdate,
+            totalQuantity: 0,
+            items: [],
+          };
+        }
+        acc[lotKey].totalQuantity += item.primaryquantity || 0;
+        acc[lotKey].items.push({
+          ...item,
+          id: `${lotKey}-${item.item_number}-${item.lid}`,
+        });
+        return acc;
+      }, {});
+      setGroupedByLot(Object.values(byLot));
+
+      setLotsLoading(false);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to fetch lots data: ' + error.message);
+      setLotsLoading(false);
+    }
+  };
+
+  // Fetch Serial Numbers with authentication
+  const fetchSerialNumbers = async (srnoLink) => {
+    if (!srnoLink) {
+      Alert.alert('Info', 'No serial numbers available for this lot');
+      return;
+    }
+
+    setSerialLoading(true);
+    try {
+      const credentials = btoa('javeed:Fusion@1234');
+      const response = await fetch(srnoLink, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Basic ${credentials}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      setSerialNumbers(data.items || []);
+      setSerialLoading(false);
+      setCurrentScreen('SerialNumbers');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to fetch serial numbers: ' + error.message);
+      setSerialLoading(false);
+    }
+  };
+
+  // Fetch Ship Orders (Pending Picking Details)
+  const fetchShipOrders = async () => {
+    setShipOrdersLoading(true);
+    try {
+      const response = await fetch(
+        'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/pendingpickingdetails'
+      );
+      const data = await response.json();
+
+      const items = data.items || [];
+      setShipOrdersData(items);
+
+      // Group by source_order_number, account_name, pick_release_date, organization_name
+      const grouped = items.reduce((acc, item) => {
+        const key = `${item.source_order_number}-${item.organization_name}`;
+        if (!acc[key]) {
+          acc[key] = {
+            id: key,
+            source_order_number: item.source_order_number,
+            account_name: item.account_name,
+            pick_release_date: item.pick_release_date,
+            organization_name: item.organization_name,
+            salesrep_name: item.salesrep_name,
+            picker_name: item.picker_name,
+            lines: [],
+            totalQty: 0,
+          };
+        }
+        acc[key].lines.push({
+          ...item,
+          lineId: `${key}-${item.id}-${item.delivery_detail_id}`,
+        });
+        acc[key].totalQty += item.qty || 0;
+        return acc;
+      }, {});
+
+      setGroupedShipOrders(Object.values(grouped));
+      setShipOrdersLoading(false);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to fetch ship orders: ' + error.message);
+      setShipOrdersLoading(false);
+    }
+  };
+
+  // Handle pick line - open modal
+  const handlePickLine = (line) => {
+    setPickingLine(line);
+    setPickedQty(String(line.qty || ''));
+    setSerialNumber('');
+    setShowPickModal(true);
+  };
+
+  // Handle confirm pick
+  const handleConfirmPick = () => {
+    if (!pickedQty || parseInt(pickedQty) <= 0) {
+      Alert.alert('Error', 'Please enter a valid picked quantity');
+      return;
+    }
+
+    Alert.alert(
+      'Success',
+      `Pick confirmed!\n\nItem: ${pickingLine.item_number}\nLot: ${pickingLine.lot_number || 'N/A'}\nPicked Qty: ${pickedQty}\nSerial: ${serialNumber || 'N/A'}`,
+      [{ text: 'OK', onPress: () => setShowPickModal(false) }]
+    );
+  };
+
+  // Handle scan serial for pick
+  const handleScanSerialForPick = () => {
+    // Open scanner for serial number
+    setShowPickModal(false);
+    setScanningForInventory(false);
+    setScanningForItem(null);
+    setScanned(false);
+    // We'll use a special flag to know we're scanning for pick serial
+    setPickingLine(pickingLine);
+    setCurrentScreen('PickSerialScanner');
+  };
+
+  // Handle ship all lines
+  const handleShipAllLines = (order) => {
+    Alert.alert(
+      'Ship All Lines',
+      `Ship all ${order.lines.length} lines for order ${order.source_order_number}?\n\nTotal Qty: ${order.totalQty}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Ship All',
+          style: 'default',
+          onPress: () => {
+            Alert.alert('Success', `All ${order.lines.length} lines shipped successfully!`);
+            setSelectedShipOrder(null);
+            setCurrentScreen('Ship');
+          },
+        },
+      ]
+    );
+  };
+
+  // Handle unified search with autocomplete (Amazon-style)
   const handleSearchChange = (text) => {
     setSearchQuery(text);
     if (text.length > 1 && onhandData.length > 0) {
@@ -327,34 +750,82 @@ export default function App() {
     vendorname: groupedPOs[docNum].vendorname,
   }));
 
-  // Handle barcode scan
+  // Handle barcode scan - navigate to scanner
   const handleScanLocator = (item) => {
     setScanningForItem(item);
+    setScanned(false); // Reset scan state
     setCurrentScreen('BarcodeScanner');
   };
 
-  const simulateScan = () => {
-    const mockLocator = `LOC-${Math.floor(Math.random() * 1000)}`;
-    setScannedLocator(mockLocator);
+  // Handle actual barcode scanned event
+  const handleBarCodeScanned = ({ type, data }) => {
+    if (scanned) return; // Prevent multiple scans
+
+    setScanned(true);
+    Vibration.vibrate(100); // Haptic feedback
+    setScannedLocator(data);
+
+    // Handle inventory search scanning
+    if (scanningForInventory) {
+      Alert.alert(
+        'Scan Successful!',
+        `Item Code: ${data}`,
+        [
+          {
+            text: 'Scan Again',
+            onPress: () => setScanned(false),
+          },
+          {
+            text: 'Search',
+            style: 'default',
+            onPress: () => {
+              setSearchQuery(data);
+              setShowSuggestions(false);
+              setScanningForInventory(false);
+              setScanned(false);
+              setCurrentScreen('Inventory');
+            },
+          },
+        ]
+      );
+      return;
+    }
 
     if (scanningForItem) {
-      const updatedItem = { ...scanningForItem, actualLocator: mockLocator };
+      const updatedItem = { ...scanningForItem, actualLocator: data };
       setSelectedItem(updatedItem);
+
+      // Update the item in poData as well
+      const updatedPoData = poData.map(item =>
+        item.id === scanningForItem.id ? { ...item, actualLocator: data } : item
+      );
+      setPoData(updatedPoData);
     }
 
     Alert.alert(
-      'Scanned Successfully',
-      `Locator: ${mockLocator}`,
+      'Scan Successful!',
+      `Barcode Type: ${type}\nLocator: ${data}`,
       [
         {
-          text: 'OK',
+          text: 'Scan Again',
+          onPress: () => setScanned(false),
+        },
+        {
+          text: 'Confirm',
+          style: 'default',
           onPress: () => {
-            setCurrentScreen('ItemDetail');
+            setCurrentScreen(scanningForItem ? 'ItemDetail' : 'Dashboard');
             setScanningForItem(null);
           },
         },
       ]
     );
+  };
+
+  // Simulate scan for testing (when camera not available)
+  const simulateScan = () => {
+    const mockLocator = `LOC-${Math.floor(Math.random() * 1000)}`;
+    handleBarCodeScanned({ type: 'SIMULATED', data: mockLocator });
   };
 
   // ============= SCREENS =============
@@ -692,10 +1163,40 @@ export default function App() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.moduleContent}>
-          {/* Module Menu Cards - Compact Grid */}
-          <View style={styles.compactMenuGrid}>
-            {/* Inventory Onhand */}
+        {/* Hamburger Menu */}
+        {menuOpen && (
+          <View style={styles.hamburgerMenu}>
+            <View style={styles.menuHeader}>
+              <Text style={styles.menuUserName}>{user?.name || 'User'}</Text>
+              <Text style={styles.menuUserRole}>Warehouse Staff</Text>
+              {selectedOrg && <Text style={styles.menuOrgText}>Org: {selectedOrg}</Text>}
+            </View>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuOpen(false); setCurrentScreen('Dashboard'); }}>
+              <Text style={styles.menuItemText}>🏠 Dashboard</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuOpen(false); setCurrentScreen('Inventory'); }}>
+              <Text style={styles.menuItemText}>📦 Inventory</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuOpen(false); fetchOrganizationsList(); }}>
+              <Text style={styles.menuItemText}>🏷️ Onhand by Lots</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
+              <Text style={[styles.menuItemText, { color: COLORS.danger }]}>🚪 Logout</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <ScrollView style={styles.dashboardContent}>
+          {/* Organization Display */}
+          {selectedOrg && (
+            <View style={styles.orgDisplayContainer}>
+              <Text style={styles.orgDisplayLabel}>Organization:</Text>
+              <Text style={styles.orgDisplayValue}>{selectedOrg}</Text>
+            </View>
+          )}
+
+          <View style={styles.cardGrid}>
+            {/* Inventory Card */}
             <TouchableOpacity
               style={styles.compactMenuCard}
               onPress={() => {
@@ -736,8 +1237,11 @@ export default function App() {
 
             {/* Ship Orders */}
             <TouchableOpacity
-              style={styles.compactMenuCard}
-              onPress={() => setCurrentScreen('Ship')}
+              style={styles.featureCard}
+              onPress={() => {
+                setCurrentScreen('Ship');
+                fetchShipOrders();
+              }}
             >
               <View style={[styles.compactMenuIconBg, { backgroundColor: '#fef3c7' }]}>
                 <Text style={styles.compactMenuIcon}>📤</Text>
@@ -802,6 +1306,19 @@ export default function App() {
               </View>
               <Text style={styles.compactMenuTitle}>Reports</Text>
             </TouchableOpacity>
+
+            {/* Onhand by Lots Card */}
+            <TouchableOpacity
+              style={styles.featureCard}
+              onPress={() => {
+                setCurrentScreen('OnhandByLots');
+                fetchLotsData();
+              }}
+            >
+              <Text style={styles.cardIcon}>🏷️</Text>
+              <Text style={styles.cardTitle}>Onhand by Lots</Text>
+              <Text style={styles.cardDescription}>View inventory by lot numbers</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
 
@@ -840,6 +1357,7 @@ export default function App() {
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
           <Text style={styles.screenTitle}>Purchase Orders</Text>
+          <View style={styles.headerSpacer} />
           <View style={styles.headerRight}>
             {selectedOrg && <Text style={styles.headerOrgText}>{selectedOrg}</Text>}
             <TouchableOpacity onPress={fetchPOData}>
@@ -936,6 +1454,7 @@ export default function App() {
             <Text style={styles.screenTitle}>PO Items</Text>
             <Text style={styles.screenSubtitle}>PO: {selectedPO.documentnumber}</Text>
           </View>
+          <View style={styles.headerSpacer} />
           <View style={styles.headerRight}>
             {selectedOrg && <Text style={styles.headerOrgText}>{selectedOrg}</Text>}
           </View>
@@ -984,6 +1503,7 @@ export default function App() {
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
           <Text style={styles.screenTitle}>Item Details</Text>
+          <View style={styles.headerSpacer} />
           <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
             <Text style={styles.notificationIconSmall}>🔔</Text>
           </TouchableOpacity>
@@ -1071,37 +1591,156 @@ export default function App() {
 
   // Barcode Scanner Screen
   if (currentScreen === 'BarcodeScanner') {
+    // Check permission status
+    if (!permission) {
+      return (
+        <View style={styles.scannerContainer}>
+          <StatusBar barStyle="light-content" backgroundColor={COLORS.secondary} />
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.scannerInstructions}>Loading camera...</Text>
+        </View>
+      );
+    }
+
+    if (!permission.granted) {
+      return (
+        <View style={styles.scannerContainer}>
+          <StatusBar barStyle="light-content" backgroundColor={COLORS.secondary} />
+          <Text style={styles.scannerIcon}>📷</Text>
+          <Text style={styles.scannerInstructions}>Camera Permission Required</Text>
+          <Text style={styles.permissionHint}>
+            We need camera access to scan barcodes and QR codes.
+          </Text>
+
+          {/* Request Permission Button */}
+          <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+            <Text style={styles.permissionButtonText}>Grant Camera Access</Text>
+          </TouchableOpacity>
+
+          {/* Fallback to simulation */}
+          <TouchableOpacity style={styles.simulateButton} onPress={simulateScan}>
+            <Text style={styles.simulateButtonText}>🎲 Use Simulated Scan</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.cancelScanButton}
+            onPress={() => {
+              setScanningForItem(null);
+              setCurrentScreen(selectedItem ? 'ItemDetail' : 'Dashboard');
+            }}
+          >
+            <Text style={styles.cancelScanButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
     return (
       <View style={styles.scannerContainer}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.dark} />
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-        {/* Scanner Frame */}
-        <View style={styles.scannerFrame}>
-          <View style={styles.scannerCornerTL} />
-          <View style={styles.scannerCornerTR} />
-          <View style={styles.scannerCornerBL} />
-          <View style={styles.scannerCornerBR} />
-          <Text style={styles.scannerIcon}>📷</Text>
-        </View>
-
-        <Text style={styles.scannerInstructions}>
-          {scanningForItem ? 'Scan Pallet Locator' : 'Point camera at barcode'}
-        </Text>
-
-        {/* Simulate Scan Button */}
-        <TouchableOpacity style={styles.simulateButton} onPress={simulateScan}>
-          <Text style={styles.simulateButtonText}>🎲 Simulate Scan (Testing)</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.cancelScanButton}
-          onPress={() => {
-            setScanningForItem(null);
-            setCurrentScreen(selectedItem ? 'ItemDetail' : 'Home');
+        {/* Full Screen Camera */}
+        <CameraView
+          style={StyleSheet.absoluteFillObject}
+          facing="back"
+          enableTorch={torchOn}
+          barcodeScannerSettings={{
+            barcodeTypes: [
+              'qr',
+              'code128',
+              'code39',
+              'ean13',
+              'ean8',
+              'upc_a',
+              'upc_e',
+              'datamatrix',
+              'pdf417',
+            ],
           }}
-        >
-          <Text style={styles.cancelScanButtonText}>Cancel</Text>
-        </TouchableOpacity>
+          onBarcodeScanned={scanned ? undefined : (result) => {
+            handleBarCodeScanned({ type: result.type, data: result.data });
+          }}
+        />
+
+        {/* Overlay */}
+        <View style={styles.scannerOverlay}>
+          {/* Top Header */}
+          <View style={styles.scannerHeader}>
+            <TouchableOpacity
+              style={styles.scannerBackButton}
+              onPress={() => {
+                setScanningForItem(null);
+                setScanningForInventory(false);
+                setScanned(false);
+                setCurrentScreen(
+                  scanningForInventory ? 'Inventory' :
+                  selectedItem ? 'ItemDetail' : 'Dashboard'
+                );
+              }}
+            >
+              <Text style={styles.scannerBackText}>← Back</Text>
+            </TouchableOpacity>
+            <Text style={styles.scannerTitle}>
+              {scanningForInventory ? 'Scan Item Code' :
+               scanningForItem ? 'Scan Pallet Locator' : 'Scan Barcode'}
+            </Text>
+            <TouchableOpacity
+              style={styles.torchButton}
+              onPress={() => setTorchOn(!torchOn)}
+            >
+              <Text style={styles.torchButtonText}>{torchOn ? '🔦' : '💡'}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Scanner Frame */}
+          <View style={styles.scannerFrameContainer}>
+            <View style={styles.scannerFrame}>
+              <View style={styles.scannerCornerTL} />
+              <View style={styles.scannerCornerTR} />
+              <View style={styles.scannerCornerBL} />
+              <View style={styles.scannerCornerBR} />
+              {scanned && (
+                <View style={styles.scannedIndicator}>
+                  <Text style={styles.scannedCheckmark}>✓</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.scannerHint}>
+              {scanned ? 'Barcode scanned!' :
+               scanningForInventory ? 'Scan item barcode to search' :
+               'Position barcode within the frame'}
+            </Text>
+          </View>
+
+          {/* Bottom Controls */}
+          <View style={styles.scannerControls}>
+            {scanningForInventory && (
+              <View style={styles.scannerItemInfo}>
+                <Text style={styles.scannerItemLabel}>Mode:</Text>
+                <Text style={styles.scannerItemValue}>Inventory Search</Text>
+              </View>
+            )}
+            {scanningForItem && (
+              <View style={styles.scannerItemInfo}>
+                <Text style={styles.scannerItemLabel}>Scanning for:</Text>
+                <Text style={styles.scannerItemValue}>{scanningForItem.itemnumber}</Text>
+              </View>
+            )}
+
+            {scanned && (
+              <TouchableOpacity
+                style={styles.rescanButton}
+                onPress={() => setScanned(false)}
+              >
+                <Text style={styles.rescanButtonText}>🔄 Scan Again</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={styles.simulateButton} onPress={simulateScan}>
+              <Text style={styles.simulateButtonText}>🎲 Simulate Scan</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
     );
   }
@@ -1124,8 +1763,13 @@ export default function App() {
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
           <Text style={styles.screenTitle}>Inventory Onhand</Text>
+          <View style={styles.headerSpacer} />
           <View style={styles.headerRight}>
-            <TouchableOpacity onPress={() => setCurrentScreen('Scanner')}>
+            <TouchableOpacity onPress={() => {
+              setScanningForInventory(true);
+              setScanned(false);
+              setCurrentScreen('BarcodeScanner');
+            }}>
               <Text style={styles.notificationIconSmall}>📷</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
@@ -1153,7 +1797,17 @@ export default function App() {
               )}
             </View>
             <TouchableOpacity
-              style={[styles.fetchButton, { backgroundColor: COLORS.inventoryColor }]}
+              style={styles.scanSearchButton}
+              onPress={() => {
+                setScanningForInventory(true);
+                setScanned(false);
+                setCurrentScreen('BarcodeScanner');
+              }}
+            >
+              <Text style={styles.scanSearchButtonText}>📷</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.fetchButton}
               onPress={() => setShowParameterModal(true)}
             >
               <Text style={styles.fetchButtonText}>📥 Fetch</Text>
@@ -1295,6 +1949,7 @@ export default function App() {
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
           <Text style={styles.screenTitle}>Scanner</Text>
+          <View style={styles.headerSpacer} />
           <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
             <Text style={styles.notificationIconSmall}>🔔</Text>
           </TouchableOpacity>
@@ -1309,27 +1964,1964 @@ export default function App() {
     );
   }
 
-  // Ship Screen
+  // Filter grouped ship orders
+  const filteredShipOrders = groupedShipOrders.filter(order => {
+    if (!shipSearchQuery) return true;
+    const query = shipSearchQuery.toLowerCase();
+    return (
+      (order.source_order_number && order.source_order_number.toLowerCase().includes(query)) ||
+      (order.account_name && order.account_name.toLowerCase().includes(query)) ||
+      (order.organization_name && order.organization_name.toLowerCase().includes(query))
+    );
+  });
+
+  // Ship Orders Screen (Grouped Orders List)
   if (currentScreen === 'Ship') {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.shipColor} />
 
-        <View style={[styles.screenHeader, { backgroundColor: COLORS.shipColor }]}>
-          <TouchableOpacity onPress={() => setCurrentScreen('Home')}>
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity onPress={() => {
+            setCurrentScreen('Dashboard');
+            setShipOrdersData([]);
+            setGroupedShipOrders([]);
+            setShipSearchQuery('');
+          }}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
           <Text style={styles.screenTitle}>Ship Orders</Text>
-          <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
-            <Text style={styles.notificationIconSmall}>🔔</Text>
+          <View style={styles.headerSpacer} />
+          <View style={styles.headerRight}>
+            <TouchableOpacity onPress={fetchShipOrders}>
+              <Text style={styles.refreshButton}>🔄</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Search Bar */}
+        <View style={styles.shipSearchContainer}>
+          <View style={styles.searchInputContainer}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search by order, account or org..."
+              value={shipSearchQuery}
+              onChangeText={setShipSearchQuery}
+              autoCapitalize="none"
+            />
+            {shipSearchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setShipSearchQuery('')}>
+                <Text style={styles.clearIcon}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* Stats */}
+        <View style={styles.shipStatsContainer}>
+          <View style={styles.shipStatBox}>
+            <Text style={styles.shipStatValue}>{filteredShipOrders.length}</Text>
+            <Text style={styles.shipStatLabel}>Orders</Text>
+          </View>
+          <View style={styles.shipStatBox}>
+            <Text style={styles.shipStatValue}>
+              {filteredShipOrders.reduce((sum, o) => sum + o.lines.length, 0)}
+            </Text>
+            <Text style={styles.shipStatLabel}>Lines</Text>
+          </View>
+          <View style={styles.shipStatBox}>
+            <Text style={styles.shipStatValue}>
+              {filteredShipOrders.reduce((sum, o) => sum + o.totalQty, 0).toLocaleString()}
+            </Text>
+            <Text style={styles.shipStatLabel}>Total Qty</Text>
+          </View>
+        </View>
+
+        {shipOrdersLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Loading orders...</Text>
+          </View>
+        ) : filteredShipOrders.length > 0 ? (
+          <FlatList
+            data={filteredShipOrders}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.shipOrdersList}
+            renderItem={({ item: order }) => (
+              <TouchableOpacity
+                style={styles.shipOrderCard}
+                onPress={() => {
+                  setSelectedShipOrder(order);
+                  setCurrentScreen('ShipOrderLines');
+                }}
+              >
+                <View style={styles.shipOrderHeader}>
+                  <View style={styles.shipOrderInfo}>
+                    <Text style={styles.shipOrderNumber}>{order.source_order_number}</Text>
+                    <View style={styles.shipBadgeRow}>
+                      <View style={styles.orgBadgeSmall}>
+                        <Text style={styles.orgBadgeSmallText}>{order.organization_name}</Text>
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.shipQtyContainer}>
+                    <Text style={styles.shipTotalQty}>{order.totalQty}</Text>
+                    <Text style={styles.shipQtyLabel}>Qty</Text>
+                  </View>
+                </View>
+
+                <View style={styles.shipAccountRow}>
+                  <Text style={styles.shipAccountIcon}>🏢</Text>
+                  <Text style={styles.shipAccountName} numberOfLines={1}>{order.account_name}</Text>
+                </View>
+
+                <View style={styles.shipOrderDetails}>
+                  <View style={styles.shipDetailItem}>
+                    <Text style={styles.shipDetailLabel}>Pick Date</Text>
+                    <Text style={styles.shipDetailValue}>
+                      {order.pick_release_date ? new Date(order.pick_release_date).toLocaleDateString() : 'N/A'}
+                    </Text>
+                  </View>
+                  <View style={styles.shipDetailItem}>
+                    <Text style={styles.shipDetailLabel}>Picker</Text>
+                    <Text style={styles.shipDetailValue}>{order.picker_name || 'N/A'}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.shipOrderFooter}>
+                  <View style={styles.shipLineCountBadge}>
+                    <Text style={styles.shipLineCountText}>{order.lines.length} line{order.lines.length !== 1 ? 's' : ''}</Text>
+                  </View>
+                  <Text style={styles.drillDownHint}>Tap to view lines →</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          />
+        ) : (
+          <View style={styles.emptyStateContainer}>
+            <Text style={styles.emptyStateIcon}>📤</Text>
+            <Text style={styles.emptyStateText}>No pending orders</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={fetchShipOrders}>
+              <Text style={styles.retryButtonText}>Refresh Orders</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  // Ship Order Lines Screen
+  if (currentScreen === 'ShipOrderLines' && selectedShipOrder) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity onPress={() => {
+            setSelectedShipOrder(null);
+            setCurrentScreen('Ship');
+          }}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.screenTitle}>Order Lines</Text>
+            <Text style={styles.screenSubtitle}>{selectedShipOrder.source_order_number}</Text>
+          </View>
+          <View style={styles.headerSpacer} />
+          <TouchableOpacity
+            style={styles.shipAllButton}
+            onPress={() => handleShipAllLines(selectedShipOrder)}
+          >
+            <Text style={styles.shipAllButtonText}>📦 Ship All</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.contentCenter}>
-          <Text style={styles.placeholderIcon}>📤</Text>
-          <Text style={styles.placeholderTitle}>Ship Orders</Text>
-          <Text style={styles.placeholderText}>Coming soon...</Text>
+        {/* Order Summary Card */}
+        <View style={styles.shipSummaryCard}>
+          <View style={styles.shipSummaryHeader}>
+            <Text style={styles.shipSummaryAccount}>{selectedShipOrder.account_name}</Text>
+            <View style={styles.orgBadgeSmall}>
+              <Text style={styles.orgBadgeSmallText}>{selectedShipOrder.organization_name}</Text>
+            </View>
+          </View>
+          <View style={styles.shipSummaryRow}>
+            <View style={styles.shipSummaryItem}>
+              <Text style={styles.shipSummaryLabel}>Pick Date</Text>
+              <Text style={styles.shipSummaryValue}>
+                {selectedShipOrder.pick_release_date ? new Date(selectedShipOrder.pick_release_date).toLocaleDateString() : 'N/A'}
+              </Text>
+            </View>
+            <View style={styles.shipSummaryItem}>
+              <Text style={styles.shipSummaryLabel}>Picker</Text>
+              <Text style={styles.shipSummaryValue}>{selectedShipOrder.picker_name || 'N/A'}</Text>
+            </View>
+            <View style={styles.shipSummaryItem}>
+              <Text style={styles.shipSummaryLabel}>Total Qty</Text>
+              <Text style={[styles.shipSummaryValue, { color: COLORS.info }]}>
+                {selectedShipOrder.totalQty}
+              </Text>
+            </View>
+          </View>
         </View>
+
+        {/* Lines List Header */}
+        <View style={styles.linesListHeader}>
+          <Text style={styles.linesListTitle}>Lines ({selectedShipOrder.lines.length})</Text>
+        </View>
+
+        {/* Lines List */}
+        <FlatList
+          data={selectedShipOrder.lines}
+          keyExtractor={(item) => item.lineId}
+          contentContainerStyle={styles.shipLinesList}
+          renderItem={({ item: line }) => (
+            <View style={styles.shipLineCard}>
+              <View style={styles.shipLineHeader}>
+                <View style={styles.shipLineInfo}>
+                  <Text style={styles.shipLineItemNumber}>{line.item_number}</Text>
+                  <Text style={styles.shipLineDescription} numberOfLines={2}>
+                    {line.description}
+                  </Text>
+                </View>
+                <View style={styles.shipLineQtyBox}>
+                  <Text style={styles.shipLineQty}>{line.qty}</Text>
+                  <Text style={styles.shipLineUom}>{line.ordered_uom}</Text>
+                </View>
+              </View>
+
+              <View style={styles.shipLineDetails}>
+                <View style={styles.shipLineDetailItem}>
+                  <Text style={styles.shipLineDetailLabel}>Lot</Text>
+                  <Text style={styles.shipLineDetailValue}>{line.lot_number || 'N/A'}</Text>
+                </View>
+                <View style={styles.shipLineDetailItem}>
+                  <Text style={styles.shipLineDetailLabel}>Locator</Text>
+                  <Text style={styles.shipLineDetailValue}>{line.locator || 'N/A'}</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.pickLineButton}
+                onPress={() => handlePickLine(line)}
+              >
+                <Text style={styles.pickLineButtonText}>📋 Pick</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        />
+
+        {/* Pick Modal */}
+        <Modal
+          visible={showPickModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowPickModal(false)}
+        >
+          <View style={styles.pickModalOverlay}>
+            <View style={styles.pickModalContainer}>
+              <View style={styles.pickModalHeader}>
+                <Text style={styles.pickModalTitle}>Pick Item</Text>
+                <TouchableOpacity onPress={() => setShowPickModal(false)}>
+                  <Text style={styles.pickModalClose}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              {pickingLine && (
+                <View style={styles.pickModalContent}>
+                  {/* Item Info */}
+                  <View style={styles.pickItemInfo}>
+                    <Text style={styles.pickItemNumber}>{pickingLine.item_number}</Text>
+                    <Text style={styles.pickItemDesc} numberOfLines={2}>{pickingLine.description}</Text>
+                  </View>
+
+                  {/* Lot Number */}
+                  <View style={styles.pickFieldRow}>
+                    <Text style={styles.pickFieldLabel}>Lot Number</Text>
+                    <View style={styles.pickFieldValueBox}>
+                      <Text style={styles.pickFieldValue}>{pickingLine.lot_number || 'N/A'}</Text>
+                    </View>
+                  </View>
+
+                  {/* Requested Qty */}
+                  <View style={styles.pickFieldRow}>
+                    <Text style={styles.pickFieldLabel}>Requested Qty</Text>
+                    <View style={styles.pickFieldValueBox}>
+                      <Text style={styles.pickFieldValue}>{pickingLine.qty} {pickingLine.ordered_uom}</Text>
+                    </View>
+                  </View>
+
+                  {/* Picked Qty */}
+                  <View style={styles.pickFieldRow}>
+                    <Text style={styles.pickFieldLabel}>Picked Qty</Text>
+                    <TextInput
+                      style={styles.pickQtyInput}
+                      value={pickedQty}
+                      onChangeText={setPickedQty}
+                      keyboardType="numeric"
+                      placeholder="Enter qty"
+                    />
+                  </View>
+
+                  {/* Serial Number */}
+                  <View style={styles.pickFieldRow}>
+                    <Text style={styles.pickFieldLabel}>Serial Number</Text>
+                    <View style={styles.pickSerialRow}>
+                      <TextInput
+                        style={styles.pickSerialInput}
+                        value={serialNumber}
+                        onChangeText={setSerialNumber}
+                        placeholder="Enter or scan serial"
+                      />
+                      <TouchableOpacity
+                        style={styles.pickScanButton}
+                        onPress={handleScanSerialForPick}
+                      >
+                        <Text style={styles.pickScanButtonText}>📷</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Buttons */}
+                  <View style={styles.pickModalButtons}>
+                    <TouchableOpacity
+                      style={styles.pickCancelButton}
+                      onPress={() => setShowPickModal(false)}
+                    >
+                      <Text style={styles.pickCancelButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.pickConfirmButton}
+                      onPress={handleConfirmPick}
+                    >
+                      <Text style={styles.pickConfirmButtonText}>Confirm</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        </Modal>
+      </View>
+    );
+  }
+
+  // Pick Serial Scanner Screen
+  if (currentScreen === 'PickSerialScanner' && pickingLine) {
+    if (!permission) {
+      return (
+        <View style={styles.container}>
+          <Text style={styles.loadingText}>Requesting camera permission...</Text>
+        </View>
+      );
+    }
+
+    if (!permission.granted) {
+      return (
+        <View style={styles.container}>
+          <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+          <View style={styles.screenHeader}>
+            <TouchableOpacity onPress={() => {
+              setShowPickModal(true);
+              setCurrentScreen('ShipOrderLines');
+            }}>
+              <Text style={styles.backButton}>←</Text>
+            </TouchableOpacity>
+            <Text style={styles.screenTitle}>Scan Serial</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+          <View style={styles.contentCenter}>
+            <Text style={styles.placeholderIcon}>📷</Text>
+            <Text style={styles.placeholderTitle}>Camera Permission Required</Text>
+            <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+              <Text style={styles.permissionButtonText}>Grant Permission</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.scannerContainer}>
+        <StatusBar barStyle="light-content" />
+
+        <CameraView
+          style={StyleSheet.absoluteFillObject}
+          facing="back"
+          enableTorch={torchOn}
+          barcodeScannerSettings={{
+            barcodeTypes: ['qr', 'code128', 'code39', 'ean13', 'ean8', 'upc_a', 'upc_e', 'datamatrix', 'pdf417'],
+          }}
+          onBarcodeScanned={scanned ? undefined : (result) => {
+            setScanned(true);
+            Vibration.vibrate(100);
+            setSerialNumber(result.data);
+            Alert.alert(
+              'Serial Scanned',
+              `Serial: ${result.data}`,
+              [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    setShowPickModal(true);
+                    setCurrentScreen('ShipOrderLines');
+                  }
+                }
+              ]
+            );
+          }}
+        />
+
+        <View style={styles.scannerOverlay}>
+          <View style={styles.scannerHeader}>
+            <TouchableOpacity
+              style={styles.scannerBackButton}
+              onPress={() => {
+                setShowPickModal(true);
+                setCurrentScreen('ShipOrderLines');
+              }}
+            >
+              <Text style={styles.scannerBackText}>← Back</Text>
+            </TouchableOpacity>
+            <Text style={styles.scannerTitle}>Scan Serial Number</Text>
+            <TouchableOpacity
+              style={styles.torchButton}
+              onPress={() => setTorchOn(!torchOn)}
+            >
+              <Text style={styles.torchButtonText}>{torchOn ? '🔦' : '💡'}</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.scannerFrameContainer}>
+            <View style={styles.scannerFrame}>
+              <View style={styles.scannerCornerTL} />
+              <View style={styles.scannerCornerTR} />
+              <View style={styles.scannerCornerBL} />
+              <View style={styles.scannerCornerBR} />
+            </View>
+            <Text style={styles.scannerHint}>
+              Scan serial number for {pickingLine.item_number}
+            </Text>
+          </View>
+
+          <View style={styles.scannerControls}>
+            <View style={styles.scannerItemInfo}>
+              <Text style={styles.scannerItemLabel}>Item:</Text>
+              <Text style={styles.scannerItemValue}>{pickingLine.item_number}</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // Filter grouped lots data
+  const filteredGroupedLots = groupedLotsData.filter(item => {
+    if (!lotsSearchQuery) return true;
+    const query = lotsSearchQuery.toLowerCase();
+    return (
+      (item.item_number && item.item_number.toLowerCase().includes(query)) ||
+      (item.item_description && item.item_description.toLowerCase().includes(query)) ||
+      (item.sub_inventory_code && item.sub_inventory_code.toLowerCase().includes(query))
+    );
+  });
+
+  // Get unique organizations from lotsData
+  const uniqueOrganizations = [...new Set(lotsData.map(item => item.organization_code))].filter(Boolean);
+
+  // Get unique products for autofill (filtered by selected org if any) - use item_description
+  const uniqueProductDescriptions = lotsData
+    .filter(item => !lotsOrgFilter || item.organization_code === lotsOrgFilter)
+    .reduce((acc, item) => {
+      if (item.item_description && !acc.find(p => p.description === item.item_description)) {
+        acc.push({
+          item_number: item.item_number,
+          description: item.item_description,
+        });
+      }
+      return acc;
+    }, []);
+
+  // Filter org suggestions
+  const orgSuggestions = uniqueOrganizations.filter(org =>
+    org.toLowerCase().includes(lotsOrgFilter.toLowerCase())
+  );
+
+  // Filter product suggestions by description
+  const productSuggestions = uniqueProductDescriptions.filter(prod =>
+    prod.description.toLowerCase().includes(lotsProductFilter.toLowerCase()) ||
+    prod.item_number.toLowerCase().includes(lotsProductFilter.toLowerCase())
+  ).slice(0, 10);
+
+  // Apply filters to all grouped data
+  const applyLotsFilters = (data, isLocatorTab = false) => {
+    return data.filter(item => {
+      // For locator tab, be more lenient with org matching or skip it since we already filtered by org in API
+      const matchesOrg = !lotsOrgFilter ||
+        item.organization_code === lotsOrgFilter ||
+        (isLocatorTab && true); // Skip org filter for locator tab as API already filters
+
+      // For locator groups, check items array for product match
+      let matchesProduct = !lotsProductFilter;
+      if (!matchesProduct) {
+        if (item.item_number && item.item_number.toLowerCase().includes(lotsProductFilter.toLowerCase())) {
+          matchesProduct = true;
+        } else if (item.item_description && item.item_description.toLowerCase().includes(lotsProductFilter.toLowerCase())) {
+          matchesProduct = true;
+        } else if (item.items && item.items.length > 0) {
+          // Check nested items for locator groups
+          matchesProduct = item.items.some(i =>
+            (i.item_number && i.item_number.toLowerCase().includes(lotsProductFilter.toLowerCase())) ||
+            (i.item_description && i.item_description.toLowerCase().includes(lotsProductFilter.toLowerCase()))
+          );
+        }
+      }
+
+      // For locator groups, check items array for search match
+      let matchesSearch = !lotsSearchQuery;
+      if (!matchesSearch) {
+        const query = lotsSearchQuery.toLowerCase();
+        if (item.item_number && item.item_number.toLowerCase().includes(query)) {
+          matchesSearch = true;
+        } else if (item.item_description && item.item_description.toLowerCase().includes(query)) {
+          matchesSearch = true;
+        } else if (item.lotnumber && item.lotnumber.toLowerCase().includes(query)) {
+          matchesSearch = true;
+        } else if (item.locator && item.locator.toLowerCase().includes(query)) {
+          matchesSearch = true;
+        } else if (item.items && item.items.length > 0) {
+          // Check nested items for locator groups
+          matchesSearch = item.items.some(i =>
+            (i.item_number && i.item_number.toLowerCase().includes(query)) ||
+            (i.item_description && i.item_description.toLowerCase().includes(query))
+          );
+        }
+      }
+      return matchesOrg && matchesProduct && matchesSearch;
+    });
+  };
+
+  // Organization Selection Screen for Lots
+  if (currentScreen === 'LotsOrgSelection') {
+    // Get distinct warehouses
+    const distinctWarehouses = [...new Set(organizationsList.map(org => org.warehouse_code))].filter(Boolean);
+
+    // Get subinventories for selected warehouse
+    const warehouseSubinventories = selectedWarehouse
+      ? organizationsList.filter(org => org.warehouse_code === selectedWarehouse)
+      : [];
+
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity onPress={() => {
+            setCurrentScreen('Dashboard');
+            setLotsData([]);
+            setGroupedLotsData([]);
+            setGroupedByLot([]);
+            setGroupedByLocator([]);
+            setLocatorData([]);
+            setSelectedWarehouse(null);
+            setSelectedSubinventory(null);
+          }}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.screenTitle}>Select Organization</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        {orgsLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Loading organizations...</Text>
+          </View>
+        ) : organizationsList.length > 0 ? (
+          <ScrollView contentContainerStyle={styles.lotsOrgList}>
+            {/* Warehouse Selection */}
+            <View style={styles.orgSectionContainer}>
+              <Text style={styles.orgSectionTitle}>Warehouse</Text>
+              <View style={styles.orgChipsContainer}>
+                {distinctWarehouses.map((warehouse, index) => (
+                  <TouchableOpacity
+                    key={warehouse || `wh-${index}`}
+                    style={[
+                      styles.orgChip,
+                      selectedWarehouse === warehouse && styles.orgChipSelected
+                    ]}
+                    onPress={() => {
+                      setSelectedWarehouse(warehouse);
+                      setSelectedSubinventory(null);
+                    }}
+                  >
+                    <Text style={[
+                      styles.orgChipText,
+                      selectedWarehouse === warehouse && styles.orgChipTextSelected
+                    ]}>
+                      {warehouse}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Subinventory Selection - Only show when warehouse is selected */}
+            {selectedWarehouse && warehouseSubinventories.length > 0 && (
+              <View style={styles.orgSectionContainer}>
+                <Text style={styles.orgSectionTitle}>Subinventory</Text>
+                <View style={styles.orgChipsContainer}>
+                  {warehouseSubinventories.map((org, index) => (
+                    <TouchableOpacity
+                      key={org.subinventory_code || `sub-${index}`}
+                      style={[
+                        styles.orgChip,
+                        selectedSubinventory === org.subinventory_code && styles.orgChipSelected
+                      ]}
+                      onPress={() => setSelectedSubinventory(org.subinventory_code)}
+                    >
+                      <Text style={[
+                        styles.orgChipText,
+                        selectedSubinventory === org.subinventory_code && styles.orgChipTextSelected
+                      ]}>
+                        {org.subinventory_code}
+                      </Text>
+                      {org.subinventory_name && (
+                        <Text style={[
+                          styles.orgChipSubtext,
+                          selectedSubinventory === org.subinventory_code && styles.orgChipSubtextSelected
+                        ]}>
+                          {org.subinventory_name}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Selection Summary */}
+            {selectedWarehouse && (
+              <View style={styles.orgSelectionSummary}>
+                <Text style={styles.orgSelectionLabel}>Selected:</Text>
+                <Text style={styles.orgSelectionValue}>
+                  {selectedWarehouse}
+                  {selectedSubinventory ? ` / ${selectedSubinventory}` : ' (All Subinventories)'}
+                </Text>
+              </View>
+            )}
+
+            {/* Get Data Button */}
+            {selectedWarehouse && (
+              <TouchableOpacity
+                style={styles.getDataButton}
+                onPress={() => {
+                  const orgCode = selectedWarehouse;
+                  console.log('Get Data for org:', orgCode, 'subinv:', selectedSubinventory);
+                  setLotsSelectedOrg(orgCode);
+                  setLotsOrgFilter(orgCode);
+                  // Fetch both APIs with selected org
+                  fetchLotsData(orgCode);
+                  fetchLocatorData(orgCode);
+                  setCurrentScreen('OnhandByLots');
+                }}
+              >
+                <Text style={styles.getDataButtonText}>Get Data</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        ) : (
+          <View style={styles.emptyStateContainer}>
+            <Text style={styles.emptyStateIcon}>🏭</Text>
+            <Text style={styles.emptyStateText}>No organizations found</Text>
+            <Text style={styles.emptyStateHint}>Check your network connection or API</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => {
+                setOrganizationsList([]);
+                fetchOrganizationsList();
+              }}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  // Locator Global View Screen - Hierarchical drill-down
+  if (currentScreen === 'LocatorGlobalView') {
+    const currentLevel = getCurrentLevelData(locatorHierarchy, locatorDrillPath);
+    const levelNames = ['AREA', 'BIN', 'COLUMN', 'ROW', 'SHELVING'];
+    const levelIcons = ['🏢', '📦', '🗂️', '📋', '🔖'];
+    const levelColors = [COLORS.primary, COLORS.info, COLORS.success, COLORS.warning, COLORS.accent];
+    const currentDepth = locatorDrillPath.length;
+    const currentLevelName = currentDepth > 0 ? levelNames[currentDepth - 1] : 'WAREHOUSE';
+    const nextLevelName = levelNames[currentDepth] || 'ITEMS';
+
+    const childrenArray = currentLevel ? Object.values(currentLevel.children) : [];
+    const hasChildren = childrenArray.length > 0;
+    const items = currentLevel?.items || [];
+
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity onPress={() => {
+            if (locatorDrillPath.length > 0) {
+              setLocatorDrillPath(locatorDrillPath.slice(0, -1));
+            } else {
+              setCurrentScreen('OnhandByLots');
+            }
+          }}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.screenTitle}>Global Locator View</Text>
+          </View>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        {/* Breadcrumb Navigation */}
+        <View style={styles.breadcrumbContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <TouchableOpacity
+              style={styles.breadcrumbItem}
+              onPress={() => setLocatorDrillPath([])}
+            >
+              <Text style={styles.breadcrumbIcon}>🏭</Text>
+              <Text style={[styles.breadcrumbText, locatorDrillPath.length === 0 && styles.breadcrumbTextActive]}>
+                All
+              </Text>
+            </TouchableOpacity>
+            {locatorDrillPath.map((segment, idx) => (
+              <View key={idx} style={styles.breadcrumbItemWrapper}>
+                <Text style={styles.breadcrumbSeparator}>›</Text>
+                <TouchableOpacity
+                  style={styles.breadcrumbItem}
+                  onPress={() => setLocatorDrillPath(locatorDrillPath.slice(0, idx + 1))}
+                >
+                  <Text style={styles.breadcrumbIcon}>{levelIcons[idx] || '📍'}</Text>
+                  <Text style={[
+                    styles.breadcrumbText,
+                    idx === locatorDrillPath.length - 1 && styles.breadcrumbTextActive
+                  ]}>
+                    {segment}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Current Level Info */}
+        <View style={styles.levelInfoContainer}>
+          <View style={[styles.levelInfoBadge, { backgroundColor: levelColors[currentDepth] || COLORS.primary }]}>
+            <Text style={styles.levelInfoBadgeText}>
+              {currentDepth === 0 ? 'WAREHOUSE' : currentLevelName}
+            </Text>
+          </View>
+          <View style={styles.levelInfoStats}>
+            <Text style={styles.levelInfoStatsText}>
+              {hasChildren ? `${childrenArray.length} ${nextLevelName}${childrenArray.length !== 1 ? 's' : ''}` : `${items.length} Items`}
+            </Text>
+            <Text style={styles.levelInfoQtyText}>
+              {(currentLevel?.totalQty || 0).toLocaleString()} Total Qty
+            </Text>
+          </View>
+        </View>
+
+        {/* Content */}
+        <ScrollView style={styles.globalViewContent}>
+          {hasChildren ? (
+            /* Show children as cards */
+            <View style={styles.hierarchyGrid}>
+              {childrenArray.map((child, idx) => (
+                <TouchableOpacity
+                  key={child.name}
+                  style={[styles.hierarchyCard, { borderLeftColor: levelColors[currentDepth] || COLORS.primary }]}
+                  onPress={() => setLocatorDrillPath([...locatorDrillPath, child.name])}
+                >
+                  <View style={styles.hierarchyCardHeader}>
+                    <View style={[styles.hierarchyCardIcon, { backgroundColor: levelColors[currentDepth] || COLORS.primary }]}>
+                      <Text style={styles.hierarchyCardIconText}>{levelIcons[currentDepth] || '📍'}</Text>
+                    </View>
+                    <View style={styles.hierarchyCardInfo}>
+                      <Text style={styles.hierarchyCardName}>{child.name}</Text>
+                      <Text style={styles.hierarchyCardLevel}>{child.level}</Text>
+                    </View>
+                    <Text style={styles.hierarchyCardArrow}>→</Text>
+                  </View>
+                  <View style={styles.hierarchyCardStats}>
+                    <View style={styles.hierarchyCardStat}>
+                      <Text style={styles.hierarchyCardStatValue}>
+                        {Object.keys(child.children).length || child.items.length}
+                      </Text>
+                      <Text style={styles.hierarchyCardStatLabel}>
+                        {Object.keys(child.children).length > 0 ? levelNames[currentDepth + 1] || 'Sub' : 'Items'}
+                      </Text>
+                    </View>
+                    <View style={styles.hierarchyCardStat}>
+                      <Text style={styles.hierarchyCardStatValue}>{child.itemCount}</Text>
+                      <Text style={styles.hierarchyCardStatLabel}>Total Items</Text>
+                    </View>
+                    <View style={styles.hierarchyCardStat}>
+                      <Text style={styles.hierarchyCardStatValue}>{child.totalQty.toLocaleString()}</Text>
+                      <Text style={styles.hierarchyCardStatLabel}>Qty</Text>
+                    </View>
+                  </View>
+                  {/* Mini progress bar showing relative quantity */}
+                  <View style={styles.hierarchyProgressBar}>
+                    <View
+                      style={[
+                        styles.hierarchyProgressFill,
+                        {
+                          width: `${Math.min(100, (child.totalQty / (currentLevel?.totalQty || 1)) * 100)}%`,
+                          backgroundColor: levelColors[currentDepth] || COLORS.primary,
+                        }
+                      ]}
+                    />
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : items.length > 0 ? (
+            /* Show items at leaf level */
+            <View style={styles.leafItemsContainer}>
+              <Text style={styles.leafItemsTitle}>Items in {locatorDrillPath[locatorDrillPath.length - 1] || 'Location'}</Text>
+              {items.map((item, idx) => (
+                <View key={idx} style={styles.leafItemCard}>
+                  <View style={styles.leafItemHeader}>
+                    <Text style={styles.leafItemNumber}>{item.item_number}</Text>
+                    <View style={styles.leafItemQtyBadge}>
+                      <Text style={styles.leafItemQtyText}>{item.quantity.toLocaleString()}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.leafItemDescription} numberOfLines={2}>
+                    {item.item_description}
+                  </Text>
+                  <View style={styles.leafItemMeta}>
+                    <Text style={styles.leafItemMetaText}>
+                      {item.subinventorycode || item.sub_inventory_code}
+                    </Text>
+                    {item.primaryuomcode && (
+                      <Text style={styles.leafItemMetaText}>UOM: {item.primaryuomcode}</Text>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyStateContainer}>
+              <Text style={styles.emptyStateIcon}>📍</Text>
+              <Text style={styles.emptyStateText}>No items at this location</Text>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Visual Warehouse Map (simplified 2D view) */}
+        {currentDepth === 0 && childrenArray.length > 0 && (
+          <View style={styles.warehouseMapContainer}>
+            <Text style={styles.warehouseMapTitle}>Warehouse Overview</Text>
+            <View style={styles.warehouseMapGrid}>
+              {childrenArray.slice(0, 8).map((area, idx) => (
+                <TouchableOpacity
+                  key={area.name}
+                  style={styles.warehouseMapCell}
+                  onPress={() => setLocatorDrillPath([area.name])}
+                >
+                  <Text style={styles.warehouseMapCellText}>{area.name}</Text>
+                  <Text style={styles.warehouseMapCellQty}>{area.itemCount}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  // Onhand by Lots Screen with Tabs (Grouped View)
+  if (currentScreen === 'OnhandByLots') {
+    const filteredByItem = applyLotsFilters(groupedLotsData);
+    const filteredByLot = applyLotsFilters(groupedByLot);
+    const filteredByLocator = applyLotsFilters(groupedByLocator, true);
+
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity onPress={() => {
+            setCurrentScreen('Dashboard');
+            setLotsData([]);
+            setGroupedLotsData([]);
+            setGroupedByLot([]);
+            setGroupedByLocator([]);
+            setLotsSearchQuery('');
+            setLotsProductFilter('');
+            setLotsOrgFilter('');
+            setLotsActiveTab('byItem');
+            setLotsSelectedOrg(null);
+          }}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.screenTitle}>Onhand by Lots</Text>
+          </View>
+          <View style={styles.headerSpacer} />
+          <View style={styles.headerRight}>
+            <TouchableOpacity onPress={() => fetchLotsData(lotsSelectedOrg)}>
+              <Text style={styles.refreshButton}>🔄</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Organization Selector */}
+        <TouchableOpacity
+          style={styles.lotsOrgSelector}
+          onPress={() => {
+            setCurrentScreen('LotsOrgSelection');
+          }}
+        >
+          <Text style={styles.lotsOrgSelectorIcon}>🏭</Text>
+          <Text style={styles.lotsOrgSelectorText}>
+            {lotsSelectedOrg || 'Select Organization'}
+          </Text>
+          <Text style={styles.lotsOrgSelectorArrow}>▼</Text>
+        </TouchableOpacity>
+
+        {/* Tab Navigation */}
+        <View style={styles.lotsTabContainer}>
+          <TouchableOpacity
+            style={[styles.lotsTab, lotsActiveTab === 'byItem' && styles.lotsTabActive]}
+            onPress={() => setLotsActiveTab('byItem')}
+          >
+            <Text style={[styles.lotsTabText, lotsActiveTab === 'byItem' && styles.lotsTabTextActive]}>By Item</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.lotsTab, lotsActiveTab === 'byLot' && styles.lotsTabActive]}
+            onPress={() => setLotsActiveTab('byLot')}
+          >
+            <Text style={[styles.lotsTabText, lotsActiveTab === 'byLot' && styles.lotsTabTextActive]}>By Lot</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.lotsTab, lotsActiveTab === 'byLocator' && styles.lotsTabActive]}
+            onPress={() => setLotsActiveTab('byLocator')}
+          >
+            <Text style={[styles.lotsTabText, lotsActiveTab === 'byLocator' && styles.lotsTabTextActive]}>By Locator</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Filters */}
+        <View style={styles.lotsFilterContainer}>
+          {/* Organization Filter */}
+          <View style={styles.lotsFilterRow}>
+            <View style={styles.lotsFilterField}>
+              <Text style={styles.lotsFilterLabel}>Organization</Text>
+              <View style={styles.lotsAutocompleteContainer}>
+                <TextInput
+                  style={styles.lotsFilterInput}
+                  placeholder="Filter by org..."
+                  value={lotsOrgFilter}
+                  onChangeText={(text) => {
+                    setLotsOrgFilter(text);
+                    setShowLotsOrgDropdown(text.length > 0);
+                  }}
+                  onFocus={() => setShowLotsOrgDropdown(lotsOrgFilter.length > 0)}
+                />
+                {lotsOrgFilter.length > 0 && (
+                  <TouchableOpacity style={styles.lotsFilterClear} onPress={() => {
+                    setLotsOrgFilter('');
+                    setShowLotsOrgDropdown(false);
+                  }}>
+                    <Text style={styles.lotsFilterClearText}>✕</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              {showLotsOrgDropdown && orgSuggestions.length > 0 && (
+                <View style={styles.lotsDropdown}>
+                  {orgSuggestions.slice(0, 5).map(org => (
+                    <TouchableOpacity
+                      key={org}
+                      style={styles.lotsDropdownItem}
+                      onPress={() => {
+                        setLotsOrgFilter(org);
+                        setShowLotsOrgDropdown(false);
+                      }}
+                    >
+                      <Text style={styles.lotsDropdownText}>{org}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            {/* Product Filter */}
+            <View style={styles.lotsFilterField}>
+              <Text style={styles.lotsFilterLabel}>Product</Text>
+              <View style={styles.lotsAutocompleteContainer}>
+                <TextInput
+                  style={styles.lotsFilterInput}
+                  placeholder="Filter by product..."
+                  value={lotsProductFilter}
+                  onChangeText={(text) => {
+                    setLotsProductFilter(text);
+                    setShowLotsProductDropdown(text.length > 0);
+                  }}
+                  onFocus={() => setShowLotsProductDropdown(lotsProductFilter.length > 0)}
+                />
+                {lotsProductFilter.length > 0 && (
+                  <TouchableOpacity style={styles.lotsFilterClear} onPress={() => {
+                    setLotsProductFilter('');
+                    setShowLotsProductDropdown(false);
+                  }}>
+                    <Text style={styles.lotsFilterClearText}>✕</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              {showLotsProductDropdown && productSuggestions.length > 0 && (
+                <View style={styles.lotsDropdown}>
+                  {productSuggestions.map(prod => (
+                    <TouchableOpacity
+                      key={prod.item_number}
+                      style={styles.lotsDropdownItem}
+                      onPress={() => {
+                        setLotsProductFilter(prod.description);
+                        setShowLotsProductDropdown(false);
+                      }}
+                    >
+                      <Text style={styles.lotsDropdownText} numberOfLines={1}>{prod.description}</Text>
+                      <Text style={styles.lotsDropdownSubtext}>{prod.item_number}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Search Bar */}
+          <View style={styles.lotsSearchRow}>
+            <View style={styles.searchInputContainer}>
+              <Text style={styles.searchIcon}>🔍</Text>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search..."
+                value={lotsSearchQuery}
+                onChangeText={setLotsSearchQuery}
+                autoCapitalize="none"
+              />
+              {lotsSearchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setLotsSearchQuery('')}>
+                  <Text style={styles.clearIcon}>✕</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+
+        {lotsLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Loading lots data...</Text>
+          </View>
+        ) : (
+          <>
+            {/* BY ITEM TAB */}
+            {lotsActiveTab === 'byItem' && (
+              <>
+                <View style={styles.lotsStatsContainer}>
+                  <View style={styles.lotStatBox}>
+                    <Text style={styles.lotStatValue}>{filteredByItem.length}</Text>
+                    <Text style={styles.lotStatLabel}>Items</Text>
+                  </View>
+                  <View style={styles.lotStatBox}>
+                    <Text style={styles.lotStatValue}>
+                      {filteredByItem.reduce((sum, item) => sum + item.lots.length, 0)}
+                    </Text>
+                    <Text style={styles.lotStatLabel}>Lots</Text>
+                  </View>
+                  <View style={styles.lotStatBox}>
+                    <Text style={styles.lotStatValue}>
+                      {filteredByItem.reduce((sum, item) => sum + item.totalQuantity, 0).toLocaleString()}
+                    </Text>
+                    <Text style={styles.lotStatLabel}>Total Qty</Text>
+                  </View>
+                </View>
+
+                {filteredByItem.length > 0 ? (
+                  <FlatList
+                    data={filteredByItem}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={styles.lotsList}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.lotItemCard}
+                        onPress={() => {
+                          setSelectedLotItem(item);
+                          setCurrentScreen('LotDetails');
+                        }}
+                      >
+                        <View style={styles.lotItemHeader}>
+                          <View style={styles.lotItemInfo}>
+                            <Text style={styles.lotItemNumber}>{item.item_number}</Text>
+                            <View style={styles.lotBadgeRow}>
+                              <View style={styles.orgBadgeSmall}>
+                                <Text style={styles.orgBadgeSmallText}>{item.organization_code}</Text>
+                              </View>
+                              <View style={styles.subinvBadge}>
+                                <Text style={styles.subinvBadgeText}>{item.sub_inventory_code}</Text>
+                              </View>
+                              {item.locator && (
+                                <View style={styles.locatorBadge}>
+                                  <Text style={styles.locatorBadgeText}>📍 {item.locator}</Text>
+                                </View>
+                              )}
+                            </View>
+                          </View>
+                          <View style={styles.lotQtyContainer}>
+                            <Text style={styles.lotTotalQty}>{item.totalQuantity.toLocaleString()}</Text>
+                            <Text style={styles.lotQtyLabel}>Total Qty</Text>
+                          </View>
+                        </View>
+
+                        <Text style={styles.lotItemDescription} numberOfLines={2}>
+                          {item.item_description}
+                        </Text>
+
+                        <View style={styles.lotItemFooter}>
+                          <View style={styles.lotCountBadge}>
+                            <Text style={styles.lotCountText}>{item.lots.length} lot{item.lots.length !== 1 ? 's' : ''}</Text>
+                          </View>
+                          <Text style={styles.drillDownHint}>Tap to view lots →</Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                  />
+                ) : (
+                  <View style={styles.emptyStateContainer}>
+                    <Text style={styles.emptyStateIcon}>🏷️</Text>
+                    <Text style={styles.emptyStateText}>No items found</Text>
+                  </View>
+                )}
+              </>
+            )}
+
+            {/* BY LOT TAB */}
+            {lotsActiveTab === 'byLot' && (
+              <>
+                <View style={styles.lotsStatsContainer}>
+                  <View style={styles.lotStatBox}>
+                    <Text style={styles.lotStatValue}>{filteredByLot.length}</Text>
+                    <Text style={styles.lotStatLabel}>Lots</Text>
+                  </View>
+                  <View style={styles.lotStatBox}>
+                    <Text style={styles.lotStatValue}>
+                      {filteredByLot.reduce((sum, lot) => sum + lot.items.length, 0)}
+                    </Text>
+                    <Text style={styles.lotStatLabel}>Items</Text>
+                  </View>
+                  <View style={styles.lotStatBox}>
+                    <Text style={styles.lotStatValue}>
+                      {filteredByLot.reduce((sum, lot) => sum + lot.totalQuantity, 0).toLocaleString()}
+                    </Text>
+                    <Text style={styles.lotStatLabel}>Total Qty</Text>
+                  </View>
+                </View>
+
+                {filteredByLot.length > 0 ? (
+                  <FlatList
+                    data={filteredByLot}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={styles.lotsList}
+                    renderItem={({ item: lot }) => (
+                      <TouchableOpacity
+                        style={styles.lotItemCard}
+                        onPress={() => {
+                          setSelectedLotGroup(lot);
+                          setCurrentScreen('LotGroupItems');
+                        }}
+                      >
+                        <View style={styles.lotItemHeader}>
+                          <View style={styles.lotItemInfo}>
+                            <Text style={styles.lotItemNumber}>{lot.lotnumber}</Text>
+                            <View style={styles.lotBadgeRow}>
+                              <View style={[
+                                styles.statusBadgeSmall,
+                                { backgroundColor: lot.materialstatus === 'Active' ? COLORS.successLight : COLORS.warningLight }
+                              ]}>
+                                <Text style={[
+                                  styles.statusBadgeSmallText,
+                                  { color: lot.materialstatus === 'Active' ? COLORS.success : COLORS.warning }
+                                ]}>
+                                  {lot.materialstatus || 'Unknown'}
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+                          <View style={styles.lotQtyContainer}>
+                            <Text style={styles.lotTotalQty}>{lot.totalQuantity.toLocaleString()}</Text>
+                            <Text style={styles.lotQtyLabel}>Total Qty</Text>
+                          </View>
+                        </View>
+
+                        {lot.expirationdate && (
+                          <Text style={styles.lotExpirationText}>
+                            Expires: {new Date(lot.expirationdate).toLocaleDateString()}
+                          </Text>
+                        )}
+
+                        <View style={styles.lotItemFooter}>
+                          <View style={styles.lotCountBadge}>
+                            <Text style={styles.lotCountText}>{lot.items.length} item{lot.items.length !== 1 ? 's' : ''}</Text>
+                          </View>
+                          <Text style={styles.drillDownHint}>Tap to view items →</Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                  />
+                ) : (
+                  <View style={styles.emptyStateContainer}>
+                    <Text style={styles.emptyStateIcon}>🏷️</Text>
+                    <Text style={styles.emptyStateText}>No lots found</Text>
+                  </View>
+                )}
+              </>
+            )}
+
+            {/* BY LOCATOR TAB */}
+            {lotsActiveTab === 'byLocator' && (
+              locatorLoading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color={COLORS.primary} />
+                  <Text style={styles.loadingText}>Loading locator data...</Text>
+                </View>
+              ) : (
+              <>
+                <View style={styles.lotsStatsContainer}>
+                  <View style={styles.lotStatBox}>
+                    <Text style={styles.lotStatValue}>{filteredByLocator.length}</Text>
+                    <Text style={styles.lotStatLabel}>Locators</Text>
+                  </View>
+                  <View style={styles.lotStatBox}>
+                    <Text style={styles.lotStatValue}>
+                      {filteredByLocator.reduce((sum, loc) => sum + (loc.items?.length || 0), 0)}
+                    </Text>
+                    <Text style={styles.lotStatLabel}>Items</Text>
+                  </View>
+                  <View style={styles.lotStatBox}>
+                    <Text style={styles.lotStatValue}>
+                      {filteredByLocator.reduce((sum, loc) => sum + (loc.totalQuantity || 0), 0).toLocaleString()}
+                    </Text>
+                    <Text style={styles.lotStatLabel}>Total Qty</Text>
+                  </View>
+                </View>
+
+                {/* Global View Button */}
+                <TouchableOpacity
+                  style={styles.globalViewButton}
+                  onPress={() => {
+                    const hierarchy = buildLocatorHierarchy(locatorData);
+                    setLocatorHierarchy(hierarchy);
+                    setLocatorDrillPath([]);
+                    setCurrentScreen('LocatorGlobalView');
+                  }}
+                >
+                  <Text style={styles.globalViewButtonIcon}>🌐</Text>
+                  <Text style={styles.globalViewButtonText}>Global View</Text>
+                  <Text style={styles.globalViewButtonHint}>Explore warehouse hierarchy</Text>
+                </TouchableOpacity>
+
+                {filteredByLocator.length > 0 ? (
+                  <FlatList
+                    data={filteredByLocator}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={styles.lotsList}
+                    renderItem={({ item: locator }) => (
+                      <View style={styles.lotItemCard}>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setSelectedLocatorGroup(locator);
+                            setCurrentScreen('LocatorLots');
+                          }}
+                        >
+                          <View style={styles.lotItemHeader}>
+                            <View style={styles.lotItemInfo}>
+                              <Text style={styles.lotItemNumber}>📍 {locator.locator}</Text>
+                              <View style={styles.lotBadgeRow}>
+                                <View style={styles.orgBadgeSmall}>
+                                  <Text style={styles.orgBadgeSmallText}>{locator.organization_code}</Text>
+                                </View>
+                                <View style={styles.subinvBadge}>
+                                  <Text style={styles.subinvBadgeText}>{locator.sub_inventory_code}</Text>
+                                </View>
+                              </View>
+                            </View>
+                            <View style={styles.lotQtyContainer}>
+                              <Text style={styles.lotTotalQty}>{locator.totalQuantity.toLocaleString()}</Text>
+                              <Text style={styles.lotQtyLabel}>Total Qty</Text>
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+
+                        <View style={styles.locatorFooterRow}>
+                          <TouchableOpacity
+                            onPress={() => {
+                              setSelectedLocatorGroup(locator);
+                              setCurrentScreen('LocatorLots');
+                            }}
+                          >
+                            <View style={styles.lotCountBadge}>
+                              <Text style={styles.lotCountText}>{locator.items?.length || 0} item{(locator.items?.length || 0) !== 1 ? 's' : ''}</Text>
+                            </View>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.locatorViewButton}
+                            onPress={() => {
+                              setSelectedLocatorForView(locator.locator);
+                              setShowLocatorModal(true);
+                            }}
+                          >
+                            <Text style={styles.locatorViewButtonText}>🗺️ View</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
+                  />
+                ) : (
+                  <View style={styles.emptyStateContainer}>
+                    <Text style={styles.emptyStateIcon}>📍</Text>
+                    <Text style={styles.emptyStateText}>No locators found</Text>
+                  </View>
+                )}
+              </>
+              )
+            )}
+          </>
+        )}
+
+        {/* Locator Visualization Modal */}
+        <Modal
+          visible={showLocatorModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowLocatorModal(false)}
+        >
+          <View style={styles.locatorModalOverlay}>
+            <View style={styles.locatorModalContainer}>
+              <View style={styles.locatorModalHeader}>
+                <Text style={styles.locatorModalTitle}>Locator View</Text>
+                <TouchableOpacity onPress={() => setShowLocatorModal(false)}>
+                  <Text style={styles.locatorModalClose}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.locatorModalContent}>
+                <Text style={styles.locatorModalLocatorName}>📍 {selectedLocatorForView}</Text>
+
+                {/* Parse locator segments: AREA-BIN-COLUMN-ROW-SHELVING */}
+                {selectedLocatorForView && (() => {
+                  const segments = selectedLocatorForView.split('-');
+                  const segmentLabels = ['AREA', 'BIN', 'COLUMN', 'ROW', 'SHELVING'];
+                  return (
+                    <View style={styles.locatorSegmentsContainer}>
+                      {segments.map((segment, index) => (
+                        <View key={index} style={styles.locatorSegmentBox}>
+                          <Text style={styles.locatorSegmentLabel}>
+                            {segmentLabels[index] || `SEG ${index + 1}`}
+                          </Text>
+                          <Text style={styles.locatorSegmentValue}>{segment}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  );
+                })()}
+
+                {/* 2D Visualization */}
+                <View style={styles.locatorVisualization}>
+                  <Text style={styles.locatorVisTitle}>2D Location Map</Text>
+                  <View style={styles.locatorGrid}>
+                    {selectedLocatorForView && (() => {
+                      const segments = selectedLocatorForView.split('-');
+                      const area = segments[0] || 'A';
+                      const bin = segments[1] || '1';
+                      const col = parseInt(segments[2]) || 1;
+                      const row = parseInt(segments[3]) || 1;
+                      const shelf = parseInt(segments[4]) || 1;
+
+                      return (
+                        <View style={styles.locatorGridInner}>
+                          {/* Grid representation */}
+                          <View style={styles.locatorGridRow}>
+                            {[1, 2, 3, 4, 5].map((c) => (
+                              <View
+                                key={c}
+                                style={[
+                                  styles.locatorGridCell,
+                                  c === col && styles.locatorGridCellActive
+                                ]}
+                              >
+                                <Text style={[
+                                  styles.locatorGridCellText,
+                                  c === col && styles.locatorGridCellTextActive
+                                ]}>
+                                  {c === col ? `${area}-${bin}` : ''}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+                          <View style={styles.locatorShelfIndicator}>
+                            <Text style={styles.locatorShelfText}>
+                              Row {row} • Shelf {shelf}
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    })()}
+                  </View>
+                </View>
+
+                {/* 3D Representation */}
+                <View style={styles.locator3DContainer}>
+                  <Text style={styles.locatorVisTitle}>3D Shelf View</Text>
+                  {selectedLocatorForView && (() => {
+                    const segments = selectedLocatorForView.split('-');
+                    const shelf = parseInt(segments[4]) || 1;
+                    const totalShelves = 5;
+
+                    return (
+                      <View style={styles.locator3DShelf}>
+                        {[...Array(totalShelves)].map((_, i) => {
+                          const shelfNum = totalShelves - i;
+                          const isActive = shelfNum === shelf;
+                          return (
+                            <View
+                              key={i}
+                              style={[
+                                styles.locator3DShelfLevel,
+                                isActive && styles.locator3DShelfLevelActive
+                              ]}
+                            >
+                              <Text style={[
+                                styles.locator3DShelfText,
+                                isActive && styles.locator3DShelfTextActive
+                              ]}>
+                                {isActive ? `📦 Shelf ${shelfNum}` : `Shelf ${shelfNum}`}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    );
+                  })()}
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.locatorModalCloseButton}
+                onPress={() => setShowLocatorModal(false)}
+              >
+                <Text style={styles.locatorModalCloseButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      </View>
+    );
+  }
+
+  // Lot Details Screen (Individual Lots)
+  if (currentScreen === 'LotDetails' && selectedLotItem) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity onPress={() => {
+            setSelectedLotItem(null);
+            setCurrentScreen('OnhandByLots');
+          }}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.screenTitle}>Lot Details</Text>
+            <Text style={styles.screenSubtitle}>{selectedLotItem.item_number}</Text>
+          </View>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        {/* Item Summary Card */}
+        <View style={styles.lotSummaryCard}>
+          <Text style={styles.lotSummaryTitle}>{selectedLotItem.item_description}</Text>
+          <View style={styles.lotSummaryRow}>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Organization</Text>
+              <Text style={styles.lotSummaryValue}>{selectedLotItem.organization_code}</Text>
+            </View>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Subinventory</Text>
+              <Text style={styles.lotSummaryValue}>{selectedLotItem.sub_inventory_code}</Text>
+            </View>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Total Qty</Text>
+              <Text style={[styles.lotSummaryValue, { color: COLORS.success }]}>
+                {selectedLotItem.totalQuantity.toLocaleString()}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Lots List */}
+        <View style={styles.lotsListHeader}>
+          <Text style={styles.lotsListTitle}>Lots ({selectedLotItem.lots.length})</Text>
+        </View>
+
+        <FlatList
+          data={selectedLotItem.lots}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.lotDetailsList}
+          renderItem={({ item: lot }) => (
+            <View style={styles.lotDetailCard}>
+              <View style={styles.lotDetailHeader}>
+                <View style={styles.lotNumberContainer}>
+                  <Text style={styles.lotNumberLabel}>Lot #</Text>
+                  <Text style={styles.lotNumberValue}>{lot.lotnumber || 'N/A'}</Text>
+                </View>
+                <View style={[
+                  styles.statusBadge,
+                  { backgroundColor: lot.materialstatus === 'Active' ? COLORS.successLight : COLORS.warningLight }
+                ]}>
+                  <Text style={[
+                    styles.statusBadgeText,
+                    { color: lot.materialstatus === 'Active' ? COLORS.success : COLORS.warning }
+                  ]}>
+                    {lot.materialstatus || 'Unknown'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.lotDetailRow}>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Quantity</Text>
+                  <Text style={styles.lotDetailValue}>{lot.primaryquantity || 0}</Text>
+                </View>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Expiration</Text>
+                  <Text style={styles.lotDetailValue}>
+                    {lot.expirationdate ? new Date(lot.expirationdate).toLocaleDateString() : 'N/A'}
+                  </Text>
+                </View>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Instance</Text>
+                  <Text style={styles.lotDetailValue}>{lot.instance_name || 'N/A'}</Text>
+                </View>
+              </View>
+
+              {lot.trx_number && (
+                <View style={styles.lotExtraInfo}>
+                  <Text style={styles.lotExtraLabel}>Transaction:</Text>
+                  <Text style={styles.lotExtraValue}>{lot.trx_number}</Text>
+                </View>
+              )}
+
+              {/* Serial Numbers Button */}
+              <TouchableOpacity
+                style={[
+                  styles.serialButton,
+                  !lot.srno_link && styles.serialButtonDisabled
+                ]}
+                onPress={() => {
+                  if (lot.srno_link) {
+                    setSelectedLot(lot);
+                    fetchSerialNumbers(lot.srno_link);
+                  } else {
+                    Alert.alert('Info', 'No serial numbers available for this lot');
+                  }
+                }}
+                disabled={serialLoading}
+              >
+                {serialLoading && selectedLot?.id === lot.id ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : (
+                  <>
+                    <Text style={styles.serialButtonText}>
+                      {lot.srno_link ? '🔢 View Serial Numbers' : '🔢 No Serials'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+        />
+      </View>
+    );
+  }
+
+  // Serial Numbers Screen
+  if (currentScreen === 'SerialNumbers' && selectedLot) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity onPress={() => {
+            setSerialNumbers([]);
+            setSelectedLot(null);
+            setCurrentScreen('LotDetails');
+          }}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.screenTitle}>Serial Numbers</Text>
+            <Text style={styles.screenSubtitle}>Lot: {selectedLot.lotnumber}</Text>
+          </View>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        {/* Lot Info */}
+        <View style={styles.serialLotInfo}>
+          <Text style={styles.serialLotItem}>{selectedLotItem?.item_number}</Text>
+          <Text style={styles.serialLotDesc}>{selectedLotItem?.item_description}</Text>
+        </View>
+
+        {serialLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Loading serial numbers...</Text>
+          </View>
+        ) : serialNumbers.length > 0 ? (
+          <FlatList
+            data={serialNumbers}
+            keyExtractor={(item, index) => `serial-${index}`}
+            contentContainerStyle={styles.serialList}
+            renderItem={({ item: serial, index }) => (
+              <View style={styles.serialCard}>
+                <View style={styles.serialCardHeader}>
+                  <View style={styles.serialIndexBadge}>
+                    <Text style={styles.serialIndexText}>{index + 1}</Text>
+                  </View>
+                  <Text style={styles.serialNumber}>
+                    {serial.SerialNumber || serial.serialNumber || serial.serial_number || `Serial ${index + 1}`}
+                  </Text>
+                </View>
+                {serial.Status && (
+                  <View style={styles.serialDetailRow}>
+                    <Text style={styles.serialDetailLabel}>Status:</Text>
+                    <Text style={styles.serialDetailValue}>{serial.Status}</Text>
+                  </View>
+                )}
+                {serial.CurrentOrganizationId && (
+                  <View style={styles.serialDetailRow}>
+                    <Text style={styles.serialDetailLabel}>Org ID:</Text>
+                    <Text style={styles.serialDetailValue}>{serial.CurrentOrganizationId}</Text>
+                  </View>
+                )}
+              </View>
+            )}
+          />
+        ) : (
+          <View style={styles.emptyStateContainer}>
+            <Text style={styles.emptyStateIcon}>🔢</Text>
+            <Text style={styles.emptyStateText}>No serial numbers found</Text>
+            <Text style={styles.emptyStateHint}>This lot may not have serialized items</Text>
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  // Lot Group Items Screen (Drill-down from By Lot tab)
+  if (currentScreen === 'LotGroupItems' && selectedLotGroup) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity onPress={() => {
+            setSelectedLotGroup(null);
+            setCurrentScreen('OnhandByLots');
+          }}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.screenTitle}>Lot Items</Text>
+            <Text style={styles.screenSubtitle}>{selectedLotGroup.lotnumber}</Text>
+          </View>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        {/* Lot Summary Card */}
+        <View style={styles.lotSummaryCard}>
+          <View style={styles.lotSummaryRow}>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Status</Text>
+              <Text style={[styles.lotSummaryValue, {
+                color: selectedLotGroup.materialstatus === 'Active' ? COLORS.success : COLORS.warning
+              }]}>
+                {selectedLotGroup.materialstatus || 'Unknown'}
+              </Text>
+            </View>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Expiration</Text>
+              <Text style={styles.lotSummaryValue}>
+                {selectedLotGroup.expirationdate ? new Date(selectedLotGroup.expirationdate).toLocaleDateString() : 'N/A'}
+              </Text>
+            </View>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Total Qty</Text>
+              <Text style={[styles.lotSummaryValue, { color: COLORS.success }]}>
+                {selectedLotGroup.totalQuantity.toLocaleString()}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Items List Header */}
+        <View style={styles.lotsListHeader}>
+          <Text style={styles.lotsListTitle}>Items ({selectedLotGroup.items.length})</Text>
+        </View>
+
+        <FlatList
+          data={selectedLotGroup.items}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.lotDetailsList}
+          renderItem={({ item }) => (
+            <View style={styles.lotDetailCard}>
+              <View style={styles.lotDetailHeader}>
+                <View style={styles.lotNumberContainer}>
+                  <Text style={styles.lotNumberLabel}>Item</Text>
+                  <Text style={styles.lotNumberValue}>{item.item_number}</Text>
+                </View>
+                <View style={styles.lotQtyBox}>
+                  <Text style={styles.lotQtyBoxValue}>{item.primaryquantity || 0}</Text>
+                  <Text style={styles.lotQtyBoxLabel}>Qty</Text>
+                </View>
+              </View>
+
+              <Text style={styles.lotItemDescription} numberOfLines={2}>
+                {item.item_description}
+              </Text>
+
+              <View style={styles.lotDetailRow}>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Organization</Text>
+                  <Text style={styles.lotDetailValue}>{item.organization_code}</Text>
+                </View>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Subinventory</Text>
+                  <Text style={styles.lotDetailValue}>{item.sub_inventory_code}</Text>
+                </View>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Locator</Text>
+                  <Text style={styles.lotDetailValue}>{item.locator || 'N/A'}</Text>
+                </View>
+              </View>
+            </View>
+          )}
+        />
+      </View>
+    );
+  }
+
+  // Locator Lots Screen (Drill-down from By Locator tab - shows lots in locator)
+  if (currentScreen === 'LocatorLots' && selectedLocatorGroup) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity onPress={() => {
+            setSelectedLocatorGroup(null);
+            setCurrentScreen('OnhandByLots');
+          }}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.screenTitle}>Locator Lots</Text>
+            <Text style={styles.screenSubtitle}>📍 {selectedLocatorGroup.locator}</Text>
+          </View>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        {/* Locator Summary Card */}
+        <View style={styles.lotSummaryCard}>
+          <View style={styles.lotSummaryRow}>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Organization</Text>
+              <Text style={styles.lotSummaryValue}>{selectedLocatorGroup.organization_code}</Text>
+            </View>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Subinventory</Text>
+              <Text style={styles.lotSummaryValue}>{selectedLocatorGroup.sub_inventory_code}</Text>
+            </View>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Total Qty</Text>
+              <Text style={[styles.lotSummaryValue, { color: COLORS.success }]}>
+                {selectedLocatorGroup.totalQuantity.toLocaleString()}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Lots List Header */}
+        <View style={styles.lotsListHeader}>
+          <Text style={styles.lotsListTitle}>Lots ({selectedLocatorGroup.lots.length})</Text>
+        </View>
+
+        <FlatList
+          data={selectedLocatorGroup.lots}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.lotDetailsList}
+          renderItem={({ item: lot }) => (
+            <TouchableOpacity
+              style={styles.lotDetailCard}
+              onPress={() => {
+                setSelectedLotGroup(lot);
+                setCurrentScreen('LocatorLotItems');
+              }}
+            >
+              <View style={styles.lotDetailHeader}>
+                <View style={styles.lotNumberContainer}>
+                  <Text style={styles.lotNumberLabel}>Lot #</Text>
+                  <Text style={styles.lotNumberValue}>{lot.lotnumber}</Text>
+                </View>
+                <View style={[
+                  styles.statusBadge,
+                  { backgroundColor: lot.materialstatus === 'Active' ? COLORS.successLight : COLORS.warningLight }
+                ]}>
+                  <Text style={[
+                    styles.statusBadgeText,
+                    { color: lot.materialstatus === 'Active' ? COLORS.success : COLORS.warning }
+                  ]}>
+                    {lot.materialstatus || 'Unknown'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.lotDetailRow}>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Quantity</Text>
+                  <Text style={styles.lotDetailValue}>{lot.totalQuantity.toLocaleString()}</Text>
+                </View>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Expiration</Text>
+                  <Text style={styles.lotDetailValue}>
+                    {lot.expirationdate ? new Date(lot.expirationdate).toLocaleDateString() : 'N/A'}
+                  </Text>
+                </View>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Items</Text>
+                  <Text style={styles.lotDetailValue}>{lot.items.length}</Text>
+                </View>
+              </View>
+
+              <View style={styles.lotItemFooter}>
+                <Text style={styles.drillDownHint}>Tap to view items →</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+        />
+      </View>
+    );
+  }
+
+  // Locator Lot Items Screen (Drill-down from LocatorLots - shows items in a specific lot within locator)
+  if (currentScreen === 'LocatorLotItems' && selectedLotGroup) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity onPress={() => {
+            setSelectedLotGroup(null);
+            setCurrentScreen('LocatorLots');
+          }}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.screenTitle}>Lot Items</Text>
+            <Text style={styles.screenSubtitle}>{selectedLotGroup.lotnumber}</Text>
+          </View>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        {/* Lot Summary Card */}
+        <View style={styles.lotSummaryCard}>
+          <View style={styles.lotSummaryRow}>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Status</Text>
+              <Text style={[styles.lotSummaryValue, {
+                color: selectedLotGroup.materialstatus === 'Active' ? COLORS.success : COLORS.warning
+              }]}>
+                {selectedLotGroup.materialstatus || 'Unknown'}
+              </Text>
+            </View>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Expiration</Text>
+              <Text style={styles.lotSummaryValue}>
+                {selectedLotGroup.expirationdate ? new Date(selectedLotGroup.expirationdate).toLocaleDateString() : 'N/A'}
+              </Text>
+            </View>
+            <View style={styles.lotSummaryItem}>
+              <Text style={styles.lotSummaryLabel}>Total Qty</Text>
+              <Text style={[styles.lotSummaryValue, { color: COLORS.success }]}>
+                {selectedLotGroup.totalQuantity.toLocaleString()}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Items List Header */}
+        <View style={styles.lotsListHeader}>
+          <Text style={styles.lotsListTitle}>Items ({selectedLotGroup.items.length})</Text>
+        </View>
+
+        <FlatList
+          data={selectedLotGroup.items}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.lotDetailsList}
+          renderItem={({ item }) => (
+            <View style={styles.lotDetailCard}>
+              <View style={styles.lotDetailHeader}>
+                <View style={styles.lotNumberContainer}>
+                  <Text style={styles.lotNumberLabel}>Item</Text>
+                  <Text style={styles.lotNumberValue}>{item.item_number}</Text>
+                </View>
+                <View style={styles.lotQtyBox}>
+                  <Text style={styles.lotQtyBoxValue}>{item.primaryquantity || 0}</Text>
+                  <Text style={styles.lotQtyBoxLabel}>Qty</Text>
+                </View>
+              </View>
+
+              <Text style={styles.lotItemDescription} numberOfLines={2}>
+                {item.item_description}
+              </Text>
+
+              <View style={styles.lotDetailRow}>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Organization</Text>
+                  <Text style={styles.lotDetailValue}>{item.organization_code}</Text>
+                </View>
+                <View style={styles.lotDetailItem}>
+                  <Text style={styles.lotDetailLabel}>Subinventory</Text>
+                  <Text style={styles.lotDetailValue}>{item.sub_inventory_code}</Text>
+                </View>
+              </View>
+            </View>
+          )}
+        />
       </View>
     );
   }
@@ -1580,66 +4172,64 @@ export default function App() {
   return null;
 }
 
-// ============= STYLES =============
+// ============= ORACLE REDWOOD STYLES =============
 
 const styles = StyleSheet.create({
+  // Base Container
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundSecondary,
+    backgroundColor: COLORS.background,
   },
 
-  // Login Styles
+  // ========== LOGIN SCREEN ==========
   loginTopSection: {
     backgroundColor: COLORS.primary,
-    paddingTop: 60,
-    paddingBottom: 80,
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
+    paddingTop: 36,
+    paddingBottom: 32,
+    borderBottomLeftRadius: RADIUS.xl,
+    borderBottomRightRadius: RADIUS.xl,
     alignItems: 'center',
   },
   loginLogoContainer: {
-    width: 80,
-    height: 80,
-    backgroundColor: COLORS.white,
-    borderRadius: 40,
+    width: 48,
+    height: 48,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.full,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm,
+    ...SHADOWS.md,
   },
   loginLogoIcon: {
-    fontSize: 40,
+    fontSize: 24,
   },
   loginTitle: {
-    fontSize: FONT_SIZES.xxl,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
     color: COLORS.white,
-    marginBottom: SPACING.xs,
+    marginBottom: 2,
   },
   loginSubtitle: {
-    fontSize: FONT_SIZES.md,
+    fontSize: FONT_SIZES.xs,
     color: COLORS.white,
     opacity: 0.9,
   },
   loginFormContainer: {
     flex: 1,
-    paddingHorizontal: SPACING.lg,
-    marginTop: -40,
+    paddingHorizontal: SPACING.md,
+    marginTop: -20,
   },
   loginCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
-    padding: SPACING.xl,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    ...SHADOWS.md,
   },
   loginCardTitle: {
-    fontSize: FONT_SIZES.xl,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: SPACING.lg,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+    marginBottom: SPACING.md,
     textAlign: 'center',
   },
   inputGroup: {
@@ -1647,97 +4237,99 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral600,
     marginBottom: SPACING.xs,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   input: {
-    backgroundColor: COLORS.backgroundSecondary,
-    borderRadius: 10,
+    backgroundColor: COLORS.neutral50,
+    borderRadius: RADIUS.md,
     padding: SPACING.md,
     fontSize: FONT_SIZES.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.neutral200,
+    color: COLORS.neutral900,
   },
   loginButton: {
     backgroundColor: COLORS.primary,
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
     padding: SPACING.md,
     alignItems: 'center',
-    marginTop: SPACING.md,
+    marginTop: SPACING.lg,
+    ...SHADOWS.sm,
   },
   loginButtonText: {
     color: COLORS.white,
-    fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
   },
   loginHint: {
     fontSize: FONT_SIZES.xs,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral500,
     textAlign: 'center',
-    marginTop: SPACING.md,
+    marginTop: SPACING.lg,
   },
 
-  // Modal Styles
+  // ========== MODAL STYLES ==========
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(32, 30, 28, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContainer: {
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.xl,
     padding: SPACING.lg,
     width: '85%',
     maxWidth: 400,
     maxHeight: '70%',
+    ...SHADOWS.lg,
   },
   modalTitle: {
     fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    fontWeight: '600',
+    color: COLORS.neutral900,
     marginBottom: SPACING.xs,
     textAlign: 'center',
   },
   modalSubtitle: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.md,
+    color: COLORS.neutral500,
+    marginBottom: SPACING.lg,
     textAlign: 'center',
   },
   orgScrollView: {
     maxHeight: 400,
   },
   orgButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 8,
-    padding: SPACING.sm,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
     marginBottom: SPACING.sm,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.neutral200,
   },
   orgButtonText: {
-    color: COLORS.white,
-    fontSize: FONT_SIZES.sm,
-    fontWeight: '600',
+    color: COLORS.neutral900,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '500',
   },
   orgButtonArrow: {
-    color: COLORS.white,
-    fontSize: FONT_SIZES.md,
+    color: COLORS.primary,
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '600',
   },
 
-  // ============= NEW HOME PAGE STYLES =============
-  homeHeader: {
+  // ========== DASHBOARD HEADER ==========
+  dashboardHeader: {
     backgroundColor: COLORS.primary,
-    paddingTop: 50,
-    paddingBottom: SPACING.xl,
-    paddingHorizontal: SPACING.lg,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
-  homeHeaderContent: {
+    paddingTop: 36,
+    paddingBottom: SPACING.sm,
+    paddingHorizontal: SPACING.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
@@ -1745,14 +4337,21 @@ const styles = StyleSheet.create({
   homeHeaderLeft: {
     flex: 1,
   },
-  homeGreeting: {
-    fontSize: FONT_SIZES.sm,
-    color: COLORS.white,
-    opacity: 0.9,
+  headerTitleContainer: {
+    marginLeft: SPACING.md,
   },
-  homeUserName: {
-    fontSize: FONT_SIZES.xl,
-    fontWeight: 'bold',
+  menuIcon: {
+    fontSize: 26,
+    color: COLORS.white,
+  },
+  dashboardGreeting: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.white,
+    opacity: 0.85,
+  },
+  dashboardUserName: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '600',
     color: COLORS.white,
     marginBottom: SPACING.xs,
   },
@@ -1760,8 +4359,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
+    borderRadius: RADIUS.sm,
+    marginTop: SPACING.xs,
   },
   homeOrgText: {
     color: COLORS.white,
@@ -1787,82 +4386,94 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // KPI Section
-  kpiSection: {
+  // ========== HAMBURGER MENU ==========
+  hamburgerMenu: {
+    position: 'absolute',
+    top: 110,
+    left: 0,
+    backgroundColor: COLORS.surface,
+    width: 280,
+    borderTopRightRadius: RADIUS.xl,
+    borderBottomRightRadius: RADIUS.xl,
     padding: SPACING.lg,
+    zIndex: 1000,
+    ...SHADOWS.lg,
   },
-  sectionTitle: {
-    fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
-    color: COLORS.text,
+  menuHeader: {
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+    paddingBottom: SPACING.md,
     marginBottom: SPACING.md,
   },
-  kpiLoadingContainer: {
+  menuUserName: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+  },
+  menuUserRole: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral500,
+    marginTop: 2,
+  },
+  menuOrgText: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.primary,
+    marginTop: SPACING.sm,
+    fontWeight: '600',
+  },
+  menuItem: {
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral50,
+  },
+  menuItemText: {
+    fontSize: FONT_SIZES.md,
+    color: COLORS.neutral700,
+    fontWeight: '500',
+  },
+
+  // ========== DASHBOARD CONTENT ==========
+  dashboardContent: {
+    flex: 1,
+  },
+  orgDisplayContainer: {
+    backgroundColor: COLORS.primaryLight,
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.xs,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     padding: SPACING.lg,
   },
-  kpiLoadingText: {
-    marginLeft: SPACING.sm,
-    color: COLORS.textSecondary,
+  orgDisplayLabel: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral600,
+    marginRight: SPACING.sm,
   },
-  kpiGrid: {
+  orgDisplayValue: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  cardGrid: {
+    padding: SPACING.md,
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
-  kpiCard: {
-    width: '48%',
-    borderRadius: 12,
-    padding: SPACING.sm,
-    marginBottom: SPACING.sm,
-    minHeight: 70,
-  },
-  kpiIconContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.xs,
-  },
-  kpiIcon: {
-    fontSize: 14,
-  },
-  kpiValue: {
-    fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
-    color: COLORS.white,
-  },
-  kpiLabel: {
-    fontSize: FONT_SIZES.xs,
-    color: COLORS.white,
-    opacity: 0.9,
-    marginTop: 2,
-  },
-
-  // Modules Section
-  modulesSection: {
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.lg,
-  },
-  modulesGrid: {
-    gap: SPACING.md,
-  },
-  moduleCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
+  featureCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
     padding: SPACING.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
     marginBottom: SPACING.md,
+    width: '48%',
+    minHeight: 160,
+    borderWidth: 1,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
   },
   moduleIconContainer: {
     width: 56,
@@ -2057,27 +4668,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: SPACING.sm,
   },
-  moduleMenuIcon: {
-    fontSize: 24,
-  },
-  moduleMenuTitle: {
+  cardTitle: {
     fontSize: FONT_SIZES.md,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    fontWeight: '600',
+    color: COLORS.neutral900,
     marginBottom: SPACING.xs,
   },
-  moduleMenuDescription: {
-    fontSize: FONT_SIZES.xs,
-    color: COLORS.textSecondary,
-    lineHeight: 16,
+  cardDescription: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral500,
+    lineHeight: 18,
   },
 
-  // Bottom Navigation
+  // ========== BOTTOM NAVIGATION ==========
   bottomNav: {
     flexDirection: 'row',
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: COLORS.neutral100,
     paddingVertical: SPACING.sm,
     paddingBottom: SPACING.md,
   },
@@ -2095,57 +4703,59 @@ const styles = StyleSheet.create({
   },
   navText: {
     fontSize: FONT_SIZES.xs,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral500,
     marginTop: SPACING.xs,
+    fontWeight: '500',
   },
   navTextActive: {
     color: COLORS.primary,
     fontWeight: '600',
   },
 
-  // Screen Header
+  // ========== SCREEN HEADER ==========
   screenHeader: {
     backgroundColor: COLORS.primary,
-    paddingTop: 50,
-    paddingBottom: SPACING.md,
+    paddingTop: 36,
+    paddingBottom: 6,
     paddingHorizontal: SPACING.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   backButton: {
-    fontSize: 28,
+    fontSize: 24,
     color: COLORS.white,
-    fontWeight: 'bold',
+    fontWeight: '500',
   },
   screenTitle: {
     fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: COLORS.white,
-    flex: 1,
-    marginLeft: SPACING.md,
+    marginLeft: SPACING.sm,
   },
   screenSubtitle: {
     fontSize: FONT_SIZES.sm,
     color: COLORS.white,
-    opacity: 0.9,
+    opacity: 0.85,
     marginLeft: SPACING.md,
   },
   headerCenter: {
+    marginLeft: SPACING.sm,
+  },
+  headerSpacer: {
     flex: 1,
-    marginLeft: SPACING.md,
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   headerOrgText: {
-    fontSize: FONT_SIZES.sm,
+    fontSize: FONT_SIZES.xs,
     color: COLORS.white,
     backgroundColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: RADIUS.sm,
     fontWeight: '600',
   },
   refreshButton: {
@@ -2159,39 +4769,43 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.sm,
   },
 
-  // Stats Container
+  // ========== STATS CONTAINER ==========
   statsContainer: {
-    backgroundColor: COLORS.white,
-    padding: SPACING.md,
+    backgroundColor: COLORS.surface,
+    padding: SPACING.sm,
     flexDirection: 'row',
     justifyContent: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
   },
   statBox: {
     alignItems: 'center',
     paddingHorizontal: SPACING.lg,
   },
   statValue: {
-    fontSize: FONT_SIZES.xxl,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZES.xl,
+    fontWeight: '700',
     color: COLORS.primary,
   },
   statLabel: {
-    fontSize: FONT_SIZES.sm,
-    color: COLORS.textSecondary,
-    marginTop: SPACING.xs,
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginTop: 2,
+    fontWeight: '500',
   },
 
-  // PO List
+  // ========== PO LIST ==========
   poList: {
     padding: SPACING.md,
   },
   poCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
   },
   poCardHeader: {
     flexDirection: 'row',
@@ -2200,37 +4814,38 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   poNumber: {
-    fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral900,
   },
   itemCountBadge: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
-    borderRadius: 12,
+    borderRadius: RADIUS.full,
   },
   itemCountText: {
     color: COLORS.white,
-    fontSize: FONT_SIZES.sm,
+    fontSize: FONT_SIZES.xs,
     fontWeight: '600',
   },
   poCardSubtext: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral500,
   },
 
-  // Items List
+  // ========== ITEMS LIST ==========
   itemsList: {
     padding: SPACING.md,
   },
   itemCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
   },
   itemCardHeader: {
     flexDirection: 'row',
@@ -2239,43 +4854,47 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   itemName: {
-    fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral900,
     flex: 1,
   },
   itemQty: {
-    fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZES.md,
+    fontWeight: '700',
     color: COLORS.success,
   },
   itemDetail: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral500,
     marginBottom: SPACING.xs,
   },
   itemDescription: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.text,
+    color: COLORS.neutral600,
     fontStyle: 'italic',
     marginBottom: SPACING.sm,
     paddingVertical: SPACING.xs,
+    backgroundColor: COLORS.neutral50,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: RADIUS.sm,
   },
 
-  // Item Detail
+  // ========== ITEM DETAIL ==========
   detailContainer: {
     flex: 1,
     padding: SPACING.md,
   },
   detailCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
     padding: SPACING.lg,
+    ...SHADOWS.sm,
   },
   detailTitle: {
     fontSize: FONT_SIZES.xl,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    fontWeight: '600',
+    color: COLORS.neutral900,
     marginBottom: SPACING.lg,
     textAlign: 'center',
   },
@@ -2284,53 +4903,86 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: COLORS.neutral100,
   },
   detailLabel: {
-    fontSize: FONT_SIZES.md,
-    color: COLORS.textSecondary,
-    fontWeight: '600',
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral500,
+    fontWeight: '500',
   },
   detailValue: {
-    fontSize: FONT_SIZES.md,
-    color: COLORS.text,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral900,
+    fontWeight: '600',
   },
   scanButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 10,
+    backgroundColor: COLORS.info,
+    borderRadius: RADIUS.md,
     padding: SPACING.md,
     alignItems: 'center',
     marginTop: SPACING.lg,
+    ...SHADOWS.sm,
   },
   scanButtonText: {
     color: COLORS.white,
-    fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
   },
   confirmButton: {
     backgroundColor: COLORS.success,
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
     padding: SPACING.md,
     alignItems: 'center',
     marginTop: SPACING.md,
+    ...SHADOWS.sm,
   },
   confirmButtonText: {
     color: COLORS.white,
-    fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
   },
 
-  // Scanner
+  // ========== SCANNER ==========
   scannerContainer: {
     flex: 1,
-    backgroundColor: COLORS.dark,
+    backgroundColor: COLORS.secondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scannerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'transparent',
+  },
+  scannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 36,
+    paddingHorizontal: SPACING.md,
+    paddingBottom: 6,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  scannerBackButton: {
+    padding: SPACING.sm,
+  },
+  scannerBackText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+  },
+  scannerTitle: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '600',
+  },
+  scannerFrameContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   scannerFrame: {
-    width: 250,
-    height: 250,
+    width: 280,
+    height: 280,
     position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
@@ -2339,78 +4991,183 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     left: 0,
-    width: 40,
-    height: 40,
+    width: 60,
+    height: 60,
     borderTopWidth: 4,
     borderLeftWidth: 4,
-    borderColor: COLORS.white,
+    borderColor: COLORS.primary,
+    borderTopLeftRadius: RADIUS.md,
   },
   scannerCornerTR: {
     position: 'absolute',
     top: 0,
     right: 0,
-    width: 40,
-    height: 40,
+    width: 60,
+    height: 60,
     borderTopWidth: 4,
     borderRightWidth: 4,
-    borderColor: COLORS.white,
+    borderColor: COLORS.primary,
+    borderTopRightRadius: RADIUS.md,
   },
   scannerCornerBL: {
     position: 'absolute',
     bottom: 0,
     left: 0,
-    width: 40,
-    height: 40,
+    width: 60,
+    height: 60,
     borderBottomWidth: 4,
     borderLeftWidth: 4,
-    borderColor: COLORS.white,
+    borderColor: COLORS.primary,
+    borderBottomLeftRadius: RADIUS.md,
   },
   scannerCornerBR: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: 40,
-    height: 40,
+    width: 60,
+    height: 60,
     borderBottomWidth: 4,
     borderRightWidth: 4,
-    borderColor: COLORS.white,
+    borderColor: COLORS.primary,
+    borderBottomRightRadius: RADIUS.md,
   },
-  scannerIcon: {
-    fontSize: 60,
+  scannedIndicator: {
+    backgroundColor: COLORS.success,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  scannerInstructions: {
-    fontSize: FONT_SIZES.lg,
+  scannedCheckmark: {
+    fontSize: 48,
     color: COLORS.white,
-    marginTop: SPACING.xl,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    padding: SPACING.md,
-    borderRadius: 8,
   },
-  simulateButton: {
-    backgroundColor: COLORS.secondary,
+  scannerHint: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.md,
+    marginTop: SPACING.lg,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.full,
+    fontWeight: '500',
+    overflow: 'hidden',
+  },
+  scannerControls: {
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.xl,
+    alignItems: 'center',
+  },
+  scannerItemInfo: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    width: '100%',
+    alignItems: 'center',
+  },
+  scannerItemLabel: {
+    color: COLORS.neutral300,
+    fontSize: FONT_SIZES.sm,
+    marginBottom: SPACING.xs,
+  },
+  scannerItemValue: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+  },
+  rescanButton: {
+    backgroundColor: COLORS.info,
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
+    marginBottom: SPACING.sm,
+    width: '100%',
+    alignItems: 'center',
+  },
+  rescanButtonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+  },
+  scannerIcon: {
+    fontSize: 64,
+  },
+  scannerInstructions: {
+    fontSize: FONT_SIZES.md,
+    color: COLORS.white,
     marginTop: SPACING.xl,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  permissionHint: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral300,
+    marginTop: SPACING.sm,
+    textAlign: 'center',
+    paddingHorizontal: SPACING.xl,
+  },
+  simulateButton: {
+    backgroundColor: COLORS.secondaryLight,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.md,
+    borderRadius: RADIUS.md,
+    marginTop: SPACING.sm,
+    width: '100%',
+    alignItems: 'center',
   },
   simulateButtonText: {
     color: COLORS.white,
-    fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
   },
   cancelScanButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
     marginTop: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   cancelScanButtonText: {
     color: COLORS.white,
     fontSize: FONT_SIZES.md,
+    fontWeight: '500',
+  },
+  permissionButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.md,
+    borderRadius: RADIUS.md,
+    marginTop: SPACING.lg,
+    ...SHADOWS.sm,
+  },
+  permissionButtonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+  },
+  torchButton: {
+    padding: SPACING.sm,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: RADIUS.full,
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  torchButtonText: {
+    fontSize: 24,
   },
 
-  // Loading
+  // ========== LOADING ==========
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -2419,38 +5176,42 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: FONT_SIZES.md,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral500,
     marginTop: SPACING.md,
+    fontWeight: '500',
   },
 
-  // Empty State
+  // ========== EMPTY STATE ==========
   emptyContainer: {
     padding: SPACING.xxl,
     alignItems: 'center',
   },
   emptyText: {
     fontSize: FONT_SIZES.lg,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral500,
     marginBottom: SPACING.lg,
+    fontWeight: '500',
   },
   retryButton: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
+    ...SHADOWS.sm,
   },
   retryButtonText: {
     color: COLORS.white,
     fontSize: FONT_SIZES.md,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
 
-  // Placeholder
+  // ========== PLACEHOLDER ==========
   contentCenter: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: SPACING.xl,
+    backgroundColor: COLORS.background,
   },
   placeholderIcon: {
     fontSize: 80,
@@ -2458,26 +5219,24 @@ const styles = StyleSheet.create({
   },
   placeholderTitle: {
     fontSize: FONT_SIZES.xl,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    fontWeight: '600',
+    color: COLORS.neutral900,
     marginBottom: SPACING.sm,
   },
   placeholderText: {
     fontSize: FONT_SIZES.md,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral500,
   },
 
-  // Inventory Onhand Styles
+  // ========== INVENTORY ONHAND ==========
   searchSection: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     padding: SPACING.md,
     margin: SPACING.md,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
   },
   searchHeader: {
     flexDirection: 'row',
@@ -2488,11 +5247,11 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.backgroundSecondary,
-    borderRadius: 8,
+    backgroundColor: COLORS.neutral50,
+    borderRadius: RADIUS.md,
     paddingHorizontal: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.neutral200,
   },
   searchIcon: {
     fontSize: FONT_SIZES.md,
@@ -2502,47 +5261,60 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: SPACING.sm,
     fontSize: FONT_SIZES.md,
-    color: COLORS.text,
+    color: COLORS.neutral900,
   },
   clearIcon: {
     fontSize: FONT_SIZES.lg,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral400,
     paddingLeft: SPACING.xs,
   },
   fetchButton: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
-    borderRadius: 8,
+    borderRadius: RADIUS.md,
+    ...SHADOWS.sm,
   },
   fetchButtonText: {
     color: COLORS.white,
     fontSize: FONT_SIZES.sm,
-    fontWeight: 'bold',
+    fontWeight: '600',
+  },
+  scanSearchButton: {
+    backgroundColor: COLORS.info,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.md,
+    ...SHADOWS.sm,
+  },
+  scanSearchButtonText: {
+    fontSize: FONT_SIZES.lg,
   },
   suggestionsContainer: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 8,
-    marginTop: SPACING.xs,
+    borderColor: COLORS.neutral200,
+    borderRadius: RADIUS.md,
+    marginTop: SPACING.sm,
     maxHeight: 200,
+    ...SHADOWS.md,
   },
   suggestionItem: {
     padding: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: COLORS.neutral100,
   },
   suggestionText: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.text,
+    color: COLORS.neutral700,
   },
   parameterModalContainer: {
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.xl,
     padding: SPACING.xl,
     width: '90%',
     maxWidth: 400,
+    ...SHADOWS.lg,
   },
   modalButtons: {
     flexDirection: 'row',
@@ -2551,54 +5323,58 @@ const styles = StyleSheet.create({
   },
   modalCancelButton: {
     flex: 1,
-    backgroundColor: COLORS.backgroundSecondary,
-    borderRadius: 10,
+    backgroundColor: COLORS.neutral50,
+    borderRadius: RADIUS.md,
     padding: SPACING.md,
     alignItems: 'center',
     marginRight: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.neutral200,
   },
   modalCancelText: {
-    color: COLORS.textSecondary,
+    color: COLORS.neutral600,
     fontSize: FONT_SIZES.md,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   modalFetchButton: {
     flex: 1,
     backgroundColor: COLORS.primary,
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
     padding: SPACING.md,
     alignItems: 'center',
     marginLeft: SPACING.sm,
+    ...SHADOWS.sm,
   },
   modalFetchText: {
     color: COLORS.white,
     fontSize: FONT_SIZES.md,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   resultsContainer: {
     flex: 1,
   },
   resultsHeader: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.surface,
     padding: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: COLORS.neutral100,
   },
   resultsTitle: {
     fontSize: FONT_SIZES.md,
     fontWeight: '600',
-    color: COLORS.text,
+    color: COLORS.neutral900,
   },
   onhandList: {
     padding: SPACING.md,
   },
   onhandCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
   },
   onhandCardHeader: {
     flexDirection: 'row',
@@ -2607,44 +5383,48 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   onhandItemNumber: {
-    fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral900,
     flex: 1,
   },
   qohBadge: {
     backgroundColor: COLORS.success,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
-    borderRadius: 8,
+    borderRadius: RADIUS.full,
   },
   qohText: {
     color: COLORS.white,
-    fontSize: FONT_SIZES.sm,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '700',
   },
   onhandDescription: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.text,
+    color: COLORS.neutral600,
     fontStyle: 'italic',
     marginBottom: SPACING.sm,
   },
   onhandDetailsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: SPACING.xs,
+    marginTop: SPACING.sm,
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.neutral100,
   },
   onhandDetailItem: {
     flex: 1,
   },
   onhandDetailLabel: {
     fontSize: FONT_SIZES.xs,
-    color: COLORS.textSecondary,
+    color: COLORS.neutral500,
     marginBottom: 2,
+    fontWeight: '500',
   },
   onhandDetailValue: {
     fontSize: FONT_SIZES.sm,
-    color: COLORS.text,
+    color: COLORS.neutral900,
     fontWeight: '600',
   },
   emptyStateContainer: {
@@ -2654,7 +5434,7 @@ const styles = StyleSheet.create({
     padding: SPACING.xl,
   },
   emptyStateIcon: {
-    fontSize: 60,
+    fontSize: 64,
     marginBottom: SPACING.md,
   },
   emptyStateText: {
@@ -2667,5 +5447,1561 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.sm,
     color: COLORS.textSecondary,
     textAlign: 'center',
+  },
+
+  // ========== ONHAND BY LOTS ==========
+
+  // Organization Selection
+  lotsOrgList: {
+    padding: SPACING.md,
+  },
+  lotsOrgCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
+  },
+  lotsOrgIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SPACING.sm,
+  },
+  lotsOrgIconText: {
+    fontSize: 20,
+  },
+  lotsOrgInfo: {
+    flex: 1,
+  },
+  lotsOrgName: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+  },
+  lotsOrgCount: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginTop: 2,
+  },
+  lotsOrgArrow: {
+    fontSize: FONT_SIZES.lg,
+    color: COLORS.neutral400,
+  },
+
+  // Organization Section Styles
+  orgSectionContainer: {
+    marginBottom: SPACING.lg,
+  },
+  orgSectionTitle: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+    marginBottom: SPACING.sm,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  orgChipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+  },
+  orgChip: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.neutral200,
+    minWidth: 80,
+    alignItems: 'center',
+    ...SHADOWS.sm,
+  },
+  orgChipSelected: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  orgChipText: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+  },
+  orgChipTextSelected: {
+    color: COLORS.surface,
+  },
+  orgChipSubtext: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginTop: 2,
+  },
+  orgChipSubtextSelected: {
+    color: COLORS.neutral100,
+  },
+  orgSelectionSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primaryLight,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.sm,
+  },
+  orgSelectionLabel: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral600,
+    marginRight: SPACING.xs,
+  },
+  orgSelectionValue: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.primary,
+    flex: 1,
+  },
+  getDataButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.md,
+    alignItems: 'center',
+    marginTop: SPACING.md,
+    ...SHADOWS.md,
+  },
+  getDataButtonText: {
+    color: COLORS.surface,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+  },
+
+  // Global View Button
+  globalViewButton: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginHorizontal: SPACING.md,
+    marginBottom: SPACING.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    borderStyle: 'dashed',
+    ...SHADOWS.sm,
+  },
+  globalViewButtonIcon: {
+    fontSize: 24,
+    marginRight: SPACING.sm,
+  },
+  globalViewButtonText: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.primary,
+    flex: 1,
+  },
+  globalViewButtonHint: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+  },
+
+  // Breadcrumb Navigation
+  breadcrumbContainer: {
+    backgroundColor: COLORS.surface,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  breadcrumbItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+  },
+  breadcrumbItemWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  breadcrumbIcon: {
+    fontSize: 14,
+    marginRight: 4,
+  },
+  breadcrumbText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral500,
+  },
+  breadcrumbTextActive: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  breadcrumbSeparator: {
+    fontSize: FONT_SIZES.lg,
+    color: COLORS.neutral300,
+    marginHorizontal: 4,
+  },
+
+  // Level Info
+  levelInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.neutral50,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  levelInfoBadge: {
+    paddingVertical: 4,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: RADIUS.sm,
+    marginRight: SPACING.sm,
+  },
+  levelInfoBadgeText: {
+    color: COLORS.surface,
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  levelInfoStats: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  levelInfoStatsText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral700,
+    fontWeight: '500',
+  },
+  levelInfoQtyText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral500,
+  },
+
+  // Global View Content
+  globalViewContent: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+
+  // Hierarchy Grid
+  hierarchyGrid: {
+    padding: SPACING.md,
+  },
+  hierarchyCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderLeftWidth: 4,
+    ...SHADOWS.sm,
+  },
+  hierarchyCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  hierarchyCardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SPACING.sm,
+  },
+  hierarchyCardIconText: {
+    fontSize: 18,
+  },
+  hierarchyCardInfo: {
+    flex: 1,
+  },
+  hierarchyCardName: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: COLORS.neutral900,
+  },
+  hierarchyCardLevel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  hierarchyCardArrow: {
+    fontSize: FONT_SIZES.xl,
+    color: COLORS.neutral400,
+  },
+  hierarchyCardStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.neutral100,
+  },
+  hierarchyCardStat: {
+    alignItems: 'center',
+  },
+  hierarchyCardStatValue: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: COLORS.neutral800,
+  },
+  hierarchyCardStatLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+  },
+  hierarchyProgressBar: {
+    height: 4,
+    backgroundColor: COLORS.neutral100,
+    borderRadius: 2,
+    marginTop: SPACING.sm,
+    overflow: 'hidden',
+  },
+  hierarchyProgressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+
+  // Leaf Items (at deepest level)
+  leafItemsContainer: {
+    padding: SPACING.md,
+  },
+  leafItemsTitle: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+    marginBottom: SPACING.sm,
+  },
+  leafItemCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.success,
+    ...SHADOWS.sm,
+  },
+  leafItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
+  leafItemNumber: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+  },
+  leafItemQtyBadge: {
+    backgroundColor: COLORS.successLight,
+    paddingVertical: 2,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: RADIUS.sm,
+  },
+  leafItemQtyText: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '700',
+    color: COLORS.success,
+  },
+  leafItemDescription: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral600,
+    marginBottom: SPACING.xs,
+  },
+  leafItemMeta: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+  },
+  leafItemMetaText: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+  },
+
+  // Warehouse Map
+  warehouseMapContainer: {
+    backgroundColor: COLORS.surface,
+    padding: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.neutral200,
+  },
+  warehouseMapTitle: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+    marginBottom: SPACING.sm,
+    textAlign: 'center',
+  },
+  warehouseMapGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+  },
+  warehouseMapCell: {
+    width: 70,
+    height: 50,
+    borderRadius: RADIUS.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primaryLight,
+  },
+  warehouseMapCellText: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '700',
+    color: COLORS.neutral900,
+  },
+  warehouseMapCellQty: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+  },
+
+  // Organization Selector (in header)
+  lotsOrgSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primaryLight,
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  lotsOrgSelectorIcon: {
+    fontSize: 14,
+    marginRight: SPACING.xs,
+  },
+  lotsOrgSelectorText: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  lotsOrgSelectorArrow: {
+    fontSize: 10,
+    color: COLORS.primary,
+    marginLeft: SPACING.xs,
+  },
+
+  // Tab Navigation
+  lotsTabContainer: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  lotsTab: {
+    flex: 1,
+    paddingVertical: SPACING.sm,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  lotsTabActive: {
+    borderBottomColor: COLORS.primary,
+  },
+  lotsTabText: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '500',
+    color: COLORS.neutral500,
+  },
+  lotsTabTextActive: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+
+  // Filters
+  lotsFilterContainer: {
+    backgroundColor: COLORS.surface,
+    padding: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  lotsFilterRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  lotsFilterField: {
+    flex: 1,
+    position: 'relative',
+    zIndex: 10,
+  },
+  lotsFilterLabel: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: COLORS.neutral600,
+    marginBottom: 4,
+  },
+  lotsAutocompleteContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.neutral50,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.neutral200,
+  },
+  lotsFilterInput: {
+    flex: 1,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 8,
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral900,
+  },
+  lotsFilterClear: {
+    paddingHorizontal: SPACING.sm,
+  },
+  lotsFilterClearText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral400,
+  },
+  lotsDropdown: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.neutral200,
+    marginTop: 4,
+    zIndex: 100,
+    ...SHADOWS.md,
+  },
+  lotsDropdownItem: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  lotsDropdownText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral900,
+  },
+  lotsDropdownSubtext: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginTop: 2,
+  },
+  lotsSearchRow: {
+    marginTop: SPACING.sm,
+  },
+
+  // Locator Badge
+  locatorBadge: {
+    backgroundColor: COLORS.infoLight,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  locatorBadgeText: {
+    fontSize: FONT_SIZES.xxs,
+    fontWeight: '600',
+    color: COLORS.info,
+  },
+
+  // Status Badge Small
+  statusBadgeSmall: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  statusBadgeSmallText: {
+    fontSize: FONT_SIZES.xxs,
+    fontWeight: '600',
+  },
+
+  // Expiration Text
+  lotExpirationText: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginVertical: SPACING.xs,
+  },
+
+  // Qty Box
+  lotQtyBox: {
+    backgroundColor: COLORS.successLight,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+  },
+  lotQtyBoxValue: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '700',
+    color: COLORS.success,
+  },
+  lotQtyBoxLabel: {
+    fontSize: FONT_SIZES.xxs,
+    color: COLORS.success,
+  },
+
+  lotsSearchContainer: {
+    backgroundColor: COLORS.surface,
+    padding: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  lotsStatsContainer: {
+    backgroundColor: COLORS.surface,
+    padding: SPACING.sm,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  lotStatBox: {
+    alignItems: 'center',
+    paddingHorizontal: SPACING.sm,
+  },
+  lotStatValue: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  lotStatLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  lotsList: {
+    padding: SPACING.md,
+  },
+  lotItemCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
+  },
+  lotItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: SPACING.sm,
+  },
+  lotItemInfo: {
+    flex: 1,
+  },
+  lotItemNumber: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: COLORS.neutral900,
+    marginBottom: SPACING.xs,
+  },
+  lotBadgeRow: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+  },
+  orgBadgeSmall: {
+    backgroundColor: COLORS.primaryLight,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  orgBadgeSmallText: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  subinvBadge: {
+    backgroundColor: COLORS.infoLight,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  subinvBadgeText: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: COLORS.info,
+  },
+  lotQtyContainer: {
+    alignItems: 'flex-end',
+  },
+  lotTotalQty: {
+    fontSize: FONT_SIZES.xxl,
+    fontWeight: '700',
+    color: COLORS.success,
+  },
+  lotQtyLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+  },
+  lotItemDescription: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral600,
+    marginBottom: SPACING.sm,
+    lineHeight: 18,
+  },
+  lotItemFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.neutral100,
+  },
+  lotCountBadge: {
+    backgroundColor: COLORS.neutral100,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.full,
+  },
+  lotCountText: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: COLORS.neutral600,
+  },
+  drillDownHint: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.primary,
+    fontWeight: '500',
+  },
+
+  // ========== LOT DETAILS ==========
+  lotSummaryCard: {
+    backgroundColor: COLORS.surface,
+    margin: SPACING.md,
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+    ...SHADOWS.sm,
+  },
+  lotSummaryTitle: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+    marginBottom: SPACING.md,
+  },
+  lotSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  lotSummaryItem: {
+    flex: 1,
+  },
+  lotSummaryLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginBottom: 2,
+  },
+  lotSummaryValue: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+  },
+  lotsListHeader: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.neutral50,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  lotsListTitle: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+  },
+  lotDetailsList: {
+    padding: SPACING.md,
+  },
+  lotDetailCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
+  },
+  lotDetailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  lotNumberContainer: {
+    flex: 1,
+  },
+  lotNumberLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginBottom: 2,
+  },
+  lotNumberValue: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: COLORS.neutral900,
+  },
+  statusBadge: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.full,
+  },
+  statusBadgeText: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+  },
+  lotDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.neutral100,
+  },
+  lotDetailItem: {
+    flex: 1,
+  },
+  lotDetailLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginBottom: 2,
+  },
+  lotDetailValue: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+  },
+  lotExtraInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: SPACING.sm,
+  },
+  lotExtraLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginRight: SPACING.xs,
+  },
+  lotExtraValue: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+  },
+  serialButton: {
+    backgroundColor: COLORS.info,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginTop: SPACING.md,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    ...SHADOWS.sm,
+  },
+  serialButtonDisabled: {
+    backgroundColor: COLORS.neutral300,
+  },
+  serialButtonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+  },
+
+  // ========== SERIAL NUMBERS ==========
+  serialLotInfo: {
+    backgroundColor: COLORS.primaryLight,
+    padding: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  serialLotItem: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginBottom: 2,
+  },
+  serialLotDesc: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral600,
+  },
+  serialList: {
+    padding: SPACING.md,
+  },
+  serialCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
+  },
+  serialCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  serialIndexBadge: {
+    backgroundColor: COLORS.primary,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SPACING.sm,
+  },
+  serialIndexText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '700',
+  },
+  serialNumber: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+    flex: 1,
+  },
+  serialDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: SPACING.xs,
+  },
+  serialDetailLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginRight: SPACING.xs,
+  },
+  serialDetailValue: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+  },
+
+  // ========== SHIP ORDERS ==========
+  shipSearchContainer: {
+    backgroundColor: COLORS.surface,
+    padding: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  shipStatsContainer: {
+    backgroundColor: COLORS.surface,
+    padding: SPACING.sm,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  shipStatBox: {
+    alignItems: 'center',
+    paddingHorizontal: SPACING.sm,
+  },
+  shipStatValue: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: COLORS.info,
+  },
+  shipStatLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  shipOrdersList: {
+    padding: SPACING.sm,
+  },
+  shipOrderCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
+  },
+  shipOrderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: SPACING.xs,
+  },
+  shipOrderInfo: {
+    flex: 1,
+  },
+  shipOrderNumber: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '700',
+    color: COLORS.neutral900,
+    marginBottom: 4,
+  },
+  shipBadgeRow: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+  },
+  shipQtyContainer: {
+    alignItems: 'flex-end',
+    backgroundColor: COLORS.infoLight,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: RADIUS.md,
+  },
+  shipTotalQty: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: COLORS.info,
+  },
+  shipQtyLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.info,
+  },
+  shipAccountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  shipAccountIcon: {
+    fontSize: 14,
+    marginRight: SPACING.xs,
+  },
+  shipAccountName: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+    flex: 1,
+  },
+  shipOrderDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+  },
+  shipDetailItem: {
+    flex: 1,
+  },
+  shipDetailLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginBottom: 2,
+  },
+  shipDetailValue: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '500',
+    color: COLORS.neutral700,
+  },
+  shipOrderFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: SPACING.xs,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.neutral100,
+  },
+  shipLineCountBadge: {
+    backgroundColor: COLORS.neutral100,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+  },
+  shipLineCountText: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: COLORS.neutral600,
+  },
+
+  // ========== SHIP ORDER LINES ==========
+  shipAllButton: {
+    backgroundColor: COLORS.white,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.success,
+  },
+  shipAllButtonText: {
+    color: COLORS.success,
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+  },
+  shipSummaryCard: {
+    backgroundColor: COLORS.surface,
+    margin: SPACING.sm,
+    padding: SPACING.sm,
+    borderRadius: RADIUS.lg,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.info,
+    ...SHADOWS.sm,
+  },
+  shipSummaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  shipSummaryAccount: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+    flex: 1,
+  },
+  shipSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+  },
+  shipSummaryItem: {
+    flex: 1,
+    alignItems: 'flex-start',
+  },
+  shipSummaryLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginBottom: 2,
+  },
+  shipSummaryValue: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+  },
+  linesListHeader: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    backgroundColor: COLORS.neutral50,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+  },
+  linesListTitle: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+  },
+  shipLinesList: {
+    padding: SPACING.sm,
+  },
+  shipLineCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.sm,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.neutral100,
+    ...SHADOWS.sm,
+  },
+  shipLineHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: SPACING.sm,
+  },
+  shipLineInfo: {
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  shipLineItemNumber: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '700',
+    color: COLORS.neutral900,
+    marginBottom: 4,
+  },
+  shipLineDescription: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral600,
+    lineHeight: 16,
+  },
+  shipLineQtyBox: {
+    backgroundColor: COLORS.successLight,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    minWidth: 50,
+  },
+  shipLineQty: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: COLORS.success,
+  },
+  shipLineUom: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.success,
+  },
+  shipLineDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+    paddingTop: SPACING.xs,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.neutral100,
+  },
+  shipLineDetailItem: {
+    flex: 1,
+  },
+  shipLineDetailLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    marginBottom: 2,
+  },
+  shipLineDetailValue: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '500',
+    color: COLORS.neutral700,
+  },
+  shipLineButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+    alignItems: 'center',
+    ...SHADOWS.sm,
+  },
+  shipLineButtonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+  },
+
+  // ========== PICK LINE ==========
+  pickLineButton: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.success,
+  },
+  pickLineButtonText: {
+    color: COLORS.success,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+  },
+
+  // ========== PICK MODAL ==========
+  pickModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.md,
+  },
+  pickModalContainer: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.xl,
+    width: '100%',
+    maxWidth: 400,
+    ...SHADOWS.lg,
+  },
+  pickModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+    backgroundColor: COLORS.primary,
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+  },
+  pickModalTitle: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: COLORS.white,
+  },
+  pickModalClose: {
+    fontSize: FONT_SIZES.xl,
+    color: COLORS.white,
+    fontWeight: '600',
+  },
+  pickModalContent: {
+    padding: SPACING.md,
+  },
+  pickItemInfo: {
+    backgroundColor: COLORS.neutral50,
+    padding: SPACING.sm,
+    borderRadius: RADIUS.md,
+    marginBottom: SPACING.md,
+  },
+  pickItemNumber: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginBottom: 4,
+  },
+  pickItemDesc: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.neutral600,
+  },
+  pickFieldRow: {
+    marginBottom: SPACING.md,
+  },
+  pickFieldLabel: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+    marginBottom: 6,
+  },
+  pickFieldValueBox: {
+    backgroundColor: COLORS.neutral100,
+    padding: SPACING.sm,
+    borderRadius: RADIUS.md,
+  },
+  pickFieldValue: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+  },
+  pickQtyInput: {
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.neutral200,
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral900,
+  },
+  pickSerialRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  pickSerialInput: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.neutral200,
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+    fontSize: FONT_SIZES.md,
+    color: COLORS.neutral900,
+  },
+  pickScanButton: {
+    backgroundColor: COLORS.info,
+    padding: SPACING.sm,
+    borderRadius: RADIUS.md,
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pickScanButtonText: {
+    fontSize: 20,
+  },
+  pickModalButtons: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginTop: SPACING.md,
+  },
+  pickCancelButton: {
+    flex: 1,
+    backgroundColor: COLORS.neutral200,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+  },
+  pickCancelButtonText: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+  },
+  pickConfirmButton: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.success,
+  },
+  pickConfirmButtonText: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.success,
+  },
+
+  // ========== LOCATOR VISUALIZATION ==========
+  locatorFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: SPACING.sm,
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.neutral100,
+  },
+  locatorViewButton: {
+    backgroundColor: COLORS.white,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.info,
+  },
+  locatorViewButtonText: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: COLORS.info,
+  },
+  locatorModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.md,
+  },
+  locatorModalContainer: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.xl,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '90%',
+    ...SHADOWS.lg,
+  },
+  locatorModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral100,
+    backgroundColor: COLORS.info,
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+  },
+  locatorModalTitle: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: COLORS.white,
+  },
+  locatorModalClose: {
+    fontSize: FONT_SIZES.xl,
+    color: COLORS.white,
+    fontWeight: '600',
+  },
+  locatorModalContent: {
+    padding: SPACING.md,
+  },
+  locatorModalLocatorName: {
+    fontSize: FONT_SIZES.xl,
+    fontWeight: '700',
+    color: COLORS.neutral900,
+    textAlign: 'center',
+    marginBottom: SPACING.md,
+  },
+  locatorSegmentsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginBottom: SPACING.md,
+  },
+  locatorSegmentBox: {
+    backgroundColor: COLORS.neutral50,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    minWidth: 60,
+  },
+  locatorSegmentLabel: {
+    fontSize: FONT_SIZES.xxs,
+    color: COLORS.neutral500,
+    fontWeight: '600',
+  },
+  locatorSegmentValue: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  locatorVisualization: {
+    backgroundColor: COLORS.neutral50,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  locatorVisTitle: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.neutral700,
+    marginBottom: SPACING.sm,
+    textAlign: 'center',
+  },
+  locatorGrid: {
+    alignItems: 'center',
+  },
+  locatorGridInner: {
+    alignItems: 'center',
+  },
+  locatorGridRow: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+  },
+  locatorGridCell: {
+    width: 50,
+    height: 50,
+    backgroundColor: COLORS.neutral200,
+    borderRadius: RADIUS.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  locatorGridCellActive: {
+    backgroundColor: COLORS.success,
+  },
+  locatorGridCellText: {
+    fontSize: FONT_SIZES.xxs,
+    color: COLORS.neutral500,
+    fontWeight: '600',
+  },
+  locatorGridCellTextActive: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.xs,
+  },
+  locatorShelfIndicator: {
+    marginTop: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    backgroundColor: COLORS.infoLight,
+    borderRadius: RADIUS.md,
+  },
+  locatorShelfText: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.info,
+  },
+  locator3DContainer: {
+    backgroundColor: COLORS.neutral50,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+  },
+  locator3DShelf: {
+    alignItems: 'center',
+  },
+  locator3DShelfLevel: {
+    width: '80%',
+    height: 36,
+    backgroundColor: COLORS.neutral200,
+    marginBottom: 4,
+    borderRadius: RADIUS.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.neutral300,
+  },
+  locator3DShelfLevelActive: {
+    backgroundColor: COLORS.success,
+    borderColor: COLORS.success,
+  },
+  locator3DShelfText: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.neutral500,
+    fontWeight: '500',
+  },
+  locator3DShelfTextActive: {
+    color: COLORS.white,
+    fontWeight: '700',
+  },
+  locatorModalCloseButton: {
+    backgroundColor: COLORS.neutral100,
+    padding: SPACING.md,
+    alignItems: 'center',
+    borderBottomLeftRadius: RADIUS.xl,
+    borderBottomRightRadius: RADIUS.xl,
+  },
+  locatorModalCloseButtonText: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.neutral700,
   },
 });
