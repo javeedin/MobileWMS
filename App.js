@@ -13,6 +13,7 @@ import {
   StatusBar,
   Vibration,
   Dimensions,
+  RefreshControl,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 
@@ -1938,27 +1939,132 @@ export default function App() {
     );
   }
 
-  // Scanner Screen
+  // Scanner Screen - Full Scanner Implementation
   if (currentScreen === 'Scanner') {
-    return (
-      <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.scanColor} />
+    // Check permission status
+    if (!permission) {
+      return (
+        <View style={styles.scannerContainer}>
+          <StatusBar barStyle="light-content" backgroundColor={COLORS.secondary} />
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.scannerInstructions}>Loading camera...</Text>
+        </View>
+      );
+    }
 
-        <View style={[styles.screenHeader, { backgroundColor: COLORS.scanColor }]}>
-          <TouchableOpacity onPress={() => setCurrentScreen('Home')}>
-            <Text style={styles.backButton}>←</Text>
+    if (!permission.granted) {
+      return (
+        <View style={styles.scannerContainer}>
+          <StatusBar barStyle="light-content" backgroundColor={COLORS.secondary} />
+          <Text style={styles.scannerIcon}>📷</Text>
+          <Text style={styles.scannerInstructions}>Camera Permission Required</Text>
+          <Text style={styles.permissionHint}>
+            We need camera access to scan barcodes and QR codes.
+          </Text>
+
+          <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+            <Text style={styles.permissionButtonText}>Grant Camera Access</Text>
           </TouchableOpacity>
-          <Text style={styles.screenTitle}>Scanner</Text>
-          <View style={styles.headerSpacer} />
-          <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
-            <Text style={styles.notificationIconSmall}>🔔</Text>
+
+          <TouchableOpacity
+            style={styles.cancelScanButton}
+            onPress={() => setCurrentScreen('Home')}
+          >
+            <Text style={styles.cancelScanButtonText}>Cancel</Text>
           </TouchableOpacity>
         </View>
+      );
+    }
 
-        <View style={styles.contentCenter}>
-          <Text style={styles.placeholderIcon}>📷</Text>
-          <Text style={styles.placeholderTitle}>Barcode Scanner</Text>
-          <Text style={styles.placeholderText}>Coming soon...</Text>
+    return (
+      <View style={styles.scannerContainer}>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+
+        {/* Full Screen Camera */}
+        <CameraView
+          style={StyleSheet.absoluteFillObject}
+          facing="back"
+          enableTorch={torchOn}
+          barcodeScannerSettings={{
+            barcodeTypes: [
+              'qr',
+              'code128',
+              'code39',
+              'ean13',
+              'ean8',
+              'upc_a',
+              'upc_e',
+              'datamatrix',
+              'pdf417',
+            ],
+          }}
+          onBarcodeScanned={scanned ? undefined : (result) => {
+            setScanned(true);
+            Vibration.vibrate(100);
+            Alert.alert(
+              'Barcode Scanned',
+              `Type: ${result.type}\nData: ${result.data}`,
+              [
+                {
+                  text: 'Scan Again',
+                  onPress: () => setScanned(false),
+                },
+                {
+                  text: 'Done',
+                  onPress: () => {
+                    setScanned(false);
+                    setCurrentScreen('Home');
+                  },
+                },
+              ]
+            );
+          }}
+        />
+
+        {/* Overlay */}
+        <View style={styles.scannerOverlay}>
+          {/* Top Header */}
+          <View style={styles.scannerHeader}>
+            <TouchableOpacity
+              style={styles.scannerBackButton}
+              onPress={() => {
+                setScanned(false);
+                setCurrentScreen('Home');
+              }}
+            >
+              <Text style={styles.scannerBackText}>←</Text>
+            </TouchableOpacity>
+            <Text style={styles.scannerTitle}>Scan Barcode</Text>
+            <TouchableOpacity
+              style={styles.torchButton}
+              onPress={() => setTorchOn(!torchOn)}
+            >
+              <Text style={styles.torchIcon}>{torchOn ? '🔦' : '💡'}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Scanner Frame */}
+          <View style={styles.scannerFrameContainer}>
+            <View style={styles.scannerFrame}>
+              <View style={[styles.scannerCorner, styles.scannerCornerTL]} />
+              <View style={[styles.scannerCorner, styles.scannerCornerTR]} />
+              <View style={[styles.scannerCorner, styles.scannerCornerBL]} />
+              <View style={[styles.scannerCorner, styles.scannerCornerBR]} />
+            </View>
+            <Text style={styles.scannerHint}>Position barcode within frame</Text>
+          </View>
+
+          {/* Bottom Actions */}
+          <View style={styles.scannerActions}>
+            {scanned && (
+              <TouchableOpacity
+                style={styles.rescanButton}
+                onPress={() => setScanned(false)}
+              >
+                <Text style={styles.rescanButtonText}>Tap to Scan Again</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
     );
@@ -4350,37 +4456,37 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   dashboardUserName: {
-    fontSize: FONT_SIZES.lg,
+    fontSize: FONT_SIZES.md,
     fontWeight: '600',
     color: COLORS.white,
-    marginBottom: SPACING.xs,
+    marginBottom: 2,
   },
   homeOrgBadge: {
     backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
     borderRadius: RADIUS.sm,
-    marginTop: SPACING.xs,
+    marginTop: 2,
   },
   homeOrgText: {
     color: COLORS.white,
-    fontSize: FONT_SIZES.sm,
+    fontSize: FONT_SIZES.xs,
     fontWeight: '600',
   },
   homeHeaderRight: {
     flexDirection: 'row',
-    gap: SPACING.sm,
+    gap: SPACING.xs,
   },
   homeHeaderIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerIconText: {
-    fontSize: 20,
+    fontSize: 16,
   },
   homeContent: {
     flex: 1,
@@ -4617,24 +4723,24 @@ const styles = StyleSheet.create({
 
   // ============= INVENTORY MODULE STYLES =============
   moduleHeader: {
-    paddingTop: 50,
-    paddingBottom: SPACING.lg,
-    paddingHorizontal: SPACING.lg,
+    paddingTop: 36,
+    paddingBottom: SPACING.sm,
+    paddingHorizontal: SPACING.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   moduleHeaderCenter: {
     flex: 1,
-    marginLeft: SPACING.md,
+    marginLeft: SPACING.sm,
   },
   moduleHeaderTitle: {
-    fontSize: FONT_SIZES.lg,
+    fontSize: FONT_SIZES.md,
     fontWeight: 'bold',
     color: COLORS.white,
   },
   moduleHeaderSubtitle: {
-    fontSize: FONT_SIZES.sm,
+    fontSize: FONT_SIZES.xs,
     color: COLORS.white,
     opacity: 0.9,
   },
@@ -4728,16 +4834,16 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   screenTitle: {
-    fontSize: FONT_SIZES.lg,
+    fontSize: FONT_SIZES.md,
     fontWeight: '600',
     color: COLORS.white,
     marginLeft: SPACING.sm,
   },
   screenSubtitle: {
-    fontSize: FONT_SIZES.sm,
+    fontSize: FONT_SIZES.xs,
     color: COLORS.white,
     opacity: 0.85,
-    marginLeft: SPACING.md,
+    marginLeft: SPACING.sm,
   },
   headerCenter: {
     marginLeft: SPACING.sm,
