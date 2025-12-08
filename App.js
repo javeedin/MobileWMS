@@ -1191,8 +1191,12 @@ export default function App() {
         <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={[styles.moduleHeader, { justifyContent: 'center' }]}>
-          <Text style={styles.moduleHeaderTitle}>Inventory</Text>
+        <View style={[styles.moduleHeader, { justifyContent: 'space-between' }]}>
+          <View style={{ width: 40 }} />
+          <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#C74634' }}>Inventory</Text>
+          <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
+            <Text style={{ fontSize: 20 }}>🔔</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Hamburger Menu */}
