@@ -1196,7 +1196,7 @@ export default function App() {
         {/* Header */}
         <View style={[styles.moduleHeader, { justifyContent: 'space-between' }]}>
           <Text style={{ fontSize: 10, color: '#999' }}>{APP_VERSION}</Text>
-          <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#C74634' }}>Inventory</Text>
+          <Text style={{ fontSize: 16, fontWeight: 'bold', color: 'gray' }}>Inventory</Text>
           <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
             <Text style={{ fontSize: 20 }}>🔔</Text>
           </TouchableOpacity>
