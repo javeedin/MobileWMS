@@ -62,6 +62,14 @@ const COLORS = {
   textSecondary: '#6B6560',
   border: '#E8E5E2',
   backgroundSecondary: '#F4F2F0',
+
+  // Module Colors
+  inventoryColor: '#0572CE',     // Blue for Inventory
+  receiveColor: '#107F47',       // Green for Receiving
+  shipColor: '#6366f1',          // Purple for Shipping
+  orderColor: '#D4820A',         // Amber for Orders
+  crmColor: '#C74634',           // Red for CRM
+  scanColor: '#312D2A',          // Charcoal for Scanner
 };
 
 const SPACING = {
@@ -1006,28 +1014,28 @@ export default function App() {
           }
         >
           {/* KPI Cards */}
-          <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 12 }}>Overview</Text>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.primary, marginBottom: 12 }}>Overview</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 20 }}>
-            <View style={{ width: '48%', backgroundColor: COLORS.inventoryColor, borderRadius: 8, padding: 12, marginBottom: 10 }}>
-              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>Purchase Orders</Text>
+            <View style={{ width: '48%', backgroundColor: COLORS.inventoryColor, borderRadius: 8, padding: 12, marginBottom: 10, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 }}>
+              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.9)' }}>Purchase Orders</Text>
               <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#fff' }}>{kpiData.totalPOs}</Text>
             </View>
-            <View style={{ width: '48%', backgroundColor: COLORS.receiveColor, borderRadius: 8, padding: 12, marginBottom: 10 }}>
-              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>Pending Items</Text>
+            <View style={{ width: '48%', backgroundColor: COLORS.receiveColor, borderRadius: 8, padding: 12, marginBottom: 10, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 }}>
+              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.9)' }}>Pending Items</Text>
               <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#fff' }}>{kpiData.pendingItems}</Text>
             </View>
-            <View style={{ width: '48%', backgroundColor: '#6366f1', borderRadius: 8, padding: 12, marginBottom: 10 }}>
-              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>Inventory Items</Text>
+            <View style={{ width: '48%', backgroundColor: COLORS.shipColor, borderRadius: 8, padding: 12, marginBottom: 10, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 }}>
+              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.9)' }}>Inventory Items</Text>
               <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#fff' }}>{kpiData.inventoryItems}</Text>
             </View>
-            <View style={{ width: '48%', backgroundColor: COLORS.warning, borderRadius: 8, padding: 12, marginBottom: 10 }}>
-              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>Low Stock</Text>
+            <View style={{ width: '48%', backgroundColor: COLORS.warning, borderRadius: 8, padding: 12, marginBottom: 10, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 }}>
+              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.9)' }}>Low Stock</Text>
               <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#fff' }}>{kpiData.lowStock}</Text>
             </View>
           </View>
 
           {/* Modules Grid */}
-          <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 12 }}>Modules</Text>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.primary, marginBottom: 12 }}>Modules</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 20 }}>
             {/* Inventory */}
             <TouchableOpacity
@@ -1097,7 +1105,7 @@ export default function App() {
           </View>
 
           {/* Quick Actions */}
-          <Text style={{ fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 12 }}>Quick Actions</Text>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.primary, marginBottom: 12 }}>Quick Actions</Text>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <TouchableOpacity
               style={{ width: '23%', backgroundColor: '#fff', borderRadius: 8, padding: 10, alignItems: 'center', elevation: 1 }}
@@ -1159,10 +1167,10 @@ export default function App() {
   if (currentScreen === 'InventoryModule') {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.inventoryColor} />
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={[styles.moduleHeader, { backgroundColor: COLORS.inventoryColor }]}>
+        <View style={styles.moduleHeader}>
           <TouchableOpacity onPress={goBack}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
@@ -1351,10 +1359,10 @@ export default function App() {
   if (currentScreen === 'ReceiveGoods' && !selectedPO) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.receiveColor} />
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={[styles.screenHeader, { backgroundColor: COLORS.receiveColor }]}>
+        <View style={styles.screenHeader}>
           <TouchableOpacity onPress={goBack}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
@@ -1445,10 +1453,10 @@ export default function App() {
   if (currentScreen === 'POItems' && selectedPO) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.receiveColor} />
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={[styles.screenHeader, { backgroundColor: COLORS.receiveColor }]}>
+        <View style={styles.screenHeader}>
           <TouchableOpacity onPress={() => { setSelectedPO(null); setCurrentScreen('ReceiveGoods'); }}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
@@ -1751,10 +1759,10 @@ export default function App() {
   if (currentScreen === 'Inventory') {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.inventoryColor} />
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={[styles.screenHeader, { backgroundColor: COLORS.inventoryColor }]}>
+        <View style={styles.screenHeader}>
           <TouchableOpacity onPress={() => {
             setCurrentScreen('InventoryModule');
             setOnhandData([]);
@@ -2086,7 +2094,7 @@ export default function App() {
   if (currentScreen === 'Ship') {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.shipColor} />
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
         <View style={styles.screenHeader}>
@@ -4037,10 +4045,10 @@ export default function App() {
   if (currentScreen === 'OrderManagementModule') {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.orderColor} />
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={[styles.moduleHeader, { backgroundColor: COLORS.orderColor }]}>
+        <View style={styles.moduleHeader}>
           <TouchableOpacity onPress={goBack}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
@@ -4159,10 +4167,10 @@ export default function App() {
   if (currentScreen === 'CRMModule') {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.crmColor} />
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
         {/* Header */}
-        <View style={[styles.moduleHeader, { backgroundColor: COLORS.crmColor }]}>
+        <View style={styles.moduleHeader}>
           <TouchableOpacity onPress={goBack}>
             <Text style={styles.backButton}>←</Text>
           </TouchableOpacity>
@@ -4841,6 +4849,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral200,
   },
   moduleHeaderCenter: {
     flex: 1,
@@ -4849,7 +4860,7 @@ const styles = StyleSheet.create({
   moduleHeaderTitle: {
     fontSize: FONT_SIZES.md,
     fontWeight: 'bold',
-    color: COLORS.white,
+    color: COLORS.primary,
   },
   moduleHeaderSubtitle: {
     fontSize: FONT_SIZES.xs,
@@ -4932,23 +4943,25 @@ const styles = StyleSheet.create({
 
   // ========== SCREEN HEADER ==========
   screenHeader: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.white,
     paddingTop: 36,
     paddingBottom: 6,
     paddingHorizontal: SPACING.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral200,
   },
   backButton: {
     fontSize: 24,
-    color: COLORS.white,
+    color: COLORS.primary,
     fontWeight: '500',
   },
   screenTitle: {
     fontSize: FONT_SIZES.md,
     fontWeight: '600',
-    color: COLORS.white,
+    color: COLORS.primary,
     marginLeft: SPACING.sm,
   },
   screenSubtitle: {
@@ -4983,7 +4996,7 @@ const styles = StyleSheet.create({
   },
   notificationIconSmall: {
     fontSize: 20,
-    color: COLORS.white,
+    color: COLORS.primary,
     marginLeft: SPACING.sm,
   },
 
