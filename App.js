@@ -1213,7 +1213,7 @@ export default function App() {
             {/* Inventory by Lots */}
             <TouchableOpacity
               style={styles.compactMenuCard}
-              onPress={() => Alert.alert('Coming Soon', 'Inventory by Lots feature coming soon')}
+              onPress={() => fetchOrganizationsList()}
             >
               <View style={[styles.compactMenuIconBg, { backgroundColor: '#dbeafe' }]}>
                 <Text style={styles.compactMenuIcon}>🏷️</Text>
