@@ -17,37 +17,39 @@ import {
 
 const { width } = Dimensions.get('window');
 
-// Constants
+// Oracle Redwood Theme Colors
 const COLORS = {
-  primary: '#2563eb',
-  primaryDark: '#1d4ed8',
-  primaryLight: '#3b82f6',
-  secondary: '#7c3aed',
-  secondaryLight: '#8b5cf6',
-  success: '#10b981',
-  successLight: '#34d399',
-  warning: '#f59e0b',
-  warningLight: '#fbbf24',
-  danger: '#ef4444',
-  dangerLight: '#f87171',
-  dark: '#1f2937',
-  light: '#f3f4f6',
-  white: '#ffffff',
-  text: '#111827',
-  textSecondary: '#6b7280',
-  textLight: '#9ca3af',
-  border: '#e5e7eb',
-  background: '#ffffff',
-  backgroundSecondary: '#f9fafb',
-  backgroundDark: '#f3f4f6',
-  gradientStart: '#667eea',
-  gradientEnd: '#764ba2',
-  inventoryColor: '#3b82f6',
-  receiveColor: '#10b981',
-  shipColor: '#f59e0b',
-  scanColor: '#8b5cf6',
-  orderColor: '#ec4899',
-  crmColor: '#06b6d4',
+  // Primary Redwood colors
+  primary: '#C74634',
+  primaryDark: '#A33A2B',
+  primaryLight: '#D4634F',
+  secondary: '#4A4A4A',
+  secondaryLight: '#6B6B6B',
+  // Status colors
+  success: '#0D7C3F',
+  successLight: '#1A9E52',
+  warning: '#C45500',
+  warningLight: '#E06A00',
+  danger: '#C74634',
+  dangerLight: '#D4634F',
+  // Neutrals
+  dark: '#161513',
+  light: '#FAF9F8',
+  white: '#FFFFFF',
+  text: '#161513',
+  textSecondary: '#6B6B6B',
+  textLight: '#8C8C8C',
+  border: '#E5E2DF',
+  background: '#FFFFFF',
+  backgroundSecondary: '#FAF9F8',
+  backgroundDark: '#F0EFED',
+  // Module colors (Redwood palette)
+  inventoryColor: '#0572CE',
+  receiveColor: '#0D7C3F',
+  shipColor: '#C45500',
+  scanColor: '#7C3E91',
+  orderColor: '#C74634',
+  crmColor: '#0572CE',
 };
 
 const SPACING = {
@@ -60,13 +62,13 @@ const SPACING = {
 };
 
 const FONT_SIZES = {
-  xs: 12,
-  sm: 14,
-  md: 16,
-  lg: 18,
-  xl: 24,
-  xxl: 32,
-  xxxl: 40,
+  xs: 10,
+  sm: 12,
+  md: 14,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
+  xxxl: 32,
 };
 
 // API Configuration
@@ -526,87 +528,78 @@ export default function App() {
             )}
           </View>
 
-          {/* Modules Section */}
+          {/* Modules Section - Compact Cards */}
           <View style={styles.modulesSection}>
             <Text style={styles.sectionTitle}>Modules</Text>
 
-            <View style={styles.modulesGrid}>
-              {/* Inventory Module */}
+            <View style={styles.compactModulesGrid}>
+              {/* Inventory */}
               <TouchableOpacity
-                style={styles.moduleCard}
+                style={styles.compactModuleCard}
                 onPress={() => setCurrentScreen('InventoryModule')}
               >
-                <View style={[styles.moduleIconContainer, { backgroundColor: COLORS.inventoryColor }]}>
-                  <Text style={styles.moduleIcon}>📦</Text>
+                <View style={[styles.compactModuleIcon, { backgroundColor: COLORS.inventoryColor }]}>
+                  <Text style={styles.compactIconText}>📦</Text>
                 </View>
-                <Text style={styles.moduleTitle}>Inventory</Text>
-                <Text style={styles.moduleDescription}>Manage stock, view onhand quantities, and track items</Text>
-                <View style={styles.moduleArrow}>
-                  <Text style={styles.moduleArrowText}>→</Text>
-                </View>
+                <Text style={styles.compactModuleTitle}>Inventory</Text>
               </TouchableOpacity>
 
-              {/* Receiving Module */}
+              {/* Receiving */}
               <TouchableOpacity
-                style={styles.moduleCard}
+                style={styles.compactModuleCard}
                 onPress={() => {
                   setCurrentScreen('ReceiveGoods');
                   fetchPOData();
                 }}
               >
-                <View style={[styles.moduleIconContainer, { backgroundColor: COLORS.receiveColor }]}>
-                  <Text style={styles.moduleIcon}>📥</Text>
+                <View style={[styles.compactModuleIcon, { backgroundColor: COLORS.receiveColor }]}>
+                  <Text style={styles.compactIconText}>📥</Text>
                 </View>
-                <Text style={styles.moduleTitle}>Receiving</Text>
-                <Text style={styles.moduleDescription}>Process incoming shipments and putaway operations</Text>
-                <View style={styles.moduleArrow}>
-                  <Text style={styles.moduleArrowText}>→</Text>
-                </View>
+                <Text style={styles.compactModuleTitle}>Receiving</Text>
               </TouchableOpacity>
 
-              {/* Shipping Module */}
+              {/* Shipping */}
               <TouchableOpacity
-                style={styles.moduleCard}
+                style={styles.compactModuleCard}
                 onPress={() => setCurrentScreen('Ship')}
               >
-                <View style={[styles.moduleIconContainer, { backgroundColor: COLORS.shipColor }]}>
-                  <Text style={styles.moduleIcon}>📤</Text>
+                <View style={[styles.compactModuleIcon, { backgroundColor: COLORS.shipColor }]}>
+                  <Text style={styles.compactIconText}>📤</Text>
                 </View>
-                <Text style={styles.moduleTitle}>Shipping</Text>
-                <Text style={styles.moduleDescription}>Process outgoing orders and manage shipments</Text>
-                <View style={styles.moduleArrow}>
-                  <Text style={styles.moduleArrowText}>→</Text>
-                </View>
+                <Text style={styles.compactModuleTitle}>Shipping</Text>
               </TouchableOpacity>
 
-              {/* Order Management Module */}
+              {/* Orders */}
               <TouchableOpacity
-                style={styles.moduleCard}
+                style={styles.compactModuleCard}
                 onPress={() => setCurrentScreen('OrderManagementModule')}
               >
-                <View style={[styles.moduleIconContainer, { backgroundColor: COLORS.orderColor }]}>
-                  <Text style={styles.moduleIcon}>📋</Text>
+                <View style={[styles.compactModuleIcon, { backgroundColor: COLORS.orderColor }]}>
+                  <Text style={styles.compactIconText}>📋</Text>
                 </View>
-                <Text style={styles.moduleTitle}>Order Management</Text>
-                <Text style={styles.moduleDescription}>Sales orders, purchase orders, and order tracking</Text>
-                <View style={styles.moduleArrow}>
-                  <Text style={styles.moduleArrowText}>→</Text>
-                </View>
+                <Text style={styles.compactModuleTitle}>Orders</Text>
               </TouchableOpacity>
 
-              {/* CRM Module */}
+              {/* CRM */}
               <TouchableOpacity
-                style={styles.moduleCard}
+                style={styles.compactModuleCard}
                 onPress={() => setCurrentScreen('CRMModule')}
               >
-                <View style={[styles.moduleIconContainer, { backgroundColor: COLORS.crmColor }]}>
-                  <Text style={styles.moduleIcon}>👥</Text>
+                <View style={[styles.compactModuleIcon, { backgroundColor: COLORS.crmColor }]}>
+                  <Text style={styles.compactIconText}>👥</Text>
                 </View>
-                <Text style={styles.moduleTitle}>CRM</Text>
-                <Text style={styles.moduleDescription}>Customer relationships, contacts, and activities</Text>
-                <View style={styles.moduleArrow}>
-                  <Text style={styles.moduleArrowText}>→</Text>
+                <Text style={styles.compactModuleTitle}>CRM</Text>
+              </TouchableOpacity>
+
+              {/* Scanner */}
+              <TouchableOpacity
+                style={styles.compactModuleCard}
+                onPress={() => setCurrentScreen('Scanner')}
+              >
+                <View style={[styles.compactModuleIcon, { backgroundColor: COLORS.scanColor }]}>
+                  <Text style={styles.compactIconText}>📷</Text>
                 </View>
+                <Text style={styles.compactModuleTitle}>Scanner</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -700,84 +693,114 @@ export default function App() {
         </View>
 
         <ScrollView style={styles.moduleContent}>
-          {/* Module Menu Cards */}
-          <View style={styles.moduleMenuGrid}>
+          {/* Module Menu Cards - Compact Grid */}
+          <View style={styles.compactMenuGrid}>
             {/* Inventory Onhand */}
             <TouchableOpacity
-              style={styles.moduleMenuCard}
+              style={styles.compactMenuCard}
               onPress={() => {
                 setSearchOrgCode(selectedOrg || '');
                 setCurrentScreen('Inventory');
               }}
             >
-              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#e0f2fe' }]}>
-                <Text style={styles.moduleMenuIcon}>📦</Text>
+              <View style={[styles.compactMenuIconBg, { backgroundColor: '#e0f2fe' }]}>
+                <Text style={styles.compactMenuIcon}>📦</Text>
               </View>
-              <Text style={styles.moduleMenuTitle}>Inventory Onhand</Text>
-              <Text style={styles.moduleMenuDescription}>View and search inventory quantities</Text>
+              <Text style={styles.compactMenuTitle}>Onhand</Text>
+            </TouchableOpacity>
+
+            {/* Inventory by Lots */}
+            <TouchableOpacity
+              style={styles.compactMenuCard}
+              onPress={() => Alert.alert('Coming Soon', 'Inventory by Lots feature coming soon')}
+            >
+              <View style={[styles.compactMenuIconBg, { backgroundColor: '#dbeafe' }]}>
+                <Text style={styles.compactMenuIcon}>🏷️</Text>
+              </View>
+              <Text style={styles.compactMenuTitle}>By Lots</Text>
+            </TouchableOpacity>
+
+            {/* Receive Goods */}
+            <TouchableOpacity
+              style={styles.compactMenuCard}
+              onPress={() => {
+                setCurrentScreen('ReceiveGoods');
+                fetchPOData();
+              }}
+            >
+              <View style={[styles.compactMenuIconBg, { backgroundColor: '#dcfce7' }]}>
+                <Text style={styles.compactMenuIcon}>📥</Text>
+              </View>
+              <Text style={styles.compactMenuTitle}>Receive</Text>
+            </TouchableOpacity>
+
+            {/* Ship Orders */}
+            <TouchableOpacity
+              style={styles.compactMenuCard}
+              onPress={() => setCurrentScreen('Ship')}
+            >
+              <View style={[styles.compactMenuIconBg, { backgroundColor: '#fef3c7' }]}>
+                <Text style={styles.compactMenuIcon}>📤</Text>
+              </View>
+              <Text style={styles.compactMenuTitle}>Ship</Text>
             </TouchableOpacity>
 
             {/* Scan Item */}
             <TouchableOpacity
-              style={styles.moduleMenuCard}
+              style={styles.compactMenuCard}
               onPress={() => setCurrentScreen('Scanner')}
             >
-              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#f3e8ff' }]}>
-                <Text style={styles.moduleMenuIcon}>📷</Text>
+              <View style={[styles.compactMenuIconBg, { backgroundColor: '#f3e8ff' }]}>
+                <Text style={styles.compactMenuIcon}>📷</Text>
               </View>
-              <Text style={styles.moduleMenuTitle}>Scan Item</Text>
-              <Text style={styles.moduleMenuDescription}>Scan barcode to view item details</Text>
+              <Text style={styles.compactMenuTitle}>Scan</Text>
             </TouchableOpacity>
 
             {/* Stock Counts */}
             <TouchableOpacity
-              style={styles.moduleMenuCard}
+              style={styles.compactMenuCard}
               onPress={() => Alert.alert('Coming Soon', 'Stock Counts feature coming soon')}
             >
-              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#dcfce7' }]}>
-                <Text style={styles.moduleMenuIcon}>📊</Text>
+              <View style={[styles.compactMenuIconBg, { backgroundColor: '#fce7f3' }]}>
+                <Text style={styles.compactMenuIcon}>📊</Text>
               </View>
-              <Text style={styles.moduleMenuTitle}>Stock Counts</Text>
-              <Text style={styles.moduleMenuDescription}>Perform cycle counts and adjustments</Text>
+              <Text style={styles.compactMenuTitle}>Counts</Text>
             </TouchableOpacity>
 
             {/* Transfer Orders */}
             <TouchableOpacity
-              style={styles.moduleMenuCard}
+              style={styles.compactMenuCard}
               onPress={() => Alert.alert('Coming Soon', 'Transfer Orders feature coming soon')}
             >
-              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#fef3c7' }]}>
-                <Text style={styles.moduleMenuIcon}>🔄</Text>
+              <View style={[styles.compactMenuIconBg, { backgroundColor: '#fef3c7' }]}>
+                <Text style={styles.compactMenuIcon}>🔄</Text>
               </View>
-              <Text style={styles.moduleMenuTitle}>Transfer Orders</Text>
-              <Text style={styles.moduleMenuDescription}>Move inventory between locations</Text>
+              <Text style={styles.compactMenuTitle}>Transfers</Text>
             </TouchableOpacity>
 
             {/* Item Inquiry */}
             <TouchableOpacity
-              style={styles.moduleMenuCard}
+              style={styles.compactMenuCard}
               onPress={() => {
                 setSearchOrgCode(selectedOrg || '');
                 setCurrentScreen('Inventory');
               }}
             >
-              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#fee2e2' }]}>
-                <Text style={styles.moduleMenuIcon}>🔍</Text>
+              <View style={[styles.compactMenuIconBg, { backgroundColor: '#fee2e2' }]}>
+                <Text style={styles.compactMenuIcon}>🔍</Text>
               </View>
-              <Text style={styles.moduleMenuTitle}>Item Inquiry</Text>
-              <Text style={styles.moduleMenuDescription}>Search and view item information</Text>
+              <Text style={styles.compactMenuTitle}>Inquiry</Text>
             </TouchableOpacity>
 
             {/* Reports */}
             <TouchableOpacity
-              style={styles.moduleMenuCard}
+              style={styles.compactMenuCard}
               onPress={() => Alert.alert('Coming Soon', 'Reports feature coming soon')}
             >
-              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#e0e7ff' }]}>
-                <Text style={styles.moduleMenuIcon}>📈</Text>
+              <View style={[styles.compactMenuIconBg, { backgroundColor: '#e0e7ff' }]}>
+                <Text style={styles.compactMenuIcon}>📈</Text>
               </View>
-              <Text style={styles.moduleMenuTitle}>Reports</Text>
-              <Text style={styles.moduleMenuDescription}>View inventory reports and analytics</Text>
+              <Text style={styles.compactMenuTitle}>Reports</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -1791,33 +1814,33 @@ const styles = StyleSheet.create({
   },
   kpiCard: {
     width: '48%',
-    borderRadius: 16,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-    minHeight: 120,
+    borderRadius: 12,
+    padding: SPACING.sm,
+    marginBottom: SPACING.sm,
+    minHeight: 70,
   },
   kpiIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.3)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.xs,
   },
   kpiIcon: {
-    fontSize: 20,
+    fontSize: 14,
   },
   kpiValue: {
-    fontSize: FONT_SIZES.xxl,
+    fontSize: FONT_SIZES.lg,
     fontWeight: 'bold',
     color: COLORS.white,
   },
   kpiLabel: {
-    fontSize: FONT_SIZES.sm,
+    fontSize: FONT_SIZES.xs,
     color: COLORS.white,
     opacity: 0.9,
-    marginTop: SPACING.xs,
+    marginTop: 2,
   },
 
   // Modules Section
@@ -1875,6 +1898,80 @@ const styles = StyleSheet.create({
   moduleArrowText: {
     fontSize: FONT_SIZES.lg,
     color: COLORS.textSecondary,
+  },
+
+  // Compact Module Cards (Home Page)
+  compactModulesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  compactModuleCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: SPACING.sm,
+    alignItems: 'center',
+    width: '31%',
+    marginBottom: SPACING.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  compactModuleIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
+  compactIconText: {
+    fontSize: 20,
+  },
+  compactModuleTitle: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: COLORS.text,
+    textAlign: 'center',
+  },
+
+  // Compact Menu Cards (Inside Modules)
+  compactMenuGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  compactMenuCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 10,
+    padding: SPACING.sm,
+    alignItems: 'center',
+    width: '31%',
+    marginBottom: SPACING.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  compactMenuIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
+  compactMenuIcon: {
+    fontSize: 18,
+  },
+  compactMenuTitle: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: COLORS.text,
+    textAlign: 'center',
   },
 
   // Quick Actions Section
