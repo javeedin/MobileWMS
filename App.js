@@ -1191,12 +1191,12 @@ export default function App() {
   if (currentScreen === 'InventoryModule') {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
         {/* Header */}
-        <View style={[styles.moduleHeader, { justifyContent: 'space-between' }]}>
-          <Text style={{ fontSize: 10, color: '#999' }}>{APP_VERSION}</Text>
-          <Text style={{ fontSize: 16, fontWeight: 'bold', color: 'gray' }}>Inventory</Text>
+        <View style={{ backgroundColor: '#C74634', paddingTop: 40, paddingBottom: 12, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)' }}>{APP_VERSION}</Text>
+          <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#fff' }}>Inventory</Text>
           <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
             <Text style={{ fontSize: 20 }}>🔔</Text>
           </TouchableOpacity>
@@ -1743,11 +1743,11 @@ export default function App() {
   if (currentScreen === 'Inventory') {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
         {/* Header */}
-        <View style={{ backgroundColor: '#fff', paddingTop: 40, paddingBottom: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#ddd', alignItems: 'center' }}>
-          <Text style={{ fontSize: 20, fontWeight: 'bold', color: 'red' }}>TEST SCREEN v1.0.1</Text>
+        <View style={{ backgroundColor: '#C74634', paddingTop: 40, paddingBottom: 12, paddingHorizontal: 16, alignItems: 'center' }}>
+          <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#fff' }}>Inventory Onhand</Text>
         </View>
 
         {/* Search Section */}
