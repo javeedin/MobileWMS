@@ -259,6 +259,45 @@ export default function App() {
     setKpiData({ totalPOs: 0, pendingItems: 0, inventoryItems: 0, lowStock: 0 });
   };
 
+  // Pull to refresh handler
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      // Refresh PO data for KPIs
+      const poResponse = await fetch(API_URL);
+      const poJson = await poResponse.json();
+      const poItems = poJson.items || [];
+      const uniquePOs = [...new Set(poItems.map(item => item.documentnumber))];
+
+      // Refresh Inventory data for KPIs
+      let inventoryCount = 0;
+      let lowStockCount = 0;
+      if (selectedOrg) {
+        try {
+          const invUrl = `${API_BASE}/getonhand?orgainzation_code=${selectedOrg}`;
+          const invResponse = await fetch(invUrl);
+          const invJson = await invResponse.json();
+          const invItems = invJson.items || [];
+          inventoryCount = invItems.length;
+          lowStockCount = invItems.filter(item => (item.qoh || 0) < 10).length;
+        } catch (e) {
+          console.log('Inventory fetch error:', e);
+        }
+      }
+
+      setKpiData({
+        totalPOs: uniquePOs.length,
+        pendingItems: poItems.length,
+        inventoryItems: inventoryCount,
+        lowStock: lowStockCount,
+      });
+    } catch (error) {
+      console.log('Refresh error:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   // Fetch Purchase Orders
   const fetchPOData = async () => {
     setLoading(true);
