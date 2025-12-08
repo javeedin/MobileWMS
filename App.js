@@ -46,6 +46,8 @@ const COLORS = {
   receiveColor: '#10b981',
   shipColor: '#f59e0b',
   scanColor: '#8b5cf6',
+  orderColor: '#ec4899',
+  crmColor: '#06b6d4',
 };
 
 const SPACING = {
@@ -572,6 +574,36 @@ export default function App() {
                 </View>
                 <Text style={styles.moduleTitle}>Shipping</Text>
                 <Text style={styles.moduleDescription}>Process outgoing orders and manage shipments</Text>
+                <View style={styles.moduleArrow}>
+                  <Text style={styles.moduleArrowText}>→</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Order Management Module */}
+              <TouchableOpacity
+                style={styles.moduleCard}
+                onPress={() => setCurrentScreen('OrderManagementModule')}
+              >
+                <View style={[styles.moduleIconContainer, { backgroundColor: COLORS.orderColor }]}>
+                  <Text style={styles.moduleIcon}>📋</Text>
+                </View>
+                <Text style={styles.moduleTitle}>Order Management</Text>
+                <Text style={styles.moduleDescription}>Sales orders, purchase orders, and order tracking</Text>
+                <View style={styles.moduleArrow}>
+                  <Text style={styles.moduleArrowText}>→</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* CRM Module */}
+              <TouchableOpacity
+                style={styles.moduleCard}
+                onPress={() => setCurrentScreen('CRMModule')}
+              >
+                <View style={[styles.moduleIconContainer, { backgroundColor: COLORS.crmColor }]}>
+                  <Text style={styles.moduleIcon}>👥</Text>
+                </View>
+                <Text style={styles.moduleTitle}>CRM</Text>
+                <Text style={styles.moduleDescription}>Customer relationships, contacts, and activities</Text>
                 <View style={styles.moduleArrow}>
                   <Text style={styles.moduleArrowText}>→</Text>
                 </View>
@@ -1274,6 +1306,249 @@ export default function App() {
           <Text style={styles.placeholderIcon}>📤</Text>
           <Text style={styles.placeholderTitle}>Ship Orders</Text>
           <Text style={styles.placeholderText}>Coming soon...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // ============= ORDER MANAGEMENT MODULE =============
+  if (currentScreen === 'OrderManagementModule') {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.orderColor} />
+
+        {/* Header */}
+        <View style={[styles.moduleHeader, { backgroundColor: COLORS.orderColor }]}>
+          <TouchableOpacity onPress={() => setCurrentScreen('Home')}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.moduleHeaderCenter}>
+            <Text style={styles.moduleHeaderTitle}>Order Management</Text>
+            <Text style={styles.moduleHeaderSubtitle}>{selectedOrg}</Text>
+          </View>
+          <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
+            <Text style={styles.notificationIconSmall}>🔔</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.moduleContent}>
+          {/* Module Menu Cards */}
+          <View style={styles.moduleMenuGrid}>
+            {/* Sales Orders */}
+            <TouchableOpacity
+              style={styles.moduleMenuCard}
+              onPress={() => Alert.alert('Coming Soon', 'Sales Orders feature coming soon')}
+            >
+              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#fce7f3' }]}>
+                <Text style={styles.moduleMenuIcon}>🛒</Text>
+              </View>
+              <Text style={styles.moduleMenuTitle}>Sales Orders</Text>
+              <Text style={styles.moduleMenuDescription}>Create and manage sales orders</Text>
+            </TouchableOpacity>
+
+            {/* Purchase Orders */}
+            <TouchableOpacity
+              style={styles.moduleMenuCard}
+              onPress={() => {
+                setCurrentScreen('ReceiveGoods');
+                fetchPOData();
+              }}
+            >
+              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#dbeafe' }]}>
+                <Text style={styles.moduleMenuIcon}>📦</Text>
+              </View>
+              <Text style={styles.moduleMenuTitle}>Purchase Orders</Text>
+              <Text style={styles.moduleMenuDescription}>View and process purchase orders</Text>
+            </TouchableOpacity>
+
+            {/* Order Tracking */}
+            <TouchableOpacity
+              style={styles.moduleMenuCard}
+              onPress={() => Alert.alert('Coming Soon', 'Order Tracking feature coming soon')}
+            >
+              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#dcfce7' }]}>
+                <Text style={styles.moduleMenuIcon}>🔍</Text>
+              </View>
+              <Text style={styles.moduleMenuTitle}>Order Tracking</Text>
+              <Text style={styles.moduleMenuDescription}>Track order status and delivery</Text>
+            </TouchableOpacity>
+
+            {/* Returns */}
+            <TouchableOpacity
+              style={styles.moduleMenuCard}
+              onPress={() => Alert.alert('Coming Soon', 'Returns feature coming soon')}
+            >
+              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#fee2e2' }]}>
+                <Text style={styles.moduleMenuIcon}>↩️</Text>
+              </View>
+              <Text style={styles.moduleMenuTitle}>Returns</Text>
+              <Text style={styles.moduleMenuDescription}>Process returns and refunds</Text>
+            </TouchableOpacity>
+
+            {/* Quotations */}
+            <TouchableOpacity
+              style={styles.moduleMenuCard}
+              onPress={() => Alert.alert('Coming Soon', 'Quotations feature coming soon')}
+            >
+              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#fef3c7' }]}>
+                <Text style={styles.moduleMenuIcon}>📝</Text>
+              </View>
+              <Text style={styles.moduleMenuTitle}>Quotations</Text>
+              <Text style={styles.moduleMenuDescription}>Create and send quotations</Text>
+            </TouchableOpacity>
+
+            {/* Reports */}
+            <TouchableOpacity
+              style={styles.moduleMenuCard}
+              onPress={() => Alert.alert('Coming Soon', 'Reports feature coming soon')}
+            >
+              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#e0e7ff' }]}>
+                <Text style={styles.moduleMenuIcon}>📊</Text>
+              </View>
+              <Text style={styles.moduleMenuTitle}>Reports</Text>
+              <Text style={styles.moduleMenuDescription}>Order analytics and reports</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+
+        {/* Bottom Navigation */}
+        <View style={styles.bottomNav}>
+          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('Home')}>
+            <Text style={styles.navIcon}>🏠</Text>
+            <Text style={styles.navText}>Home</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('InventoryModule')}>
+            <Text style={styles.navIcon}>📦</Text>
+            <Text style={styles.navText}>Inventory</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.navItem, styles.navItemActive]} onPress={() => setCurrentScreen('OrderManagementModule')}>
+            <Text style={styles.navIcon}>📋</Text>
+            <Text style={[styles.navText, styles.navTextActive]}>Orders</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('CRMModule')}>
+            <Text style={styles.navIcon}>👥</Text>
+            <Text style={styles.navText}>CRM</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // ============= CRM MODULE =============
+  if (currentScreen === 'CRMModule') {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.crmColor} />
+
+        {/* Header */}
+        <View style={[styles.moduleHeader, { backgroundColor: COLORS.crmColor }]}>
+          <TouchableOpacity onPress={() => setCurrentScreen('Home')}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <View style={styles.moduleHeaderCenter}>
+            <Text style={styles.moduleHeaderTitle}>CRM</Text>
+            <Text style={styles.moduleHeaderSubtitle}>{selectedOrg}</Text>
+          </View>
+          <TouchableOpacity onPress={() => Alert.alert('Notifications', 'No new notifications')}>
+            <Text style={styles.notificationIconSmall}>🔔</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.moduleContent}>
+          {/* Module Menu Cards */}
+          <View style={styles.moduleMenuGrid}>
+            {/* Customers */}
+            <TouchableOpacity
+              style={styles.moduleMenuCard}
+              onPress={() => Alert.alert('Coming Soon', 'Customers feature coming soon')}
+            >
+              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#cffafe' }]}>
+                <Text style={styles.moduleMenuIcon}>👤</Text>
+              </View>
+              <Text style={styles.moduleMenuTitle}>Customers</Text>
+              <Text style={styles.moduleMenuDescription}>Manage customer profiles</Text>
+            </TouchableOpacity>
+
+            {/* Contacts */}
+            <TouchableOpacity
+              style={styles.moduleMenuCard}
+              onPress={() => Alert.alert('Coming Soon', 'Contacts feature coming soon')}
+            >
+              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#dbeafe' }]}>
+                <Text style={styles.moduleMenuIcon}>📇</Text>
+              </View>
+              <Text style={styles.moduleMenuTitle}>Contacts</Text>
+              <Text style={styles.moduleMenuDescription}>Contact directory and details</Text>
+            </TouchableOpacity>
+
+            {/* Leads */}
+            <TouchableOpacity
+              style={styles.moduleMenuCard}
+              onPress={() => Alert.alert('Coming Soon', 'Leads feature coming soon')}
+            >
+              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#dcfce7' }]}>
+                <Text style={styles.moduleMenuIcon}>🎯</Text>
+              </View>
+              <Text style={styles.moduleMenuTitle}>Leads</Text>
+              <Text style={styles.moduleMenuDescription}>Track and manage sales leads</Text>
+            </TouchableOpacity>
+
+            {/* Activities */}
+            <TouchableOpacity
+              style={styles.moduleMenuCard}
+              onPress={() => Alert.alert('Coming Soon', 'Activities feature coming soon')}
+            >
+              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#fef3c7' }]}>
+                <Text style={styles.moduleMenuIcon}>📅</Text>
+              </View>
+              <Text style={styles.moduleMenuTitle}>Activities</Text>
+              <Text style={styles.moduleMenuDescription}>Schedule calls, meetings, tasks</Text>
+            </TouchableOpacity>
+
+            {/* Opportunities */}
+            <TouchableOpacity
+              style={styles.moduleMenuCard}
+              onPress={() => Alert.alert('Coming Soon', 'Opportunities feature coming soon')}
+            >
+              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#fce7f3' }]}>
+                <Text style={styles.moduleMenuIcon}>💰</Text>
+              </View>
+              <Text style={styles.moduleMenuTitle}>Opportunities</Text>
+              <Text style={styles.moduleMenuDescription}>Sales pipeline and deals</Text>
+            </TouchableOpacity>
+
+            {/* Reports */}
+            <TouchableOpacity
+              style={styles.moduleMenuCard}
+              onPress={() => Alert.alert('Coming Soon', 'Reports feature coming soon')}
+            >
+              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#e0e7ff' }]}>
+                <Text style={styles.moduleMenuIcon}>📈</Text>
+              </View>
+              <Text style={styles.moduleMenuTitle}>Reports</Text>
+              <Text style={styles.moduleMenuDescription}>CRM analytics and insights</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+
+        {/* Bottom Navigation */}
+        <View style={styles.bottomNav}>
+          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('Home')}>
+            <Text style={styles.navIcon}>🏠</Text>
+            <Text style={styles.navText}>Home</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('InventoryModule')}>
+            <Text style={styles.navIcon}>📦</Text>
+            <Text style={styles.navText}>Inventory</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('OrderManagementModule')}>
+            <Text style={styles.navIcon}>📋</Text>
+            <Text style={styles.navText}>Orders</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.navItem, styles.navItemActive]} onPress={() => setCurrentScreen('CRMModule')}>
+            <Text style={styles.navIcon}>👥</Text>
+            <Text style={[styles.navText, styles.navTextActive]}>CRM</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
