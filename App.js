@@ -4469,7 +4469,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // ========== DASHBOARD HEADER ==========
+  // ========== DASHBOARD/HOME HEADER ==========
   dashboardHeader: {
     backgroundColor: COLORS.primary,
     paddingTop: 36,
@@ -4479,8 +4479,30 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
+  homeHeader: {
+    backgroundColor: COLORS.primary,
+    paddingTop: 36,
+    paddingBottom: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+  },
+  homeHeaderContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
   homeHeaderLeft: {
     flex: 1,
+  },
+  homeGreeting: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.white,
+    opacity: 0.85,
+  },
+  homeUserName: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.white,
+    marginBottom: 2,
   },
   headerTitleContainer: {
     marginLeft: SPACING.md,
@@ -4529,6 +4551,97 @@ const styles = StyleSheet.create({
   },
   homeContent: {
     flex: 1,
+  },
+
+  // ========== KPI SECTION ==========
+  kpiSection: {
+    padding: SPACING.md,
+  },
+  sectionTitle: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: SPACING.sm,
+  },
+  kpiLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: SPACING.md,
+  },
+  kpiLoadingText: {
+    marginLeft: SPACING.sm,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZES.sm,
+  },
+  kpiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  kpiCard: {
+    width: '48%',
+    borderRadius: 10,
+    padding: SPACING.sm,
+    marginBottom: SPACING.sm,
+    minHeight: 70,
+  },
+  kpiIconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  kpiIcon: {
+    fontSize: 12,
+  },
+  kpiValue: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: 'bold',
+    color: COLORS.white,
+  },
+  kpiLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.white,
+    opacity: 0.9,
+    marginTop: 2,
+  },
+
+  // ========== MODULES SECTION ==========
+  modulesSection: {
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.sm,
+  },
+
+  // ========== QUICK ACTIONS ==========
+  quickActionsSection: {
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.md,
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  quickActionButton: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    padding: SPACING.sm,
+    alignItems: 'center',
+    width: '23%',
+    borderWidth: 1,
+    borderColor: COLORS.neutral100,
+  },
+  quickActionIcon: {
+    fontSize: 20,
+    marginBottom: 4,
+  },
+  quickActionText: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
   },
 
   // ========== HAMBURGER MENU ==========
