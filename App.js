@@ -15,10 +15,12 @@ import {
   Dimensions,
   RefreshControl,
   BackHandler,
+  Platform,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Contacts from 'expo-contacts';
 import * as Linking from 'expo-linking';
+import CallDetector from './src/CallDetector';
 
 // Oracle Redwood Design System Constants
 const COLORS = {
@@ -282,6 +284,11 @@ export default function App() {
   const [inboundCallTimer, setInboundCallTimer] = useState(0);
   const inboundTimerRef = useRef(null);
 
+  // Call Detection state
+  const [callDetectionEnabled, setCallDetectionEnabled] = useState(false);
+  const [detectedCallNumber, setDetectedCallNumber] = useState('');
+  const [callDetectionStatus, setCallDetectionStatus] = useState('idle'); // idle, ringing, offhook
+
   // Handle Login
   const handleLogin = () => {
     if (username === 'admin' && password === 'admin123') {
@@ -519,6 +526,73 @@ export default function App() {
     setInboundCustomerData(null);
     setInboundCallTimer(0);
     Alert.alert('Call Ended', 'Inbound call has been logged');
+  };
+
+  // ============= CALL DETECTION FUNCTIONS =============
+
+  // Start call detection (Android only)
+  const startCallDetection = async () => {
+    if (Platform.OS !== 'android') {
+      Alert.alert('Not Supported', 'Call detection is only available on Android');
+      return;
+    }
+
+    try {
+      const success = await CallDetector.startListening(
+        // On incoming call
+        (phoneNumber, state, timestamp) => {
+          console.log('Incoming call detected:', phoneNumber);
+          setDetectedCallNumber(phoneNumber);
+          setCallDetectionStatus('ringing');
+          setInboundPhoneNumber(phoneNumber);
+          // Auto-fetch customer details
+          const customerData = getInboundCustomerDetails(phoneNumber);
+          setInboundCustomerData(customerData);
+          // Vibrate to alert user
+          Vibration.vibrate([0, 500, 200, 500]);
+          // Navigate to inbound call screen if not already there
+          if (currentScreen !== 'InboundCall') {
+            navigateTo('InboundCall');
+          }
+        },
+        // On call state changed
+        (phoneNumber, state, timestamp) => {
+          console.log('Call state changed:', state);
+          setCallDetectionStatus(state.toLowerCase());
+          if (state === 'OFFHOOK') {
+            // Call answered - start timer
+            if (!inboundCallActive) {
+              startInboundTimer();
+            }
+          } else if (state === 'IDLE') {
+            // Call ended
+            setCallDetectionStatus('idle');
+          }
+        }
+      );
+
+      if (success) {
+        setCallDetectionEnabled(true);
+        Alert.alert('Call Detection', 'Now listening for incoming calls');
+      } else {
+        Alert.alert('Error', 'Failed to start call detection. Please grant phone permissions.');
+      }
+    } catch (error) {
+      console.error('Error starting call detection:', error);
+      Alert.alert('Error', 'Failed to start call detection');
+    }
+  };
+
+  // Stop call detection
+  const stopCallDetection = async () => {
+    try {
+      await CallDetector.stopListening();
+      setCallDetectionEnabled(false);
+      setDetectedCallNumber('');
+      setCallDetectionStatus('idle');
+    } catch (error) {
+      console.error('Error stopping call detection:', error);
+    }
   };
 
   // Handle Logout
@@ -4718,6 +4792,46 @@ export default function App() {
         <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
           <Text style={styles.screenTitle}>Inbound Call</Text>
         </View>
+
+        {/* Call Detection Status Banner */}
+        {Platform.OS === 'android' && (
+          <View style={{ backgroundColor: callDetectionEnabled ? '#10B981' : '#6b7280', padding: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={{ fontSize: 20, marginRight: 8 }}>{callDetectionEnabled ? '📡' : '📴'}</Text>
+              <View>
+                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>
+                  {callDetectionEnabled ? 'Auto-Detection ON' : 'Auto-Detection OFF'}
+                </Text>
+                {callDetectionEnabled && callDetectionStatus !== 'idle' && (
+                  <Text style={{ color: '#fff', fontSize: 12 }}>
+                    Status: {callDetectionStatus.toUpperCase()}
+                  </Text>
+                )}
+              </View>
+            </View>
+            <TouchableOpacity
+              style={{ backgroundColor: callDetectionEnabled ? '#EF4444' : '#C74634', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 6 }}
+              onPress={callDetectionEnabled ? stopCallDetection : startCallDetection}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 12 }}>
+                {callDetectionEnabled ? 'Stop' : 'Start'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Incoming Call Alert */}
+        {callDetectionStatus === 'ringing' && detectedCallNumber && (
+          <View style={{ backgroundColor: '#fef3c7', padding: 16, borderBottomWidth: 2, borderBottomColor: '#f59e0b' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={{ fontSize: 28, marginRight: 12 }}>📞</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#92400e' }}>Incoming Call Detected!</Text>
+                <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1f2937', marginTop: 4 }}>{detectedCallNumber}</Text>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Call Active Banner */}
         {inboundCallActive && (
