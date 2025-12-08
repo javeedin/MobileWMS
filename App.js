@@ -17,6 +17,8 @@ import {
   BackHandler,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as Contacts from 'expo-contacts';
+import * as Linking from 'expo-linking';
 
 // Oracle Redwood Design System Constants
 const COLORS = {
@@ -260,6 +262,19 @@ export default function App() {
   const [pickedQty, setPickedQty] = useState('');
   const [serialNumber, setSerialNumber] = useState('');
 
+  // Call Center state
+  const [mobileContacts, setMobileContacts] = useState([]);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [contactSearchQuery, setContactSearchQuery] = useState('');
+  const [selectedContact, setSelectedContact] = useState(null);
+  const [callInProgress, setCallInProgress] = useState(false);
+  const [callTimer, setCallTimer] = useState(0);
+  const [showCallLogModal, setShowCallLogModal] = useState(false);
+  const [callLogNotes, setCallLogNotes] = useState('');
+  const [callLogs, setCallLogs] = useState([]);
+  const [showContactInfoModal, setShowContactInfoModal] = useState(false);
+  const callTimerRef = useRef(null);
+
   // Handle Login
   const handleLogin = () => {
     if (username === 'admin' && password === 'admin123') {
@@ -277,6 +292,123 @@ export default function App() {
     setShowOrgModal(false);
     setCurrentScreen('Home');
   };
+
+  // ============= CALL CENTER FUNCTIONS =============
+
+  // Load contacts from device
+  const loadContacts = async () => {
+    setContactsLoading(true);
+    try {
+      const { status } = await Contacts.requestPermissionsAsync();
+      if (status === 'granted') {
+        const { data } = await Contacts.getContactsAsync({
+          fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Emails, Contacts.Fields.Image],
+        });
+        if (data.length > 0) {
+          // Filter contacts that have phone numbers
+          const contactsWithPhone = data.filter(c => c.phoneNumbers && c.phoneNumbers.length > 0);
+          setMobileContacts(contactsWithPhone);
+        }
+      } else {
+        Alert.alert('Permission Denied', 'Contact permission is required to use this feature');
+      }
+    } catch (error) {
+      console.error('Error loading contacts:', error);
+      Alert.alert('Error', 'Failed to load contacts');
+    }
+    setContactsLoading(false);
+  };
+
+  // Format call duration
+  const formatCallDuration = (seconds) => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    if (hrs > 0) {
+      return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Start call timer
+  const startCallTimer = () => {
+    setCallTimer(0);
+    setCallInProgress(true);
+    callTimerRef.current = setInterval(() => {
+      setCallTimer(prev => prev + 1);
+    }, 1000);
+  };
+
+  // Stop call timer and show call log modal
+  const stopCallTimer = () => {
+    if (callTimerRef.current) {
+      clearInterval(callTimerRef.current);
+      callTimerRef.current = null;
+    }
+    setCallInProgress(false);
+    setShowCallLogModal(true);
+  };
+
+  // Make phone call
+  const makePhoneCall = async (contact) => {
+    const phoneNumber = contact.phoneNumbers[0].number;
+    setSelectedContact(contact);
+    startCallTimer();
+    try {
+      await Linking.openURL(`tel:${phoneNumber}`);
+    } catch (error) {
+      console.error('Error making call:', error);
+      Alert.alert('Error', 'Unable to make phone call');
+      stopCallTimer();
+    }
+  };
+
+  // Save call log
+  const saveCallLog = () => {
+    const newLog = {
+      id: Date.now().toString(),
+      contact: selectedContact,
+      duration: callTimer,
+      notes: callLogNotes,
+      timestamp: new Date().toISOString(),
+    };
+    setCallLogs(prev => [newLog, ...prev]);
+    setShowCallLogModal(false);
+    setCallLogNotes('');
+    setCallTimer(0);
+    setSelectedContact(null);
+    Alert.alert('Success', 'Call log saved successfully');
+  };
+
+  // Get sample customer data for contact
+  const getCustomerData = (contact) => {
+    // Sample data - in real app this would come from CRM
+    return {
+      invoices: [
+        { id: 'INV-001', amount: 2500.00, status: 'Paid', date: '2024-01-15' },
+        { id: 'INV-002', amount: 1800.00, status: 'Pending', date: '2024-02-01' },
+        { id: 'INV-003', amount: 3200.00, status: 'Overdue', date: '2024-01-01' },
+      ],
+      payments: [
+        { id: 'PAY-001', amount: 2500.00, method: 'Credit Card', date: '2024-01-20' },
+        { id: 'PAY-002', amount: 1000.00, method: 'Bank Transfer', date: '2024-02-05' },
+      ],
+      orders: [
+        { id: 'ORD-001', items: 5, total: 4500.00, status: 'Delivered' },
+        { id: 'ORD-002', items: 3, total: 2100.00, status: 'Processing' },
+      ],
+      totalSpent: 8500.00,
+      memberSince: '2023-06-15',
+    };
+  };
+
+  // Filter contacts based on search query
+  const filteredContacts = mobileContacts.filter(contact => {
+    const query = contactSearchQuery.toLowerCase();
+    const name = (contact.name || '').toLowerCase();
+    const phone = contact.phoneNumbers?.[0]?.number || '';
+    return name.includes(query) || phone.includes(query);
+  });
 
   // Handle Logout
   const handleLogout = () => {
@@ -3891,7 +4023,6 @@ export default function App() {
                 <Text style={styles.moduleMenuIcon}>🛒</Text>
               </View>
               <Text style={styles.moduleMenuTitle}>Sales Orders</Text>
-              <Text style={styles.moduleMenuDescription}>Create and manage sales orders</Text>
             </TouchableOpacity>
 
             {/* Purchase Orders */}
@@ -3906,7 +4037,6 @@ export default function App() {
                 <Text style={styles.moduleMenuIcon}>📦</Text>
               </View>
               <Text style={styles.moduleMenuTitle}>Purchase Orders</Text>
-              <Text style={styles.moduleMenuDescription}>View and process purchase orders</Text>
             </TouchableOpacity>
 
             {/* Order Tracking */}
@@ -3918,7 +4048,6 @@ export default function App() {
                 <Text style={styles.moduleMenuIcon}>🔍</Text>
               </View>
               <Text style={styles.moduleMenuTitle}>Order Tracking</Text>
-              <Text style={styles.moduleMenuDescription}>Track order status and delivery</Text>
             </TouchableOpacity>
 
             {/* Returns */}
@@ -3930,7 +4059,6 @@ export default function App() {
                 <Text style={styles.moduleMenuIcon}>↩️</Text>
               </View>
               <Text style={styles.moduleMenuTitle}>Returns</Text>
-              <Text style={styles.moduleMenuDescription}>Process returns and refunds</Text>
             </TouchableOpacity>
 
             {/* Quotations */}
@@ -3942,7 +4070,6 @@ export default function App() {
                 <Text style={styles.moduleMenuIcon}>📝</Text>
               </View>
               <Text style={styles.moduleMenuTitle}>Quotations</Text>
-              <Text style={styles.moduleMenuDescription}>Create and send quotations</Text>
             </TouchableOpacity>
 
             {/* Reports */}
@@ -3954,7 +4081,6 @@ export default function App() {
                 <Text style={styles.moduleMenuIcon}>📊</Text>
               </View>
               <Text style={styles.moduleMenuTitle}>Reports</Text>
-              <Text style={styles.moduleMenuDescription}>Order analytics and reports</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -4005,7 +4131,6 @@ export default function App() {
                 <Text style={styles.moduleMenuIcon}>👤</Text>
               </View>
               <Text style={styles.moduleMenuTitle}>Customers</Text>
-              <Text style={styles.moduleMenuDescription}>Manage customer profiles</Text>
             </TouchableOpacity>
 
             {/* Contacts */}
@@ -4017,7 +4142,6 @@ export default function App() {
                 <Text style={styles.moduleMenuIcon}>📇</Text>
               </View>
               <Text style={styles.moduleMenuTitle}>Contacts</Text>
-              <Text style={styles.moduleMenuDescription}>Contact directory and details</Text>
             </TouchableOpacity>
 
             {/* Leads */}
@@ -4029,7 +4153,6 @@ export default function App() {
                 <Text style={styles.moduleMenuIcon}>🎯</Text>
               </View>
               <Text style={styles.moduleMenuTitle}>Leads</Text>
-              <Text style={styles.moduleMenuDescription}>Track and manage sales leads</Text>
             </TouchableOpacity>
 
             {/* Activities */}
@@ -4041,7 +4164,6 @@ export default function App() {
                 <Text style={styles.moduleMenuIcon}>📅</Text>
               </View>
               <Text style={styles.moduleMenuTitle}>Activities</Text>
-              <Text style={styles.moduleMenuDescription}>Schedule calls, meetings, tasks</Text>
             </TouchableOpacity>
 
             {/* Opportunities */}
@@ -4053,7 +4175,6 @@ export default function App() {
                 <Text style={styles.moduleMenuIcon}>💰</Text>
               </View>
               <Text style={styles.moduleMenuTitle}>Opportunities</Text>
-              <Text style={styles.moduleMenuDescription}>Sales pipeline and deals</Text>
             </TouchableOpacity>
 
             {/* Reports */}
@@ -4065,7 +4186,31 @@ export default function App() {
                 <Text style={styles.moduleMenuIcon}>📈</Text>
               </View>
               <Text style={styles.moduleMenuTitle}>Reports</Text>
-              <Text style={styles.moduleMenuDescription}>CRM analytics and insights</Text>
+            </TouchableOpacity>
+
+            {/* Outbound Call */}
+            <TouchableOpacity
+              style={styles.moduleMenuCard}
+              onPress={() => {
+                navigateTo('OutboundCall');
+                loadContacts();
+              }}
+            >
+              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#dcfce7' }]}>
+                <Text style={styles.moduleMenuIcon}>📞</Text>
+              </View>
+              <Text style={styles.moduleMenuTitle}>Outbound Call</Text>
+            </TouchableOpacity>
+
+            {/* Call Logs */}
+            <TouchableOpacity
+              style={styles.moduleMenuCard}
+              onPress={() => navigateTo('CallLogs')}
+            >
+              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#fef3c7' }]}>
+                <Text style={styles.moduleMenuIcon}>📋</Text>
+              </View>
+              <Text style={styles.moduleMenuTitle}>Call Logs</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -4089,6 +4234,354 @@ export default function App() {
             <Text style={[styles.navText, styles.navTextActive]}>CRM</Text>
           </TouchableOpacity>
         </View>
+      </View>
+    );
+  }
+
+  // ============= OUTBOUND CALL SCREEN =============
+  if (currentScreen === 'OutboundCall') {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#C74634" />
+
+        {/* Header */}
+        <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
+          <Text style={styles.screenTitle}>Outbound Call</Text>
+        </View>
+
+        {/* Call In Progress Banner */}
+        {callInProgress && (
+          <View style={{ backgroundColor: '#10B981', padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View>
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
+                Call in Progress: {selectedContact?.name}
+              </Text>
+              <Text style={{ color: '#fff', fontSize: 24, fontWeight: 'bold' }}>
+                {formatCallDuration(callTimer)}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={{ backgroundColor: '#EF4444', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 8 }}
+              onPress={stopCallTimer}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold' }}>End Call</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Search Bar */}
+        <View style={{ padding: 16, backgroundColor: '#fff' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', borderRadius: 8, paddingHorizontal: 12 }}>
+            <Text style={{ fontSize: 20, marginRight: 8 }}>🔍</Text>
+            <TextInput
+              style={{ flex: 1, paddingVertical: 12, fontSize: 16 }}
+              placeholder="Search contacts..."
+              value={contactSearchQuery}
+              onChangeText={setContactSearchQuery}
+            />
+            {contactSearchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setContactSearchQuery('')}>
+                <Text style={{ fontSize: 18, color: '#9ca3af' }}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* Contacts List */}
+        {contactsLoading ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#C74634" />
+            <Text style={{ marginTop: 12, color: '#6b7280' }}>Loading contacts...</Text>
+          </View>
+        ) : filteredContacts.length === 0 ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <Text style={{ fontSize: 48 }}>📱</Text>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', marginTop: 16, color: '#374151' }}>
+              {mobileContacts.length === 0 ? 'No contacts found' : 'No matching contacts'}
+            </Text>
+            <Text style={{ color: '#6b7280', marginTop: 8, textAlign: 'center' }}>
+              {mobileContacts.length === 0
+                ? 'Grant contacts permission to see your mobile contacts'
+                : 'Try a different search term'}
+            </Text>
+            {mobileContacts.length === 0 && (
+              <TouchableOpacity
+                style={{ backgroundColor: '#C74634', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8, marginTop: 16 }}
+                onPress={loadContacts}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Load Contacts</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <FlatList
+            data={filteredContacts}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <View style={{ backgroundColor: '#fff', marginHorizontal: 16, marginVertical: 4, borderRadius: 12, padding: 16, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}>
+                <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#C74634', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                  <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>
+                    {(item.name || '?')[0].toUpperCase()}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: '#1f2937' }}>{item.name || 'Unknown'}</Text>
+                  <Text style={{ fontSize: 14, color: '#6b7280', marginTop: 2 }}>
+                    {item.phoneNumbers?.[0]?.number || 'No phone'}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#dbeafe', padding: 10, borderRadius: 8 }}
+                    onPress={() => {
+                      setSelectedContact(item);
+                      setShowContactInfoModal(true);
+                    }}
+                  >
+                    <Text style={{ fontSize: 18 }}>ℹ️</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#dcfce7', padding: 10, borderRadius: 8 }}
+                    onPress={() => makePhoneCall(item)}
+                    disabled={callInProgress}
+                  >
+                    <Text style={{ fontSize: 18, opacity: callInProgress ? 0.5 : 1 }}>📞</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            contentContainerStyle={{ paddingVertical: 8 }}
+          />
+        )}
+
+        {/* Call Log Modal */}
+        <Modal visible={showCallLogModal} transparent animationType="slide">
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 20 }}>
+              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1f2937', marginBottom: 16 }}>Call Log</Text>
+
+              <View style={{ backgroundColor: '#f3f4f6', borderRadius: 8, padding: 16, marginBottom: 16 }}>
+                <Text style={{ fontSize: 16, fontWeight: '600', color: '#374151' }}>{selectedContact?.name}</Text>
+                <Text style={{ fontSize: 14, color: '#6b7280', marginTop: 4 }}>
+                  {selectedContact?.phoneNumbers?.[0]?.number}
+                </Text>
+                <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#C74634', marginTop: 8 }}>
+                  Duration: {formatCallDuration(callTimer)}
+                </Text>
+              </View>
+
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Call Notes:</Text>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 12, height: 100, textAlignVertical: 'top', marginBottom: 16 }}
+                placeholder="Enter call notes..."
+                value={callLogNotes}
+                onChangeText={setCallLogNotes}
+                multiline
+              />
+
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#f3f4f6', padding: 14, borderRadius: 8, alignItems: 'center' }}
+                  onPress={() => {
+                    setShowCallLogModal(false);
+                    setCallLogNotes('');
+                    setCallTimer(0);
+                    setSelectedContact(null);
+                  }}
+                >
+                  <Text style={{ fontWeight: '600', color: '#374151' }}>Skip</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#C74634', padding: 14, borderRadius: 8, alignItems: 'center' }}
+                  onPress={saveCallLog}
+                >
+                  <Text style={{ fontWeight: '600', color: '#fff' }}>Save Log</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Contact Info Modal */}
+        <Modal visible={showContactInfoModal} transparent animationType="slide">
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%' }}>
+              {/* Header */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+                <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1f2937' }}>Contact Info</Text>
+                <TouchableOpacity onPress={() => setShowContactInfoModal(false)}>
+                  <Text style={{ fontSize: 24, color: '#9ca3af' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={{ padding: 20 }}>
+                {/* Contact Header */}
+                <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                  <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#C74634', justifyContent: 'center', alignItems: 'center' }}>
+                    <Text style={{ color: '#fff', fontSize: 32, fontWeight: 'bold' }}>
+                      {(selectedContact?.name || '?')[0].toUpperCase()}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 22, fontWeight: 'bold', marginTop: 12, color: '#1f2937' }}>{selectedContact?.name}</Text>
+                  <Text style={{ fontSize: 16, color: '#6b7280', marginTop: 4 }}>{selectedContact?.phoneNumbers?.[0]?.number}</Text>
+                </View>
+
+                {/* Customer Summary */}
+                {(() => {
+                  const customerData = getCustomerData(selectedContact);
+                  return (
+                    <>
+                      <View style={{ flexDirection: 'row', marginBottom: 20 }}>
+                        <View style={{ flex: 1, backgroundColor: '#dcfce7', borderRadius: 12, padding: 16, marginRight: 8 }}>
+                          <Text style={{ fontSize: 12, color: '#166534' }}>Total Spent</Text>
+                          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#166534' }}>${customerData.totalSpent.toFixed(2)}</Text>
+                        </View>
+                        <View style={{ flex: 1, backgroundColor: '#dbeafe', borderRadius: 12, padding: 16, marginLeft: 8 }}>
+                          <Text style={{ fontSize: 12, color: '#1e40af' }}>Member Since</Text>
+                          <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1e40af' }}>{customerData.memberSince}</Text>
+                        </View>
+                      </View>
+
+                      {/* Recent Invoices */}
+                      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1f2937', marginBottom: 12 }}>Recent Invoices</Text>
+                      {customerData.invoices.map(inv => (
+                        <View key={inv.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f9fafb', borderRadius: 8, padding: 12, marginBottom: 8 }}>
+                          <View>
+                            <Text style={{ fontWeight: '600', color: '#374151' }}>{inv.id}</Text>
+                            <Text style={{ fontSize: 12, color: '#6b7280' }}>{inv.date}</Text>
+                          </View>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={{ fontWeight: 'bold', color: '#1f2937' }}>${inv.amount.toFixed(2)}</Text>
+                            <View style={{ backgroundColor: inv.status === 'Paid' ? '#dcfce7' : inv.status === 'Pending' ? '#fef3c7' : '#fee2e2', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, marginTop: 4 }}>
+                              <Text style={{ fontSize: 10, fontWeight: '600', color: inv.status === 'Paid' ? '#166534' : inv.status === 'Pending' ? '#92400e' : '#dc2626' }}>{inv.status}</Text>
+                            </View>
+                          </View>
+                        </View>
+                      ))}
+
+                      {/* Recent Payments */}
+                      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1f2937', marginTop: 16, marginBottom: 12 }}>Recent Payments</Text>
+                      {customerData.payments.map(pay => (
+                        <View key={pay.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f9fafb', borderRadius: 8, padding: 12, marginBottom: 8 }}>
+                          <View>
+                            <Text style={{ fontWeight: '600', color: '#374151' }}>{pay.id}</Text>
+                            <Text style={{ fontSize: 12, color: '#6b7280' }}>{pay.date} - {pay.method}</Text>
+                          </View>
+                          <Text style={{ fontWeight: 'bold', color: '#10B981' }}>+${pay.amount.toFixed(2)}</Text>
+                        </View>
+                      ))}
+
+                      {/* Recent Orders */}
+                      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1f2937', marginTop: 16, marginBottom: 12 }}>Recent Orders</Text>
+                      {customerData.orders.map(ord => (
+                        <View key={ord.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f9fafb', borderRadius: 8, padding: 12, marginBottom: 8 }}>
+                          <View>
+                            <Text style={{ fontWeight: '600', color: '#374151' }}>{ord.id}</Text>
+                            <Text style={{ fontSize: 12, color: '#6b7280' }}>{ord.items} items</Text>
+                          </View>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={{ fontWeight: 'bold', color: '#1f2937' }}>${ord.total.toFixed(2)}</Text>
+                            <Text style={{ fontSize: 10, color: '#6b7280' }}>{ord.status}</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </>
+                  );
+                })()}
+
+                <View style={{ height: 40 }} />
+              </ScrollView>
+
+              {/* Call Button */}
+              <View style={{ padding: 20, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
+                <TouchableOpacity
+                  style={{ backgroundColor: '#10B981', padding: 16, borderRadius: 12, alignItems: 'center' }}
+                  onPress={() => {
+                    setShowContactInfoModal(false);
+                    makePhoneCall(selectedContact);
+                  }}
+                  disabled={callInProgress}
+                >
+                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>📞 Call Now</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      </View>
+    );
+  }
+
+  // ============= CALL LOGS SCREEN =============
+  if (currentScreen === 'CallLogs') {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#C74634" />
+
+        {/* Header */}
+        <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
+          <Text style={styles.screenTitle}>Call Logs</Text>
+        </View>
+
+        {callLogs.length === 0 ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <Text style={{ fontSize: 48 }}>📋</Text>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', marginTop: 16, color: '#374151' }}>No call logs yet</Text>
+            <Text style={{ color: '#6b7280', marginTop: 8, textAlign: 'center' }}>
+              Make calls from Outbound Call to see your call history
+            </Text>
+            <TouchableOpacity
+              style={{ backgroundColor: '#C74634', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8, marginTop: 16 }}
+              onPress={() => {
+                navigateTo('OutboundCall');
+                loadContacts();
+              }}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold' }}>Start Calling</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <FlatList
+            data={callLogs}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <View style={{ backgroundColor: '#fff', marginHorizontal: 16, marginVertical: 4, borderRadius: 12, padding: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#C74634', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                      <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>
+                        {(item.contact?.name || '?')[0].toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 16, fontWeight: '600', color: '#1f2937' }}>{item.contact?.name || 'Unknown'}</Text>
+                      <Text style={{ fontSize: 13, color: '#6b7280', marginTop: 2 }}>
+                        {item.contact?.phoneNumbers?.[0]?.number}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <View style={{ backgroundColor: '#dcfce7', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}>
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#166534' }}>
+                        {formatCallDuration(item.duration)}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+                      {new Date(item.timestamp).toLocaleDateString()} {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                </View>
+                {item.notes && (
+                  <View style={{ backgroundColor: '#f9fafb', borderRadius: 8, padding: 12, marginTop: 12 }}>
+                    <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Notes:</Text>
+                    <Text style={{ fontSize: 14, color: '#374151' }}>{item.notes}</Text>
+                  </View>
+                )}
+              </View>
+            )}
+            contentContainerStyle={{ paddingVertical: 12 }}
+          />
+        )}
       </View>
     );
   }
