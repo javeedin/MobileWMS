@@ -1747,7 +1747,7 @@ export default function App() {
 
         {/* Header */}
         <View style={{ backgroundColor: '#fff', paddingTop: 40, paddingBottom: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#ddd', alignItems: 'center' }}>
-          <Text style={{ fontSize: 16, fontWeight: 'bold', color: 'gray' }}>Inventory Onhand</Text>
+          <Text style={{ fontSize: 20, fontWeight: 'bold', color: 'red' }}>TEST SCREEN v1.0.1</Text>
         </View>
 
         {/* Search Section */}
