@@ -275,6 +275,13 @@ export default function App() {
   const [showContactInfoModal, setShowContactInfoModal] = useState(false);
   const callTimerRef = useRef(null);
 
+  // Inbound Call state
+  const [inboundPhoneNumber, setInboundPhoneNumber] = useState('');
+  const [inboundCustomerData, setInboundCustomerData] = useState(null);
+  const [inboundCallActive, setInboundCallActive] = useState(false);
+  const [inboundCallTimer, setInboundCallTimer] = useState(0);
+  const inboundTimerRef = useRef(null);
+
   // Handle Login
   const handleLogin = () => {
     if (username === 'admin' && password === 'admin123') {
@@ -409,6 +416,110 @@ export default function App() {
     const phone = contact.phoneNumbers?.[0]?.number || '';
     return name.includes(query) || phone.includes(query);
   });
+
+  // ============= INBOUND CALL FUNCTIONS =============
+
+  // Get customer details by phone number
+  const getInboundCustomerDetails = (phoneNumber) => {
+    // Sample customer database - in real app this would be an API call
+    const customerDatabase = {
+      '+1234567890': {
+        name: 'John Smith',
+        company: 'ABC Corporation',
+        email: 'john.smith@abc.com',
+        customerType: 'Premium',
+        creditLimit: 50000,
+        outstandingBalance: 12500,
+        invoices: [
+          { id: 'INV-2024-001', amount: 5500.00, status: 'Overdue', date: '2024-01-15', dueDate: '2024-02-15' },
+          { id: 'INV-2024-002', amount: 3200.00, status: 'Pending', date: '2024-02-01', dueDate: '2024-03-01' },
+          { id: 'INV-2024-003', amount: 8900.00, status: 'Paid', date: '2024-01-01', dueDate: '2024-02-01' },
+        ],
+        payments: [
+          { id: 'PAY-001', amount: 8900.00, method: 'Wire Transfer', date: '2024-01-28' },
+          { id: 'PAY-002', amount: 2500.00, method: 'Credit Card', date: '2024-02-10' },
+        ],
+        orders: [
+          { id: 'SO-2024-101', items: 12, total: 15600.00, status: 'Shipped', date: '2024-02-01' },
+          { id: 'SO-2024-089', items: 5, total: 4200.00, status: 'Delivered', date: '2024-01-20' },
+          { id: 'SO-2024-075', items: 8, total: 9800.00, status: 'Delivered', date: '2024-01-10' },
+        ],
+        notes: 'VIP customer - always prioritize. Prefers email communication.',
+        lastContact: '2024-02-15',
+      },
+      'default': {
+        name: 'Unknown Caller',
+        company: 'Not in system',
+        email: 'N/A',
+        customerType: 'New',
+        creditLimit: 0,
+        outstandingBalance: 0,
+        invoices: [],
+        payments: [],
+        orders: [],
+        notes: 'New caller - not found in customer database',
+        lastContact: 'Never',
+      }
+    };
+
+    // Clean phone number for matching
+    const cleanNumber = phoneNumber.replace(/[\s\-\(\)]/g, '');
+
+    // Return matching customer or default
+    return customerDatabase[cleanNumber] || customerDatabase['default'];
+  };
+
+  // Start inbound call timer
+  const startInboundTimer = () => {
+    setInboundCallTimer(0);
+    setInboundCallActive(true);
+    inboundTimerRef.current = setInterval(() => {
+      setInboundCallTimer(prev => prev + 1);
+    }, 1000);
+  };
+
+  // Stop inbound call timer
+  const stopInboundTimer = () => {
+    if (inboundTimerRef.current) {
+      clearInterval(inboundTimerRef.current);
+      inboundTimerRef.current = null;
+    }
+    setInboundCallActive(false);
+  };
+
+  // Handle get details button
+  const handleGetInboundDetails = () => {
+    if (!inboundPhoneNumber.trim()) {
+      Alert.alert('Error', 'Please enter a phone number');
+      return;
+    }
+    const customerData = getInboundCustomerDetails(inboundPhoneNumber);
+    setInboundCustomerData(customerData);
+    if (!inboundCallActive) {
+      startInboundTimer();
+    }
+  };
+
+  // End inbound call and log
+  const endInboundCall = () => {
+    stopInboundTimer();
+    const newLog = {
+      id: Date.now().toString(),
+      contact: {
+        name: inboundCustomerData?.name || 'Unknown',
+        phoneNumbers: [{ number: inboundPhoneNumber }],
+      },
+      duration: inboundCallTimer,
+      notes: `Inbound call from ${inboundCustomerData?.company || 'Unknown'}`,
+      timestamp: new Date().toISOString(),
+      type: 'inbound',
+    };
+    setCallLogs(prev => [newLog, ...prev]);
+    setInboundPhoneNumber('');
+    setInboundCustomerData(null);
+    setInboundCallTimer(0);
+    Alert.alert('Call Ended', 'Inbound call has been logged');
+  };
 
   // Handle Logout
   const handleLogout = () => {
@@ -4212,6 +4323,17 @@ export default function App() {
               </View>
               <Text style={styles.moduleMenuTitle}>Call Logs</Text>
             </TouchableOpacity>
+
+            {/* Inbound Call */}
+            <TouchableOpacity
+              style={styles.moduleMenuCard}
+              onPress={() => navigateTo('InboundCall')}
+            >
+              <View style={[styles.moduleMenuIconBg, { backgroundColor: '#fee2e2' }]}>
+                <Text style={styles.moduleMenuIcon}>📲</Text>
+              </View>
+              <Text style={styles.moduleMenuTitle}>Inbound Call</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
 
@@ -4582,6 +4704,217 @@ export default function App() {
             contentContainerStyle={{ paddingVertical: 12 }}
           />
         )}
+      </View>
+    );
+  }
+
+  // ============= INBOUND CALL SCREEN =============
+  if (currentScreen === 'InboundCall') {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#C74634" />
+
+        {/* Header */}
+        <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
+          <Text style={styles.screenTitle}>Inbound Call</Text>
+        </View>
+
+        {/* Call Active Banner */}
+        {inboundCallActive && (
+          <View style={{ backgroundColor: '#10B981', padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View>
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
+                Call Active: {inboundCustomerData?.name || 'Unknown'}
+              </Text>
+              <Text style={{ color: '#fff', fontSize: 24, fontWeight: 'bold' }}>
+                {formatCallDuration(inboundCallTimer)}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={{ backgroundColor: '#EF4444', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 8 }}
+              onPress={endInboundCall}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold' }}>End Call</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <ScrollView style={{ flex: 1 }}>
+          {/* Phone Number Input */}
+          <View style={{ backgroundColor: '#fff', margin: 16, borderRadius: 12, padding: 20, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}>
+            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1f2937', marginBottom: 12 }}>
+              Enter Caller's Phone Number
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', borderRadius: 8, paddingHorizontal: 12 }}>
+              <Text style={{ fontSize: 20, marginRight: 8 }}>📞</Text>
+              <TextInput
+                style={{ flex: 1, paddingVertical: 14, fontSize: 18 }}
+                placeholder="+1234567890"
+                value={inboundPhoneNumber}
+                onChangeText={setInboundPhoneNumber}
+                keyboardType="phone-pad"
+              />
+              {inboundPhoneNumber.length > 0 && (
+                <TouchableOpacity onPress={() => setInboundPhoneNumber('')}>
+                  <Text style={{ fontSize: 18, color: '#9ca3af' }}>✕</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <TouchableOpacity
+              style={{ backgroundColor: '#C74634', padding: 16, borderRadius: 8, alignItems: 'center', marginTop: 16 }}
+              onPress={handleGetInboundDetails}
+            >
+              <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>Get Details</Text>
+            </TouchableOpacity>
+            <Text style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center', marginTop: 8 }}>
+              Tip: Use +1234567890 to see sample customer data
+            </Text>
+          </View>
+
+          {/* Customer Details */}
+          {inboundCustomerData && (
+            <View style={{ marginHorizontal: 16 }}>
+              {/* Customer Header Card */}
+              <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 20, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                  <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: inboundCustomerData.customerType === 'Premium' ? '#C74634' : '#6b7280', justifyContent: 'center', alignItems: 'center', marginRight: 16 }}>
+                    <Text style={{ color: '#fff', fontSize: 24, fontWeight: 'bold' }}>
+                      {(inboundCustomerData.name || '?')[0].toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1f2937' }}>{inboundCustomerData.name}</Text>
+                    <Text style={{ fontSize: 14, color: '#6b7280' }}>{inboundCustomerData.company}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                      <View style={{ backgroundColor: inboundCustomerData.customerType === 'Premium' ? '#fef3c7' : '#f3f4f6', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: inboundCustomerData.customerType === 'Premium' ? '#92400e' : '#6b7280' }}>
+                          {inboundCustomerData.customerType}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Quick Stats */}
+                <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 16 }}>
+                  <View style={{ flex: 1, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 12, color: '#6b7280' }}>Credit Limit</Text>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1f2937' }}>${inboundCustomerData.creditLimit?.toLocaleString()}</Text>
+                  </View>
+                  <View style={{ flex: 1, alignItems: 'center', borderLeftWidth: 1, borderLeftColor: '#e5e7eb' }}>
+                    <Text style={{ fontSize: 12, color: '#6b7280' }}>Outstanding</Text>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: inboundCustomerData.outstandingBalance > 0 ? '#dc2626' : '#10B981' }}>
+                      ${inboundCustomerData.outstandingBalance?.toLocaleString()}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1, alignItems: 'center', borderLeftWidth: 1, borderLeftColor: '#e5e7eb' }}>
+                    <Text style={{ fontSize: 12, color: '#6b7280' }}>Last Contact</Text>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{inboundCustomerData.lastContact}</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Contact Info */}
+              <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}>
+                <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1f2937', marginBottom: 12 }}>Contact Information</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={{ fontSize: 16, marginRight: 8 }}>📧</Text>
+                  <Text style={{ color: '#374151' }}>{inboundCustomerData.email}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 16, marginRight: 8 }}>📞</Text>
+                  <Text style={{ color: '#374151' }}>{inboundPhoneNumber}</Text>
+                </View>
+              </View>
+
+              {/* Notes */}
+              {inboundCustomerData.notes && (
+                <View style={{ backgroundColor: '#fef3c7', borderRadius: 12, padding: 16, marginBottom: 12 }}>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#92400e', marginBottom: 8 }}>⚠️ Important Notes</Text>
+                  <Text style={{ color: '#92400e' }}>{inboundCustomerData.notes}</Text>
+                </View>
+              )}
+
+              {/* Invoices */}
+              {inboundCustomerData.invoices?.length > 0 && (
+                <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1f2937', marginBottom: 12 }}>Recent Invoices</Text>
+                  {inboundCustomerData.invoices.map(inv => (
+                    <View key={inv.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f9fafb', borderRadius: 8, padding: 12, marginBottom: 8 }}>
+                      <View>
+                        <Text style={{ fontWeight: '600', color: '#374151' }}>{inv.id}</Text>
+                        <Text style={{ fontSize: 11, color: '#6b7280' }}>{inv.date} • Due: {inv.dueDate}</Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={{ fontWeight: 'bold', color: '#1f2937' }}>${inv.amount.toLocaleString()}</Text>
+                        <View style={{ backgroundColor: inv.status === 'Paid' ? '#dcfce7' : inv.status === 'Pending' ? '#fef3c7' : '#fee2e2', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, marginTop: 4 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '600', color: inv.status === 'Paid' ? '#166534' : inv.status === 'Pending' ? '#92400e' : '#dc2626' }}>{inv.status}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Payments */}
+              {inboundCustomerData.payments?.length > 0 && (
+                <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1f2937', marginBottom: 12 }}>Recent Payments</Text>
+                  {inboundCustomerData.payments.map(pay => (
+                    <View key={pay.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f9fafb', borderRadius: 8, padding: 12, marginBottom: 8 }}>
+                      <View>
+                        <Text style={{ fontWeight: '600', color: '#374151' }}>{pay.id}</Text>
+                        <Text style={{ fontSize: 11, color: '#6b7280' }}>{pay.date} • {pay.method}</Text>
+                      </View>
+                      <Text style={{ fontWeight: 'bold', color: '#10B981' }}>+${pay.amount.toLocaleString()}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Orders */}
+              {inboundCustomerData.orders?.length > 0 && (
+                <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1f2937', marginBottom: 12 }}>Recent Orders</Text>
+                  {inboundCustomerData.orders.map(ord => (
+                    <View key={ord.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f9fafb', borderRadius: 8, padding: 12, marginBottom: 8 }}>
+                      <View>
+                        <Text style={{ fontWeight: '600', color: '#374151' }}>{ord.id}</Text>
+                        <Text style={{ fontSize: 11, color: '#6b7280' }}>{ord.date} • {ord.items} items</Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={{ fontWeight: 'bold', color: '#1f2937' }}>${ord.total.toLocaleString()}</Text>
+                        <Text style={{ fontSize: 10, color: '#6b7280' }}>{ord.status}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* No Data Message */}
+              {inboundCustomerData.invoices?.length === 0 && inboundCustomerData.payments?.length === 0 && (
+                <View style={{ backgroundColor: '#f3f4f6', borderRadius: 12, padding: 20, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 32 }}>📭</Text>
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#374151', marginTop: 8 }}>No History Found</Text>
+                  <Text style={{ color: '#6b7280', textAlign: 'center', marginTop: 4 }}>This caller is not in our customer database</Text>
+                </View>
+              )}
+
+              <View style={{ height: 20 }} />
+            </View>
+          )}
+
+          {/* Empty State */}
+          {!inboundCustomerData && (
+            <View style={{ alignItems: 'center', padding: 40 }}>
+              <Text style={{ fontSize: 64 }}>📲</Text>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#374151', marginTop: 16 }}>Receiving a Call?</Text>
+              <Text style={{ color: '#6b7280', textAlign: 'center', marginTop: 8, paddingHorizontal: 20 }}>
+                Enter the caller's phone number above and tap "Get Details" to see their customer information
+              </Text>
+            </View>
+          )}
+        </ScrollView>
       </View>
     );
   }
