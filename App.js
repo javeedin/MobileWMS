@@ -1370,7 +1370,7 @@ export default function App() {
   if (currentScreen === 'ReceiveGoods' && !selectedPO) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
         {/* Header */}
         <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
@@ -1454,7 +1454,7 @@ export default function App() {
   if (currentScreen === 'POItems' && selectedPO) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
         {/* Header */}
         <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
@@ -1496,7 +1496,7 @@ export default function App() {
   if (currentScreen === 'ItemDetail' && selectedItem) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
         {/* Header */}
         <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
@@ -2056,7 +2056,7 @@ export default function App() {
   if (currentScreen === 'Ship') {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
         {/* Header */}
         <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
@@ -2179,7 +2179,7 @@ export default function App() {
   if (currentScreen === 'ShipOrderLines' && selectedShipOrder) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
         {/* Header */}
         <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
@@ -2368,7 +2368,7 @@ export default function App() {
     if (!permission.granted) {
       return (
         <View style={styles.container}>
-          <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+          <StatusBar barStyle="light-content" backgroundColor="#C74634" />
           <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
             <Text style={styles.screenTitle}>Scan Serial</Text>
           </View>
@@ -2555,7 +2555,7 @@ export default function App() {
 
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
         {/* Header */}
         <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
@@ -2696,7 +2696,7 @@ export default function App() {
 
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
         {/* Header */}
         <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
@@ -2870,7 +2870,7 @@ export default function App() {
 
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
         {/* Header */}
         <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
@@ -3434,7 +3434,7 @@ export default function App() {
   if (currentScreen === 'LotDetails' && selectedLotItem) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
         {/* Header */}
         <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
@@ -3552,7 +3552,7 @@ export default function App() {
   if (currentScreen === 'SerialNumbers' && selectedLot) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
         {/* Header */}
         <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
@@ -3615,7 +3615,7 @@ export default function App() {
   if (currentScreen === 'LotGroupItems' && selectedLotGroup) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
         {/* Header */}
         <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
@@ -3699,7 +3699,7 @@ export default function App() {
   if (currentScreen === 'LocatorLots' && selectedLocatorGroup) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
         {/* Header */}
         <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
@@ -3792,7 +3792,7 @@ export default function App() {
   if (currentScreen === 'LocatorLotItems' && selectedLotGroup) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
         {/* Header */}
         <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
@@ -3872,7 +3872,7 @@ export default function App() {
   if (currentScreen === 'OrderManagementModule') {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
         {/* Header */}
         <View style={[styles.moduleHeader, { justifyContent: 'center' }]}>
@@ -3986,7 +3986,7 @@ export default function App() {
   if (currentScreen === 'CRMModule') {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+        <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
         {/* Header */}
         <View style={[styles.moduleHeader, { justifyContent: 'center' }]}>
@@ -4654,15 +4654,13 @@ const styles = StyleSheet.create({
 
   // ============= INVENTORY MODULE STYLES =============
   moduleHeader: {
-    paddingTop: 36,
-    paddingBottom: SPACING.sm,
+    paddingTop: 40,
+    paddingBottom: 12,
     paddingHorizontal: SPACING.md,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.neutral200,
+    justifyContent: 'center',
+    backgroundColor: '#C74634',
   },
   moduleHeaderCenter: {
     flex: 1,
@@ -4671,7 +4669,7 @@ const styles = StyleSheet.create({
   moduleHeaderTitle: {
     fontSize: FONT_SIZES.md,
     fontWeight: 'bold',
-    color: COLORS.primary,
+    color: '#fff',
   },
   moduleHeaderSubtitle: {
     fontSize: FONT_SIZES.xs,
@@ -4754,25 +4752,23 @@ const styles = StyleSheet.create({
 
   // ========== SCREEN HEADER ==========
   screenHeader: {
-    backgroundColor: COLORS.white,
-    paddingTop: 36,
-    paddingBottom: 6,
+    backgroundColor: '#C74634',
+    paddingTop: 40,
+    paddingBottom: 12,
     paddingHorizontal: SPACING.md,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.neutral200,
+    justifyContent: 'center',
   },
   backButton: {
     fontSize: 24,
-    color: COLORS.primary,
+    color: '#fff',
     fontWeight: '500',
   },
   screenTitle: {
     fontSize: FONT_SIZES.md,
     fontWeight: '600',
-    color: COLORS.primary,
+    color: '#fff',
     marginLeft: SPACING.sm,
   },
   screenSubtitle: {
