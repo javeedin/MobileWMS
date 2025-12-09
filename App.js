@@ -130,7 +130,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.2.2';
+const APP_VERSION = 'v1.2.3';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -2178,6 +2178,27 @@ export default function App() {
                 {(item.subinventory || item.SUBINVENTORY) && <Text style={{ fontSize: 12, color: COLORS.info }}>📦 {item.subinventory || item.SUBINVENTORY}</Text>}
                 <Text style={{ fontSize: 12, color: COLORS.warning }}>🏷️ Lot: {item.lotnumber || item.LOTNUMBER || item.lot_number || item.LOT_NUMBER || 'N/A'}</Text>
               </View>
+
+              {/* Processing Status */}
+              {(item.processingstatuscode || item.PROCESSINGSTATUSCODE) && (
+                <View style={{ marginTop: 6 }}>
+                  <View style={{
+                    backgroundColor: (item.processingstatuscode || item.PROCESSINGSTATUSCODE) === 'SUCCESS' ? COLORS.successLight : COLORS.warningLight,
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    borderRadius: 10,
+                    alignSelf: 'flex-start'
+                  }}>
+                    <Text style={{
+                      fontSize: 11,
+                      fontWeight: '600',
+                      color: (item.processingstatuscode || item.PROCESSINGSTATUSCODE) === 'SUCCESS' ? COLORS.success : COLORS.warning
+                    }}>
+                      {(item.processingstatuscode || item.PROCESSINGSTATUSCODE) === 'SUCCESS' ? '✓ Received' : item.processingstatuscode || item.PROCESSINGSTATUSCODE}
+                    </Text>
+                  </View>
+                </View>
+              )}
             </TouchableOpacity>
           )}
         />
@@ -2296,6 +2317,24 @@ export default function App() {
               <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, width: 55 }}>Line No:</Text>
               <Text style={{ fontSize: 12, color: COLORS.text }}>{selectedItem.documentlinenumber || 'N/A'}</Text>
             </View>
+            {/* Processing Status */}
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, width: 55 }}>Status:</Text>
+              <View style={{
+                backgroundColor: (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS' ? COLORS.successLight : COLORS.warningLight,
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 10,
+              }}>
+                <Text style={{
+                  fontSize: 11,
+                  fontWeight: '600',
+                  color: (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS' ? COLORS.success : COLORS.warning
+                }}>
+                  {(selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS' ? '✓ Received' : (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE || 'Pending')}
+                </Text>
+              </View>
+            </View>
           </View>
 
           {/* Location Info - Compact */}
@@ -2358,18 +2397,22 @@ export default function App() {
               </TouchableOpacity>
             )}
 
-            {/* Confirm Receipt - disabled if splits exist but not all scanned */}
-            <TouchableOpacity
-              style={{
-                backgroundColor: (receivingLoading || (splitLines.length > 0 && !allSplitLinesScanned())) ? COLORS.neutral400 : COLORS.success,
-                padding: 16,
-                borderRadius: 12,
-                flexDirection: 'row',
-                justifyContent: 'center',
-                alignItems: 'center'
-              }}
-              disabled={receivingLoading || (splitLines.length > 0 && !allSplitLinesScanned())}
-              onPress={() => {
+            {/* Confirm Receipt - disabled if already received, loading, or splits not scanned */}
+            {(() => {
+              const isAlreadyReceived = (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS';
+              const isDisabled = receivingLoading || isAlreadyReceived || (splitLines.length > 0 && !allSplitLinesScanned());
+              return (
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: isDisabled ? COLORS.neutral400 : COLORS.success,
+                    padding: 16,
+                    borderRadius: 12,
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    alignItems: 'center'
+                  }}
+                  disabled={isDisabled}
+                  onPress={() => {
                 if (splitLines.length > 0) {
                   // Split mode - show summary of all lines
                   const splitSummary = splitLines.map(l => `• Qty ${l.qty} → ${l.locator}`).join('\n');
@@ -2399,17 +2442,21 @@ export default function App() {
                   );
                 }
               }}
-            >
-              {receivingLoading ? (
-                <ActivityIndicator color={COLORS.white} size="small" />
-              ) : (
-                <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.white }}>
-                  {splitLines.length > 0 && !allSplitLinesScanned()
-                    ? `Assign all locators first`
-                    : '✓ Confirm Receipt'}
-                </Text>
-              )}
-            </TouchableOpacity>
+                >
+                  {receivingLoading ? (
+                    <ActivityIndicator color={COLORS.white} size="small" />
+                  ) : (
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.white }}>
+                      {isAlreadyReceived
+                        ? '✓ Already Received'
+                        : splitLines.length > 0 && !allSplitLinesScanned()
+                          ? 'Assign all locators first'
+                          : '✓ Confirm Receipt'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })()}
           </View>
         </ScrollView>
 
