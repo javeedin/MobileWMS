@@ -130,7 +130,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.1.0';
+const APP_VERSION = 'v1.1.1';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -300,6 +300,7 @@ export default function App() {
   const [inboundCallTimer, setInboundCallTimer] = useState(0);
   const inboundTimerRef = useRef(null);
   const [loginLoading, setLoginLoading] = useState(false);
+  const [receivingLoading, setReceivingLoading] = useState(false);
 
   // AI Stock Counting state
   const [stockCountingMode, setStockCountingMode] = useState('camera'); // 'camera', 'analyzing', 'results'
@@ -342,6 +343,67 @@ export default function App() {
     setSelectedOrg(org);
     setShowOrgModal(false);
     setCurrentScreen('Home');
+  };
+
+  // Confirm Receiving API - POST to receive one line
+  const confirmReceivingAPI = async (item) => {
+    if (!item.lineid) {
+      Alert.alert('Error', 'Line ID is missing. Cannot process receiving.');
+      return;
+    }
+
+    const shipmentNumber = item.asn_number || item.shipmentnumber || '';
+    if (!shipmentNumber) {
+      Alert.alert('Error', 'Shipment number is missing. Cannot process receiving.');
+      return;
+    }
+
+    setReceivingLoading(true);
+    try {
+      const response = await fetch(
+        'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/poreceiveoneline',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            lineid: item.lineid,
+            shipmentnumber: shipmentNumber,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.ok && (data.status === 'success' || data.STATUS === 'SUCCESS' || data.message?.toLowerCase().includes('success'))) {
+        Alert.alert(
+          '✓ Receipt Confirmed',
+          data.message || data.MESSAGE || `Successfully received ${item.itemnumber}`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Refresh PO data and go back to items list
+                fetchPOData();
+                setSelectedItem(null);
+                setCurrentScreen('POItems');
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Receiving Failed',
+          data.message || data.MESSAGE || data.error || 'Failed to process receiving. Please try again.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Network error: ' + error.message);
+    } finally {
+      setReceivingLoading(false);
+    }
   };
 
   // ============= CALL CENTER FUNCTIONS =============
@@ -2073,25 +2135,34 @@ export default function App() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={{ backgroundColor: COLORS.success, padding: 16, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}
+              style={{
+                backgroundColor: receivingLoading ? COLORS.neutral400 : COLORS.success,
+                padding: 16,
+                borderRadius: 12,
+                flexDirection: 'row',
+                justifyContent: 'center',
+                alignItems: 'center'
+              }}
+              disabled={receivingLoading}
               onPress={() => {
                 Alert.alert(
                   'Confirm Receipt',
-                  `Confirm receipt of ${selectedItem.itemnumber}?\n\nQuantity: ${selectedItem.transactionquantity}\nLocator: ${selectedItem.actualLocator || selectedItem.locator}`,
+                  `Confirm receipt of ${selectedItem.itemnumber}?\n\nQuantity: ${selectedItem.transactionquantity}\nLocator: ${selectedItem.actualLocator || selectedItem.locator}\nLine ID: ${selectedItem.lineid || 'N/A'}\nShipment: ${selectedItem.asn_number || selectedItem.shipmentnumber || 'N/A'}`,
                   [
                     { text: 'Cancel', style: 'cancel' },
                     {
                       text: 'Confirm',
-                      onPress: () => {
-                        Alert.alert('Success', 'Receipt confirmed successfully!');
-                        setCurrentScreen('POItems');
-                      },
+                      onPress: () => confirmReceivingAPI(selectedItem),
                     },
                   ]
                 );
               }}
             >
-              <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.white }}>✓ Confirm Receipt</Text>
+              {receivingLoading ? (
+                <ActivityIndicator color={COLORS.white} size="small" />
+              ) : (
+                <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.white }}>✓ Confirm Receipt</Text>
+              )}
             </TouchableOpacity>
           </View>
         </ScrollView>
