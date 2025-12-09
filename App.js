@@ -2064,6 +2064,11 @@ export default function App() {
           <View style={{ backgroundColor: COLORS.surface, marginHorizontal: 12, marginBottom: 12, padding: 16, borderRadius: 12, ...SHADOWS.sm }}>
             <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 8 }}>SHIPMENT INFO</Text>
 
+            <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.primary, width: 80 }}>Line ID:</Text>
+              <Text style={{ fontSize: 13, color: COLORS.text, flex: 1, fontWeight: '600' }}>{selectedItem.lineid || 'N/A'}</Text>
+            </View>
+
             {selectedItem.asn_number && (
               <View style={{ flexDirection: 'row', marginBottom: 8 }}>
                 <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.info, width: 80 }}>ASN:</Text>
