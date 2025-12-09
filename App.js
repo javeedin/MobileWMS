@@ -130,7 +130,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.2.3';
+const APP_VERSION = 'v1.2.4';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -352,14 +352,15 @@ export default function App() {
     setCurrentScreen('Home');
   };
 
-  // Confirm Receiving API - POST to receive one line
+  // Confirm Receiving API - GET request with query parameters
   const confirmReceivingAPI = async (item) => {
-    if (!item.lineid) {
+    const lineId = item.lineid || item.LINEID || item.line_id || item.LINE_ID || '';
+    if (!lineId) {
       Alert.alert('Error', 'Line ID is missing. Cannot process receiving.');
       return;
     }
 
-    const shipmentNumber = item.asn_number || item.shipmentnumber || '';
+    const shipmentNumber = item.asn_number || item.shipmentnumber || item.shipment_number || '';
     if (!shipmentNumber) {
       Alert.alert('Error', 'Shipment number is missing. Cannot process receiving.');
       return;
@@ -367,19 +368,11 @@ export default function App() {
 
     setReceivingLoading(true);
     try {
-      const response = await fetch(
-        'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/poreceiveoneline',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            lineid: item.lineid,
-            shipmentnumber: shipmentNumber,
-          }),
-        }
-      );
+      const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/poreceiveoneline?shipment_number=${encodeURIComponent(shipmentNumber)}&line_id=${encodeURIComponent(lineId)}`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+      });
 
       const data = await response.json();
 
@@ -2401,10 +2394,12 @@ export default function App() {
             {(() => {
               const isAlreadyReceived = (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS';
               const isDisabled = receivingLoading || isAlreadyReceived || (splitLines.length > 0 && !allSplitLinesScanned());
+              // Green for already received, grey for other disabled states, green for enabled
+              const buttonBg = isAlreadyReceived ? COLORS.success : (isDisabled ? COLORS.neutral400 : COLORS.success);
               return (
                 <TouchableOpacity
                   style={{
-                    backgroundColor: isDisabled ? COLORS.neutral400 : COLORS.success,
+                    backgroundColor: buttonBg,
                     padding: 16,
                     borderRadius: 12,
                     flexDirection: 'row',
