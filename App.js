@@ -1094,7 +1094,7 @@ export default function App() {
   const handleScanLocator = (item) => {
     setScanningForItem(item);
     setScanned(false); // Reset scan state
-    setCurrentScreen('BarcodeScanner');
+    navigateTo('BarcodeScanner');
   };
 
   // Handle actual barcode scanned event
@@ -1474,7 +1474,7 @@ export default function App() {
               style={styles.compactMenuCard}
               onPress={() => {
                 setSearchOrgCode(selectedOrg || '');
-                setCurrentScreen('Inventory');
+                navigateTo('Inventory');
               }}
             >
               <View style={[styles.compactMenuIconBg, { backgroundColor: '#e0f2fe' }]}>
@@ -1487,7 +1487,7 @@ export default function App() {
             <TouchableOpacity
               style={styles.compactMenuCard}
               onPress={() => {
-                setCurrentScreen('OnhandByLots');
+                navigateTo('OnhandByLots');
                 fetchLotsData();
               }}
             >
@@ -1501,7 +1501,7 @@ export default function App() {
             <TouchableOpacity
               style={styles.compactMenuCard}
               onPress={() => {
-                setCurrentScreen('ReceiveGoods');
+                navigateTo('ReceiveGoods');
                 fetchPOData();
               }}
             >
@@ -1515,7 +1515,7 @@ export default function App() {
             <TouchableOpacity
               style={styles.compactMenuCard}
               onPress={() => {
-                setCurrentScreen('Ship');
+                navigateTo('Ship');
                 fetchShipOrders();
               }}
             >
@@ -1528,7 +1528,7 @@ export default function App() {
             {/* Scan Item */}
             <TouchableOpacity
               style={styles.compactMenuCard}
-              onPress={() => setCurrentScreen('Scanner')}
+              onPress={() => navigateTo('Scanner')}
             >
               <View style={[styles.compactMenuIconBg, { backgroundColor: '#f3e8ff' }]}>
                 <Text style={styles.compactMenuIcon}>📷</Text>
@@ -1563,7 +1563,7 @@ export default function App() {
               style={styles.compactMenuCard}
               onPress={() => {
                 setSearchOrgCode(selectedOrg || '');
-                setCurrentScreen('Inventory');
+                navigateTo('Inventory');
               }}
             >
               <View style={[styles.compactMenuIconBg, { backgroundColor: '#fee2e2' }]}>
@@ -1647,7 +1647,7 @@ export default function App() {
                 style={styles.poCard}
                 onPress={() => {
                   setSelectedPO(item);
-                  setCurrentScreen('POItems');
+                  navigateTo('POItems');
                 }}
               >
                 <View style={styles.poCardHeader}>
@@ -1714,7 +1714,7 @@ export default function App() {
               style={styles.itemCard}
               onPress={() => {
                 setSelectedItem(item);
-                setCurrentScreen('ItemDetail');
+                navigateTo('ItemDetail');
               }}
             >
               <View style={styles.itemCardHeader}>
@@ -2016,7 +2016,7 @@ export default function App() {
               onPress={() => {
                 setScanningForInventory(true);
                 setScanned(false);
-                setCurrentScreen('BarcodeScanner');
+                navigateTo('BarcodeScanner');
               }}
             >
               <Text style={styles.scanSearchButtonText}>📷</Text>
@@ -2360,7 +2360,7 @@ export default function App() {
                 style={styles.shipOrderCard}
                 onPress={() => {
                   setSelectedShipOrder(order);
-                  setCurrentScreen('ShipOrderLines');
+                  navigateTo('ShipOrderLines');
                 }}
               >
                 <View style={styles.shipOrderHeader}>
@@ -3302,7 +3302,7 @@ export default function App() {
                         style={styles.lotItemCard}
                         onPress={() => {
                           setSelectedLotItem(item);
-                          setCurrentScreen('LotDetails');
+                          navigateTo('LotDetails');
                         }}
                       >
                         <View style={styles.lotItemHeader}>
@@ -3382,7 +3382,7 @@ export default function App() {
                         style={styles.lotItemCard}
                         onPress={() => {
                           setSelectedLotGroup(lot);
-                          setCurrentScreen('LotGroupItems');
+                          navigateTo('LotGroupItems');
                         }}
                       >
                         <View style={styles.lotItemHeader}>
@@ -3467,7 +3467,7 @@ export default function App() {
                     const hierarchy = buildLocatorHierarchy(locatorData);
                     setLocatorHierarchy(hierarchy);
                     setLocatorDrillPath([]);
-                    setCurrentScreen('LocatorGlobalView');
+                    navigateTo('LocatorGlobalView');
                   }}
                 >
                   <Text style={styles.globalViewButtonIcon}>🌐</Text>
@@ -3485,7 +3485,7 @@ export default function App() {
                         <TouchableOpacity
                           onPress={() => {
                             setSelectedLocatorGroup(locator);
-                            setCurrentScreen('LocatorLots');
+                            navigateTo('LocatorLots');
                           }}
                         >
                           <View style={styles.lotItemHeader}>
@@ -3511,7 +3511,7 @@ export default function App() {
                           <TouchableOpacity
                             onPress={() => {
                               setSelectedLocatorGroup(locator);
-                              setCurrentScreen('LocatorLots');
+                              navigateTo('LocatorLots');
                             }}
                           >
                             <View style={styles.lotCountBadge}>
@@ -3983,7 +3983,7 @@ export default function App() {
               style={styles.lotDetailCard}
               onPress={() => {
                 setSelectedLotGroup(lot);
-                setCurrentScreen('LocatorLotItems');
+                navigateTo('LocatorLotItems');
               }}
             >
               <View style={styles.lotDetailHeader}>
@@ -4140,7 +4140,7 @@ export default function App() {
             <TouchableOpacity
               style={styles.moduleMenuCard}
               onPress={() => {
-                setCurrentScreen('ReceiveGoods');
+                navigateTo('ReceiveGoods');
                 fetchPOData();
               }}
             >
