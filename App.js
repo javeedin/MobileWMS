@@ -367,14 +367,30 @@ export default function App() {
     }
 
     setReceivingLoading(true);
-    try {
-      const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/poreceiveoneline?p_shipment_number=${encodeURIComponent(shipmentNumber)}&p_line_id=${encodeURIComponent(lineId)}`;
+    const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/poreceiveoneline?p_shipment_number=${encodeURIComponent(shipmentNumber)}&p_line_id=${encodeURIComponent(lineId)}`;
 
+    try {
+      console.log('Calling API:', url);
       const response = await fetch(url, {
         method: 'GET',
       });
 
-      const data = await response.json();
+      // Get raw text first for debugging
+      const rawText = await response.text();
+      console.log('Raw response:', rawText);
+
+      // Try to parse as JSON
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch (parseError) {
+        Alert.alert(
+          'API Response Error',
+          `URL: ${url}\n\nResponse (not JSON):\n${rawText.substring(0, 300)}`,
+          [{ text: 'OK' }]
+        );
+        return;
+      }
 
       if (response.ok && (data.status === 'success' || data.STATUS === 'SUCCESS' || data.message?.toLowerCase().includes('success'))) {
         Alert.alert(
@@ -395,12 +411,12 @@ export default function App() {
       } else {
         Alert.alert(
           'Receiving Failed',
-          data.message || data.MESSAGE || data.error || 'Failed to process receiving. Please try again.',
+          `${data.message || data.MESSAGE || data.error || 'Failed to process receiving.'}\n\nURL: ${url}`,
           [{ text: 'OK' }]
         );
       }
     } catch (error) {
-      Alert.alert('Error', 'Network error: ' + error.message);
+      Alert.alert('Network Error', `${error.message}\n\nURL: ${url}`);
     } finally {
       setReceivingLoading(false);
     }
@@ -2423,10 +2439,14 @@ export default function App() {
                     ]
                   );
                 } else {
-                  // Normal mode
+                  // Normal mode - show URL for debugging
+                  const lineId = selectedItem.lineid || selectedItem.LINEID || selectedItem.line_id || selectedItem.LINE_ID || '';
+                  const shipmentNum = selectedItem.asn_number || selectedItem.shipmentnumber || selectedItem.shipment_number || '';
+                  const debugUrl = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/poreceiveoneline?p_shipment_number=${shipmentNum}&p_line_id=${lineId}`;
+
                   Alert.alert(
                     'Confirm Receipt',
-                    `Confirm receipt of ${selectedItem.itemnumber}?\n\nQuantity: ${selectedItem.transactionquantity}\nLocator: ${selectedItem.actualLocator || selectedItem.locator}\nLine ID: ${selectedItem.lineid || 'N/A'}\nShipment: ${selectedItem.asn_number || selectedItem.shipmentnumber || 'N/A'}`,
+                    `Confirm receipt of ${selectedItem.itemnumber}?\n\nQuantity: ${selectedItem.transactionquantity}\nLocator: ${selectedItem.actualLocator || selectedItem.locator}\n\n📡 API URL:\n${debugUrl}`,
                     [
                       { text: 'Cancel', style: 'cancel' },
                       {
