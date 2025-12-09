@@ -130,7 +130,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.0.8';
+const APP_VERSION = 'v1.0.9';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -574,10 +574,36 @@ export default function App() {
     setRefreshing(true);
     try {
       // Refresh PO data for KPIs
-      const poResponse = await fetch(API_URL);
+      const pickerName = user?.username || username || 'PICKER1';
+      const poUrl = `${API_BASE}/PUTAWAYDETAILS?PICKER_NAME=${encodeURIComponent(pickerName)}`;
+      const poResponse = await fetch(poUrl);
       const poJson = await poResponse.json();
       const poItems = poJson.items || [];
       const uniquePOs = [...new Set(poItems.map(item => item.documentnumber))];
+
+      // Refresh Ship Orders data for KPIs
+      try {
+        const shipResponse = await fetch(
+          'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/pendingpickingdetails'
+        );
+        const shipJson = await shipResponse.json();
+        const shipItems = shipJson.items || [];
+        setShipOrdersData(shipItems);
+
+        // Group ship orders
+        const grouped = shipItems.reduce((acc, item) => {
+          const key = `${item.source_order_number}-${item.organization_name}`;
+          if (!acc[key]) {
+            acc[key] = { id: key, lines: [], totalQty: 0, ...item };
+          }
+          acc[key].lines.push(item);
+          acc[key].totalQty += item.qty || 0;
+          return acc;
+        }, {});
+        setGroupedShipOrders(Object.values(grouped));
+      } catch (e) {
+        console.log('Ship orders fetch error:', e);
+      }
 
       // Refresh Inventory data for KPIs
       let inventoryCount = 0;
@@ -1305,20 +1331,37 @@ export default function App() {
 
   // ============= NEW HOME PAGE =============
   if (currentScreen === 'Home') {
+    // Calculate ship orders KPIs
+    const totalShipOrders = groupedShipOrders.length;
+    const totalShipLines = shipOrdersData.length;
+
     return (
       <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
 
-        {/* Simple Header */}
+        {/* Header with Bell Icon */}
         <View style={{ backgroundColor: COLORS.primary, paddingTop: 40, paddingBottom: 16, paddingHorizontal: 16 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>MobileWMS {APP_VERSION}</Text>
-              <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>Welcome, {user?.name || 'User'}</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>
+                Welcome, {user?.name || 'User'} {selectedOrg ? `• ${selectedOrg}` : ''}
+              </Text>
             </View>
-            <TouchableOpacity onPress={handleLogout} style={{ padding: 8 }}>
-              <Text style={{ fontSize: 20 }}>🚪</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity
+                onPress={() => Alert.alert('Notifications', 'No new notifications')}
+                style={{ padding: 8, marginRight: 4 }}
+              >
+                <View style={{ position: 'relative' }}>
+                  <Text style={{ fontSize: 22 }}>🔔</Text>
+                  <View style={{ position: 'absolute', top: -2, right: -2, backgroundColor: COLORS.danger, width: 8, height: 8, borderRadius: 4 }} />
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleLogout} style={{ padding: 8 }}>
+                <Text style={{ fontSize: 20 }}>🚪</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -1329,25 +1372,60 @@ export default function App() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
           }
         >
-          {/* KPI Cards */}
+          {/* Overview KPI Cards */}
           <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.primary, marginBottom: 12 }}>Overview</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 20 }}>
-            <View style={{ width: '48%', backgroundColor: COLORS.inventoryColor, borderRadius: 8, padding: 12, marginBottom: 10, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 }}>
-              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.9)' }}>Purchase Orders</Text>
-              <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#fff' }}>{kpiData.totalPOs}</Text>
-            </View>
-            <View style={{ width: '48%', backgroundColor: COLORS.receiveColor, borderRadius: 8, padding: 12, marginBottom: 10, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 }}>
-              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.9)' }}>Pending Items</Text>
-              <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#fff' }}>{kpiData.pendingItems}</Text>
-            </View>
-            <View style={{ width: '48%', backgroundColor: COLORS.shipColor, borderRadius: 8, padding: 12, marginBottom: 10, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 }}>
-              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.9)' }}>Inventory Items</Text>
-              <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#fff' }}>{kpiData.inventoryItems}</Text>
-            </View>
-            <View style={{ width: '48%', backgroundColor: COLORS.warning, borderRadius: 8, padding: 12, marginBottom: 10, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 }}>
-              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.9)' }}>Low Stock</Text>
-              <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#fff' }}>{kpiData.lowStock}</Text>
-            </View>
+            {/* POs/ASNs Card */}
+            <TouchableOpacity
+              style={{ width: '48%', backgroundColor: COLORS.receiveColor, borderRadius: 12, padding: 14, marginBottom: 10, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 }}
+              onPress={() => { navigateTo('ReceiveGoods'); fetchPOData(); }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.9)', fontWeight: '600' }}>POs/ASNs</Text>
+                <Text style={{ fontSize: 16 }}>📥</Text>
+              </View>
+              <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#fff' }}>{kpiData.totalPOs}</Text>
+              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>{kpiData.pendingItems} Lines</Text>
+            </TouchableOpacity>
+
+            {/* Shipping Card */}
+            <TouchableOpacity
+              style={{ width: '48%', backgroundColor: COLORS.shipColor, borderRadius: 12, padding: 14, marginBottom: 10, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 }}
+              onPress={() => { navigateTo('Ship'); fetchShipOrders(); }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.9)', fontWeight: '600' }}>Shipping</Text>
+                <Text style={{ fontSize: 16 }}>📤</Text>
+              </View>
+              <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#fff' }}>{totalShipOrders}</Text>
+              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>{totalShipLines} Lines</Text>
+            </TouchableOpacity>
+
+            {/* Supplier Returns Card */}
+            <TouchableOpacity
+              style={{ width: '48%', backgroundColor: COLORS.warning, borderRadius: 12, padding: 14, marginBottom: 10, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 }}
+              onPress={() => Alert.alert('Coming Soon', 'Supplier Returns feature coming soon')}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.9)', fontWeight: '600' }}>Supplier Returns</Text>
+                <Text style={{ fontSize: 16 }}>↩️</Text>
+              </View>
+              <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#fff' }}>0</Text>
+              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>0 Lines</Text>
+            </TouchableOpacity>
+
+            {/* Order Returns Card */}
+            <TouchableOpacity
+              style={{ width: '48%', backgroundColor: COLORS.crmColor, borderRadius: 12, padding: 14, marginBottom: 10, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 }}
+              onPress={() => Alert.alert('Coming Soon', 'Order Returns feature coming soon')}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.9)', fontWeight: '600' }}>Order Returns</Text>
+                <Text style={{ fontSize: 16 }}>🔄</Text>
+              </View>
+              <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#fff' }}>0</Text>
+              <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>0 Lines</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Modules Grid */}
