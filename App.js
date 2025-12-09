@@ -130,7 +130,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.0.6';
+const APP_VERSION = 'v1.0.7';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -1811,12 +1811,11 @@ export default function App() {
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
-        {/* Header with PO/ASN */}
+        {/* Header with ASN */}
         <View style={[styles.screenHeader, { justifyContent: 'center', paddingVertical: 12 }]}>
-          <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>PO: {selectedItem.documentnumber}</Text>
-          {selectedItem.asn_number && (
-            <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>ASN: {selectedItem.asn_number}</Text>
-          )}
+          <Text style={{ fontSize: 16, fontWeight: '600', color: '#fff' }}>
+            {selectedItem.asn_number ? `ASN: ${selectedItem.asn_number}` : 'Item Details'}
+          </Text>
         </View>
 
         <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }}>
