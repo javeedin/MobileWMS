@@ -130,7 +130,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.2.1';
+const APP_VERSION = 'v1.2.2';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -2176,7 +2176,7 @@ export default function App() {
               {/* Subinventory & Lot Number Row */}
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
                 {(item.subinventory || item.SUBINVENTORY) && <Text style={{ fontSize: 12, color: COLORS.info }}>📦 {item.subinventory || item.SUBINVENTORY}</Text>}
-                {(item.lotnumber || item.LOTNUMBER) && <Text style={{ fontSize: 12, color: COLORS.warning }}>🏷️ Lot: {item.lotnumber || item.LOTNUMBER}</Text>}
+                <Text style={{ fontSize: 12, color: COLORS.warning }}>🏷️ Lot: {item.lotnumber || item.LOTNUMBER || item.lot_number || item.LOT_NUMBER || 'N/A'}</Text>
               </View>
             </TouchableOpacity>
           )}
@@ -2312,7 +2312,7 @@ export default function App() {
 
             <View style={{ flexDirection: 'row', marginBottom: 6 }}>
               <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.warning, width: 70 }}>Lot No:</Text>
-              <Text style={{ fontSize: 12, color: COLORS.text, flex: 1 }}>{selectedItem.lotnumber || selectedItem.LOTNUMBER || 'N/A'}</Text>
+              <Text style={{ fontSize: 12, color: COLORS.text, flex: 1 }}>{selectedItem.lotnumber || selectedItem.LOTNUMBER || selectedItem.lot_number || selectedItem.LOT_NUMBER || 'N/A'}</Text>
             </View>
 
             <View style={{ flexDirection: 'row', marginBottom: 6 }}>
