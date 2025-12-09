@@ -130,7 +130,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.0.3';
+const APP_VERSION = 'v1.0.4';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -621,7 +621,9 @@ export default function App() {
   const fetchPOData = async () => {
     setLoading(true);
     try {
-      const response = await fetch(API_URL);
+      const pickerName = user?.username || username || 'PICKER1';
+      const url = `${API_BASE}/PUTAWAYDETAILS?PICKER_NAME=${encodeURIComponent(pickerName)}`;
+      const response = await fetch(url);
       const data = await response.json();
 
       const transformedData = data.items.map((item, index) => ({
