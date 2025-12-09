@@ -130,7 +130,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.0.2';
+const APP_VERSION = 'v1.0.3';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -139,8 +139,8 @@ const API_URL = `${API_BASE}/PUTAWAYDETAILS?PICKER_NAME=PICKER1`;
 export default function App() {
   // Authentication state
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('admin123');
+  const [username, setUsername] = useState('PICKER1');
+  const [password, setPassword] = useState('12345');
   const [user, setUser] = useState(null);
 
   // Organization state
@@ -281,15 +281,34 @@ export default function App() {
   const [inboundCallActive, setInboundCallActive] = useState(false);
   const [inboundCallTimer, setInboundCallTimer] = useState(0);
   const inboundTimerRef = useRef(null);
+  const [loginLoading, setLoginLoading] = useState(false);
 
-  // Handle Login
-  const handleLogin = () => {
-    if (username === 'admin' && password === 'admin123') {
-      setUser({ name: username, username: username });
-      setIsLoggedIn(true);
-      setShowOrgModal(true);
-    } else {
-      Alert.alert('Error', 'Invalid credentials');
+  // Handle Login with API
+  const handleLogin = async () => {
+    if (!username.trim() || !password.trim()) {
+      Alert.alert('Error', 'Please enter username and password');
+      return;
+    }
+
+    setLoginLoading(true);
+    try {
+      const response = await fetch(
+        `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/Login?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+      );
+      const data = await response.json();
+
+      if (response.ok && data && (data.status === 'success' || data.STATUS === 'SUCCESS' || data.items?.length > 0)) {
+        setUser({ name: username, username: username });
+        setIsLoggedIn(true);
+        setShowOrgModal(true);
+      } else {
+        Alert.alert('Login Failed', data.message || data.MESSAGE || 'Invalid username or password');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      Alert.alert('Error', 'Unable to connect to server. Please check your internet connection.');
+    } finally {
+      setLoginLoading(false);
     }
   };
 
@@ -1241,11 +1260,19 @@ export default function App() {
               />
             </View>
 
-            <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-              <Text style={styles.loginButtonText}>Sign In</Text>
+            <TouchableOpacity
+              style={[styles.loginButton, loginLoading && { opacity: 0.7 }]}
+              onPress={handleLogin}
+              disabled={loginLoading}
+            >
+              {loginLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.loginButtonText}>Sign In</Text>
+              )}
             </TouchableOpacity>
 
-            <Text style={styles.loginHint}>Use admin/admin123 to login</Text>
+            <Text style={styles.loginHint}>Use PICKER1/12345 to login</Text>
           </View>
         </View>
 
