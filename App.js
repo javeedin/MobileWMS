@@ -130,7 +130,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.0.5';
+const APP_VERSION = 'v1.0.6';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -164,6 +164,15 @@ export default function App() {
     if (navigationHistory.length > 0) {
       const prevScreen = navigationHistory[navigationHistory.length - 1];
       setNavigationHistory(prev => prev.slice(0, -1));
+
+      // Clear selection states when going back to parent screens
+      if (prevScreen === 'ReceiveGoods') {
+        setSelectedPO(null);
+        setSelectedItem(null);
+      } else if (prevScreen === 'POItems') {
+        setSelectedItem(null);
+      }
+
       setCurrentScreen(prevScreen);
     } else {
       setCurrentScreen('Home');
