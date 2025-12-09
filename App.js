@@ -130,7 +130,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.2.0';
+const APP_VERSION = 'v1.2.1';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -305,7 +305,8 @@ export default function App() {
   // Split Quantity state
   const [splitLines, setSplitLines] = useState([]); // Array of {id, qty, locator, scanned}
   const [showSplitModal, setShowSplitModal] = useState(false);
-  const [splitQtyInput, setSplitQtyInput] = useState('');
+  const [splitQtyInput1, setSplitQtyInput1] = useState('');
+  const [splitQtyInput2, setSplitQtyInput2] = useState('');
   const [scanningForSplitLine, setScanningForSplitLine] = useState(null); // ID of split line being scanned
 
   // AI Stock Counting state
@@ -422,52 +423,66 @@ export default function App() {
     setScanningForSplitLine(null);
   };
 
-  // Handle split quantity
+  // Handle split quantity - supports two split inputs
   const handleSplitQty = () => {
-    const splitQty = parseInt(splitQtyInput);
+    const splitQty1 = parseInt(splitQtyInput1) || 0;
+    const splitQty2 = parseInt(splitQtyInput2) || 0;
     const totalQty = selectedItem?.transactionquantity || 0;
 
-    if (!splitQty || splitQty <= 0) {
-      Alert.alert('Invalid', 'Please enter a valid quantity');
+    if (splitQty1 <= 0 && splitQty2 <= 0) {
+      Alert.alert('Invalid', 'Please enter at least one valid quantity');
       return;
     }
+
+    const totalSplit = splitQty1 + splitQty2;
 
     // Calculate current allocated qty
     const currentAllocated = splitLines.reduce((sum, line) => sum + line.qty, 0);
     const remainingQty = totalQty - currentAllocated;
 
-    if (splitQty >= remainingQty) {
-      Alert.alert('Invalid', `Split quantity must be less than remaining quantity (${remainingQty})`);
+    if (totalSplit >= remainingQty) {
+      Alert.alert('Invalid', `Total split (${totalSplit}) must be less than remaining quantity (${remainingQty})`);
       return;
     }
 
-    // Add new split line
-    const newLine = {
-      id: Date.now().toString(),
-      qty: splitQty,
-      locator: '',
-      scanned: false,
-    };
+    const newLines = [];
+    if (splitQty1 > 0) {
+      newLines.push({
+        id: Date.now().toString(),
+        qty: splitQty1,
+        locator: '',
+        scanned: false,
+      });
+    }
+    if (splitQty2 > 0) {
+      newLines.push({
+        id: (Date.now() + 1).toString(),
+        qty: splitQty2,
+        locator: '',
+        scanned: false,
+      });
+    }
 
     // If this is first split, also create line for remaining qty
     if (splitLines.length === 0) {
       const remainingLine = {
         id: 'original',
-        qty: totalQty - splitQty,
+        qty: totalQty - totalSplit,
         locator: selectedItem?.actualLocator || '',
         scanned: !!selectedItem?.actualLocator,
       };
-      setSplitLines([remainingLine, newLine]);
+      setSplitLines([remainingLine, ...newLines]);
     } else {
-      // Update the first line's qty (remaining) and add new split
+      // Update the first line's qty (remaining) and add new splits
       setSplitLines(prev => {
         const updated = [...prev];
-        updated[0] = { ...updated[0], qty: updated[0].qty - splitQty };
-        return [...updated, newLine];
+        updated[0] = { ...updated[0], qty: updated[0].qty - totalSplit };
+        return [...updated, ...newLines];
       });
     }
 
-    setSplitQtyInput('');
+    setSplitQtyInput1('');
+    setSplitQtyInput2('');
     setShowSplitModal(false);
   };
 
@@ -2134,7 +2149,8 @@ export default function App() {
               onPress={() => {
                 setSelectedItem({ ...item, vendorname: selectedPO.vendorname, asn_number: selectedPO.asn_number || item.asn_number });
                 setSplitLines([]); // Reset split lines for new item
-                setSplitQtyInput('');
+                setSplitQtyInput1('');
+                setSplitQtyInput2('');
                 navigateTo('ItemDetail');
               }}
             >
@@ -2213,7 +2229,7 @@ export default function App() {
 
           {/* Split Lines Table - Show when splits exist */}
           {splitLines.length > 0 && (
-            <View style={{ backgroundColor: COLORS.surface, marginHorizontal: 12, marginBottom: 8, padding: 12, borderRadius: 12, ...SHADOWS.sm }}>
+            <View style={{ backgroundColor: '#FFFDE7', marginHorizontal: 12, marginBottom: 8, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#FFF59D', ...SHADOWS.sm }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary }}>SPLIT QUANTITIES</Text>
                 <TouchableOpacity onPress={() => setShowSplitModal(true)}>
@@ -2222,7 +2238,7 @@ export default function App() {
               </View>
 
               {/* Table Header */}
-              <View style={{ flexDirection: 'row', paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: COLORS.border, marginBottom: 6 }}>
+              <View style={{ flexDirection: 'row', paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#FFF59D', marginBottom: 6 }}>
                 <Text style={{ fontSize: 11, fontWeight: '600', color: COLORS.textSecondary, width: 50 }}>Qty</Text>
                 <Text style={{ fontSize: 11, fontWeight: '600', color: COLORS.textSecondary, flex: 1 }}>Locator</Text>
                 <Text style={{ fontSize: 11, fontWeight: '600', color: COLORS.textSecondary, width: 70, textAlign: 'center' }}>Action</Text>
@@ -2230,7 +2246,7 @@ export default function App() {
 
               {/* Split Lines */}
               {splitLines.map((line, index) => (
-                <View key={line.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: index < splitLines.length - 1 ? 1 : 0, borderBottomColor: COLORS.neutral100 }}>
+                <View key={line.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: index < splitLines.length - 1 ? 1 : 0, borderBottomColor: '#FFF59D' }}>
                   <View style={{ width: 50 }}>
                     <View style={{ backgroundColor: COLORS.infoLight, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, alignSelf: 'flex-start' }}>
                       <Text style={{ fontSize: 12, fontWeight: 'bold', color: COLORS.info }}>{line.qty}</Text>
@@ -2405,35 +2421,64 @@ export default function App() {
           onRequestClose={() => setShowSplitModal(false)}
         >
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-            <View style={{ backgroundColor: COLORS.surface, borderRadius: 16, padding: 20, width: '100%', maxWidth: 320 }}>
+            <View style={{ backgroundColor: '#FFFDE7', borderRadius: 16, padding: 20, width: '100%', maxWidth: 320, borderWidth: 1, borderColor: '#FFF59D' }}>
               <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 8 }}>✂️ Split Quantity</Text>
               <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 16 }}>
                 Total: {selectedItem.transactionquantity} | Available: {selectedItem.transactionquantity - splitLines.reduce((s, l) => s + l.qty, 0)}
               </Text>
 
-              <TextInput
-                style={{
-                  borderWidth: 1,
-                  borderColor: COLORS.border,
-                  borderRadius: 8,
-                  padding: 12,
-                  fontSize: 18,
-                  textAlign: 'center',
-                  marginBottom: 16,
-                }}
-                placeholder="Enter qty to split"
-                keyboardType="number-pad"
-                value={splitQtyInput}
-                onChangeText={setSplitQtyInput}
-                autoFocus
-              />
+              {/* Two split input fields */}
+              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 4, textAlign: 'center' }}>Split 1</Text>
+                  <TextInput
+                    style={{
+                      borderWidth: 1,
+                      borderColor: COLORS.border,
+                      borderRadius: 8,
+                      padding: 12,
+                      fontSize: 18,
+                      textAlign: 'center',
+                      backgroundColor: COLORS.surface,
+                    }}
+                    placeholder="Qty"
+                    keyboardType="number-pad"
+                    value={splitQtyInput1}
+                    onChangeText={setSplitQtyInput1}
+                    autoFocus
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 4, textAlign: 'center' }}>Split 2</Text>
+                  <TextInput
+                    style={{
+                      borderWidth: 1,
+                      borderColor: COLORS.border,
+                      borderRadius: 8,
+                      padding: 12,
+                      fontSize: 18,
+                      textAlign: 'center',
+                      backgroundColor: COLORS.surface,
+                    }}
+                    placeholder="Qty"
+                    keyboardType="number-pad"
+                    value={splitQtyInput2}
+                    onChangeText={setSplitQtyInput2}
+                  />
+                </View>
+              </View>
+
+              <Text style={{ fontSize: 11, color: COLORS.textSecondary, textAlign: 'center', marginBottom: 12 }}>
+                Enter one or both quantities
+              </Text>
 
               <View style={{ flexDirection: 'row', gap: 12 }}>
                 <TouchableOpacity
                   style={{ flex: 1, backgroundColor: COLORS.neutral200, padding: 14, borderRadius: 8, alignItems: 'center' }}
                   onPress={() => {
                     setShowSplitModal(false);
-                    setSplitQtyInput('');
+                    setSplitQtyInput1('');
+                    setSplitQtyInput2('');
                   }}
                 >
                   <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }}>Cancel</Text>
