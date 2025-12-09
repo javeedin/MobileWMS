@@ -130,7 +130,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.2.5';
+const APP_VERSION = 'v1.2.6';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -400,17 +400,50 @@ export default function App() {
         return;
       }
 
-      if (response.ok && (data.status === 'success' || data.STATUS === 'SUCCESS' || data.message?.toLowerCase().includes('success'))) {
+      // Check for success - linesSuccess:1 or other success indicators
+      const isSuccess = response.ok && (
+        data.linesSuccess === 1 ||
+        data.linesSuccess === '1' ||
+        data.LINESSUCCESS === 1 ||
+        data.status === 'success' ||
+        data.STATUS === 'SUCCESS' ||
+        data.message?.toLowerCase().includes('success')
+      );
+
+      if (isSuccess) {
+        // Update local state to mark item as received
+        const lineIdToUpdate = lineId;
+
+        // Update poData items
+        setPoData(prevData => {
+          if (!prevData || !prevData.items) return prevData;
+          return {
+            ...prevData,
+            items: prevData.items.map(i => {
+              const itemLineId = i.lineid || i.LINEID || i.line_id || i.LINE_ID || '';
+              if (itemLineId === lineIdToUpdate) {
+                return { ...i, processingstatuscode: 'SUCCESS', PROCESSINGSTATUSCODE: 'SUCCESS' };
+              }
+              return i;
+            })
+          };
+        });
+
+        // Update selectedItem as well
+        setSelectedItem(prev => ({
+          ...prev,
+          processingstatuscode: 'SUCCESS',
+          PROCESSINGSTATUSCODE: 'SUCCESS'
+        }));
+
         Alert.alert(
           '✓ Receipt Confirmed',
-          data.message || data.MESSAGE || `Successfully received ${item.itemnumber}`,
+          data.message || data.MESSAGE || `Successfully received ${item.itemnumber || item.ITEMNUMBER}`,
           [
             {
               text: 'OK',
               onPress: () => {
-                // Refresh PO data and go back to items list
-                fetchPOData();
-                setSelectedItem(null);
+                // Go back to items list (data already updated locally)
                 setCurrentScreen('POItems');
               },
             },
