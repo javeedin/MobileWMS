@@ -130,7 +130,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.1.4';
+const APP_VERSION = 'v1.1.5';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -2043,7 +2043,7 @@ export default function App() {
 
         {/* Header with Supplier + ASN */}
         <View style={[styles.screenHeader, { justifyContent: 'center', paddingVertical: 10 }]}>
-          <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)' }} numberOfLines={1}>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }} numberOfLines={1}>
             {selectedItem.vendorname || 'Unknown Supplier'}
           </Text>
           <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>
