@@ -130,7 +130,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.0.4';
+const APP_VERSION = 'v1.0.5';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -1098,6 +1098,7 @@ export default function App() {
       acc[docNum] = {
         items: [],
         vendorname: item.vendorname || 'Unknown Vendor',
+        asn_number: item.asn_number || '',
       };
     }
     acc[docNum].items.push(item);
@@ -1109,6 +1110,7 @@ export default function App() {
     items: groupedPOs[docNum].items,
     itemCount: groupedPOs[docNum].items.length,
     vendorname: groupedPOs[docNum].vendorname,
+    asn_number: groupedPOs[docNum].asn_number,
   }));
 
   // Handle barcode scan - navigate to scanner
@@ -1685,6 +1687,12 @@ export default function App() {
                     <Text style={styles.itemCountText}>{item.itemCount} items</Text>
                   </View>
                 </View>
+                {item.asn_number && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                    <Text style={{ fontSize: 12, color: COLORS.info, fontWeight: '600' }}>ASN: </Text>
+                    <Text style={{ fontSize: 12, color: COLORS.info }}>{item.asn_number}</Text>
+                  </View>
+                )}
                 <Text style={styles.poCardSubtext}>Vendor: {item.vendorname}</Text>
               </TouchableOpacity>
             )}
@@ -1730,7 +1738,24 @@ export default function App() {
 
         {/* Header */}
         <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
-          <Text style={styles.screenTitle}>PO Items - {selectedPO.documentnumber}</Text>
+          <Text style={styles.screenTitle}>PO: {selectedPO.documentnumber}</Text>
+        </View>
+
+        {/* PO Summary Card */}
+        <View style={{ backgroundColor: COLORS.surface, margin: 12, marginBottom: 0, padding: 12, borderRadius: 8, ...SHADOWS.sm }}>
+          {selectedPO.asn_number && (
+            <View style={{ flexDirection: 'row', marginBottom: 6 }}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.info }}>ASN: </Text>
+              <Text style={{ fontSize: 13, color: COLORS.info }}>{selectedPO.asn_number}</Text>
+            </View>
+          )}
+          <View style={{ flexDirection: 'row' }}>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary }}>Supplier: </Text>
+            <Text style={{ fontSize: 13, color: COLORS.text }}>{selectedPO.vendorname}</Text>
+          </View>
+          <View style={{ flexDirection: 'row', marginTop: 4 }}>
+            <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>{selectedPO.itemCount} items</Text>
+          </View>
         </View>
 
         {/* Items List */}
@@ -1742,21 +1767,28 @@ export default function App() {
             <TouchableOpacity
               style={styles.itemCard}
               onPress={() => {
-                setSelectedItem(item);
+                setSelectedItem({ ...item, vendorname: selectedPO.vendorname, asn_number: selectedPO.asn_number || item.asn_number });
                 navigateTo('ItemDetail');
               }}
             >
-              <View style={styles.itemCardHeader}>
-                <Text style={styles.itemName}>{item.itemnumber || 'Unknown Item'}</Text>
-                <Text style={styles.itemQty}>Qty: {item.transactionquantity || 0}</Text>
+              {/* Item Title - Code + Description */}
+              <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.text, marginBottom: 4 }} numberOfLines={2}>
+                {item.itemnumber || 'Unknown'} - {item.itemdescription || 'No Description'}
+              </Text>
+
+              {/* Quantity Badge */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <View style={{ backgroundColor: COLORS.successLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.success }}>Qty: {item.transactionquantity || 0}</Text>
+                </View>
+                <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>Line: {item.documentlinenumber || 'N/A'}</Text>
               </View>
-              {item.itemdescription && (
-                <Text style={styles.itemDescription}>{item.itemdescription}</Text>
-              )}
-              <Text style={styles.itemDetail}>Line No: {item.documentlinenumber || 'N/A'}</Text>
-              <Text style={styles.itemDetail}>SKU: {item.itemnumber || 'N/A'}</Text>
-              <Text style={styles.itemDetail}>Locator: {item.locator || 'Not assigned'}</Text>
-              <Text style={styles.itemDetail}>Org: {item.organizationcode || 'N/A'}</Text>
+
+              {/* Details Row */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>📍 {item.locator || 'No Locator'}</Text>
+                <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>🏢 {item.organizationcode || 'N/A'}</Text>
+              </View>
             </TouchableOpacity>
           )}
         />
@@ -1770,66 +1802,108 @@ export default function App() {
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
-        {/* Header */}
-        <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
-          <Text style={styles.screenTitle}>Item Details</Text>
+        {/* Header with PO/ASN */}
+        <View style={[styles.screenHeader, { justifyContent: 'center', paddingVertical: 12 }]}>
+          <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>PO: {selectedItem.documentnumber}</Text>
+          {selectedItem.asn_number && (
+            <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>ASN: {selectedItem.asn_number}</Text>
+          )}
         </View>
 
-        <ScrollView style={styles.detailContainer}>
-          <View style={styles.detailCard}>
-            <Text style={styles.detailTitle}>{selectedItem.itemnumber || 'Unknown Item'}</Text>
+        <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }}>
+          {/* Item Title Card - Code + Description */}
+          <View style={{ backgroundColor: COLORS.surface, margin: 12, padding: 16, borderRadius: 12, ...SHADOWS.md }}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 8 }}>
+              {selectedItem.itemnumber || 'Unknown'}
+            </Text>
+            <Text style={{ fontSize: 14, color: COLORS.textSecondary, lineHeight: 20 }}>
+              {selectedItem.itemdescription || 'No description available'}
+            </Text>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>PO Number:</Text>
-              <Text style={styles.detailValue}>{selectedItem.documentnumber || 'N/A'}</Text>
+            {/* Quantity Badge */}
+            <View style={{ flexDirection: 'row', marginTop: 12 }}>
+              <View style={{ backgroundColor: COLORS.successLight, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 }}>
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.success }}>Qty: {selectedItem.transactionquantity || 0}</Text>
+              </View>
             </View>
+          </View>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Item Number:</Text>
-              <Text style={styles.detailValue}>{selectedItem.itemnumber || 'N/A'}</Text>
-            </View>
+          {/* ASN & Supplier Info */}
+          <View style={{ backgroundColor: COLORS.surface, marginHorizontal: 12, marginBottom: 12, padding: 16, borderRadius: 12, ...SHADOWS.sm }}>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 8 }}>SHIPMENT INFO</Text>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Line No:</Text>
-              <Text style={styles.detailValue}>{selectedItem.documentlinenumber || 'N/A'}</Text>
-            </View>
-
-            {selectedItem.itemdescription && (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Description:</Text>
-                <Text style={styles.detailValue}>{selectedItem.itemdescription}</Text>
+            {selectedItem.asn_number && (
+              <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.info, width: 80 }}>ASN:</Text>
+                <Text style={{ fontSize: 13, color: COLORS.text, flex: 1 }}>{selectedItem.asn_number}</Text>
               </View>
             )}
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Quantity:</Text>
-              <Text style={styles.detailValue}>{selectedItem.transactionquantity || 0}</Text>
+            <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, width: 80 }}>Supplier:</Text>
+              <Text style={{ fontSize: 13, color: COLORS.text, flex: 1 }}>{selectedItem.vendorname || 'N/A'}</Text>
             </View>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Original Locator:</Text>
-              <Text style={styles.detailValue}>{selectedItem.locator || 'N/A'}</Text>
+            <View style={{ flexDirection: 'row' }}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, width: 80 }}>Line No:</Text>
+              <Text style={{ fontSize: 13, color: COLORS.text, flex: 1 }}>{selectedItem.documentlinenumber || 'N/A'}</Text>
+            </View>
+          </View>
+
+          {/* Location Info */}
+          <View style={{ backgroundColor: COLORS.surface, marginHorizontal: 12, marginBottom: 12, padding: 16, borderRadius: 12, ...SHADOWS.sm }}>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 8 }}>LOCATION</Text>
+
+            <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, width: 100 }}>Organization:</Text>
+              <Text style={{ fontSize: 13, color: COLORS.text, flex: 1 }}>{selectedItem.organizationcode || 'N/A'}</Text>
             </View>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Scanned Locator:</Text>
-              <Text style={styles.detailValue}>{selectedItem.actualLocator || 'Not scanned'}</Text>
+            <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, width: 100 }}>Locator:</Text>
+              <Text style={{ fontSize: 13, color: COLORS.text, flex: 1 }}>{selectedItem.locator || 'Not assigned'}</Text>
             </View>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Organization:</Text>
-              <Text style={styles.detailValue}>{selectedItem.organizationcode || 'N/A'}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, width: 100 }}>Scanned:</Text>
+              {selectedItem.actualLocator ? (
+                <View style={{ backgroundColor: COLORS.successLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.success }}>{selectedItem.actualLocator}</Text>
+                </View>
+              ) : (
+                <Text style={{ fontSize: 13, color: COLORS.warning, fontStyle: 'italic' }}>Not scanned yet</Text>
+              )}
             </View>
+          </View>
 
+          {/* Serial Numbers - Only show after locator is scanned */}
+          {selectedItem.actualLocator && (selectedItem.fromserialnumber || selectedItem.toserialnumber) && (
+            <View style={{ backgroundColor: COLORS.infoLight, marginHorizontal: 12, marginBottom: 12, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: COLORS.info }}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.info, marginBottom: 8 }}>📋 SERIAL NUMBERS</Text>
+
+              <View style={{ flexDirection: 'row', marginBottom: 6 }}>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, width: 50 }}>From:</Text>
+                <Text style={{ fontSize: 13, color: COLORS.text, flex: 1, fontFamily: 'monospace' }}>{selectedItem.fromserialnumber || 'N/A'}</Text>
+              </View>
+
+              <View style={{ flexDirection: 'row' }}>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, width: 50 }}>To:</Text>
+                <Text style={{ fontSize: 13, color: COLORS.text, flex: 1, fontFamily: 'monospace' }}>{selectedItem.toserialnumber || 'N/A'}</Text>
+              </View>
+            </View>
+          )}
+
+          {/* Action Buttons */}
+          <View style={{ paddingHorizontal: 12, paddingBottom: 24 }}>
             <TouchableOpacity
-              style={styles.scanButton}
+              style={{ backgroundColor: COLORS.secondary, padding: 16, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}
               onPress={() => handleScanLocator(selectedItem)}
             >
-              <Text style={styles.scanButtonText}>📷 Scan Pallet Locator</Text>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.white }}>📷 Scan Pallet Locator</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.confirmButton}
+              style={{ backgroundColor: COLORS.success, padding: 16, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}
               onPress={() => {
                 Alert.alert(
                   'Confirm Receipt',
@@ -1847,7 +1921,7 @@ export default function App() {
                 );
               }}
             >
-              <Text style={styles.confirmButtonText}>✓ Confirm Receipt</Text>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.white }}>✓ Confirm Receipt</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
