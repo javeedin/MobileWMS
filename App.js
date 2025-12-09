@@ -130,7 +130,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.1.3';
+const APP_VERSION = 'v1.1.4';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -2025,8 +2025,8 @@ export default function App() {
 
               {/* Subinventory & Lot Number Row */}
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
-                {item.subinventory && <Text style={{ fontSize: 12, color: COLORS.info }}>📦 {item.subinventory}</Text>}
-                {item.lotnumber && <Text style={{ fontSize: 12, color: COLORS.warning }}>🏷️ Lot: {item.lotnumber}</Text>}
+                {(item.subinventory || item.SUBINVENTORY) && <Text style={{ fontSize: 12, color: COLORS.info }}>📦 {item.subinventory || item.SUBINVENTORY}</Text>}
+                {(item.lotnumber || item.LOTNUMBER) && <Text style={{ fontSize: 12, color: COLORS.warning }}>🏷️ Lot: {item.lotnumber || item.LOTNUMBER}</Text>}
               </View>
             </TouchableOpacity>
           )}
@@ -2041,98 +2041,86 @@ export default function App() {
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
-        {/* Header with ASN */}
-        <View style={[styles.screenHeader, { justifyContent: 'center', paddingVertical: 12 }]}>
-          <Text style={{ fontSize: 16, fontWeight: '600', color: '#fff' }}>
+        {/* Header with Supplier + ASN */}
+        <View style={[styles.screenHeader, { justifyContent: 'center', paddingVertical: 10 }]}>
+          <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)' }} numberOfLines={1}>
+            {selectedItem.vendorname || 'Unknown Supplier'}
+          </Text>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>
             {selectedItem.asn_number ? `ASN: ${selectedItem.asn_number}` : 'Item Details'}
           </Text>
         </View>
 
         <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }}>
           {/* Item Title Card - Code + Description + Qty */}
-          <View style={{ backgroundColor: COLORS.surface, margin: 12, padding: 16, borderRadius: 12, ...SHADOWS.md }}>
+          <View style={{ backgroundColor: COLORS.surface, margin: 12, padding: 12, borderRadius: 12, ...SHADOWS.md }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, flex: 1, marginRight: 12 }}>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.text, flex: 1, marginRight: 8 }}>
                 {selectedItem.itemnumber || 'Unknown'}
               </Text>
-              <View style={{ backgroundColor: COLORS.successLight, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 }}>
-                <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.success }}>Qty: {selectedItem.transactionquantity || 0}</Text>
+              <View style={{ backgroundColor: COLORS.successLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                <Text style={{ fontSize: 13, fontWeight: 'bold', color: COLORS.success }}>Qty: {selectedItem.transactionquantity || 0}</Text>
               </View>
             </View>
-            <Text style={{ fontSize: 14, color: COLORS.textSecondary, lineHeight: 20, marginTop: 8 }}>
+            <Text style={{ fontSize: 13, color: COLORS.textSecondary, lineHeight: 18, marginTop: 6 }} numberOfLines={2}>
               {selectedItem.itemdescription || 'No description available'}
             </Text>
           </View>
 
-          {/* Shipment Info */}
-          <View style={{ backgroundColor: COLORS.surface, marginHorizontal: 12, marginBottom: 12, padding: 16, borderRadius: 12, ...SHADOWS.sm }}>
-            <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 8 }}>SHIPMENT INFO</Text>
-
-            <View style={{ flexDirection: 'row', marginBottom: 8 }}>
-              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.primary, width: 80 }}>Line ID:</Text>
-              <Text style={{ fontSize: 13, color: COLORS.text, flex: 1, fontWeight: '600' }}>{selectedItem.lineid || 'N/A'}</Text>
-            </View>
-
-            <View style={{ flexDirection: 'row', marginBottom: 8 }}>
-              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, width: 80 }}>Supplier:</Text>
-              <Text style={{ fontSize: 13, color: COLORS.text, flex: 1 }}>{selectedItem.vendorname || 'N/A'}</Text>
-            </View>
-
-            <View style={{ flexDirection: 'row' }}>
-              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, width: 80 }}>Line No:</Text>
-              <Text style={{ fontSize: 13, color: COLORS.text, flex: 1 }}>{selectedItem.documentlinenumber || 'N/A'}</Text>
+          {/* Shipment Info - Compact */}
+          <View style={{ backgroundColor: COLORS.surface, marginHorizontal: 12, marginBottom: 8, padding: 12, borderRadius: 12, ...SHADOWS.sm }}>
+            <View style={{ flexDirection: 'row', marginBottom: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.primary, width: 55 }}>Line ID:</Text>
+              <Text style={{ fontSize: 12, color: COLORS.text, fontWeight: '600', flex: 1 }}>{selectedItem.lineid || selectedItem.LINEID || 'N/A'}</Text>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, width: 55 }}>Line No:</Text>
+              <Text style={{ fontSize: 12, color: COLORS.text }}>{selectedItem.documentlinenumber || 'N/A'}</Text>
             </View>
           </View>
 
-          {/* Location Info */}
-          <View style={{ backgroundColor: COLORS.surface, marginHorizontal: 12, marginBottom: 12, padding: 16, borderRadius: 12, ...SHADOWS.sm }}>
-            <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 8 }}>LOCATION</Text>
-
-            <View style={{ flexDirection: 'row', marginBottom: 8 }}>
-              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, width: 100 }}>Organization:</Text>
-              <Text style={{ fontSize: 13, color: COLORS.text, flex: 1 }}>{selectedItem.organizationcode || 'N/A'}</Text>
+          {/* Location Info - Compact */}
+          <View style={{ backgroundColor: COLORS.surface, marginHorizontal: 12, marginBottom: 8, padding: 12, borderRadius: 12, ...SHADOWS.sm }}>
+            <View style={{ flexDirection: 'row', marginBottom: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, width: 70 }}>Org:</Text>
+              <Text style={{ fontSize: 12, color: COLORS.text, flex: 1 }}>{selectedItem.organizationcode || 'N/A'}</Text>
             </View>
 
-            <View style={{ flexDirection: 'row', marginBottom: 8 }}>
-              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.info, width: 100 }}>Subinventory:</Text>
-              <Text style={{ fontSize: 13, color: COLORS.text, flex: 1 }}>{selectedItem.subinventory || 'N/A'}</Text>
+            <View style={{ flexDirection: 'row', marginBottom: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.info, width: 70 }}>SubInv:</Text>
+              <Text style={{ fontSize: 12, color: COLORS.text, flex: 1 }}>{selectedItem.subinventory || selectedItem.SUBINVENTORY || 'N/A'}</Text>
             </View>
 
-            <View style={{ flexDirection: 'row', marginBottom: 8 }}>
-              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.warning, width: 100 }}>Lot Number:</Text>
-              <Text style={{ fontSize: 13, color: COLORS.text, flex: 1 }}>{selectedItem.lotnumber || 'N/A'}</Text>
+            <View style={{ flexDirection: 'row', marginBottom: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.warning, width: 70 }}>Lot No:</Text>
+              <Text style={{ fontSize: 12, color: COLORS.text, flex: 1 }}>{selectedItem.lotnumber || selectedItem.LOTNUMBER || 'N/A'}</Text>
             </View>
 
-            <View style={{ flexDirection: 'row', marginBottom: 8 }}>
-              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, width: 100 }}>Locator:</Text>
-              <Text style={{ fontSize: 13, color: COLORS.text, flex: 1 }}>{selectedItem.locator || 'Not assigned'}</Text>
+            <View style={{ flexDirection: 'row', marginBottom: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, width: 70 }}>Locator:</Text>
+              <Text style={{ fontSize: 12, color: COLORS.text, flex: 1 }}>{selectedItem.locator || 'Not assigned'}</Text>
             </View>
 
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, width: 100 }}>Scanned:</Text>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, width: 70 }}>Scanned:</Text>
               {selectedItem.actualLocator ? (
-                <View style={{ backgroundColor: COLORS.successLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.success }}>{selectedItem.actualLocator}</Text>
+                <View style={{ backgroundColor: COLORS.successLight, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.success }}>{selectedItem.actualLocator}</Text>
                 </View>
               ) : (
-                <Text style={{ fontSize: 13, color: COLORS.warning, fontStyle: 'italic' }}>Not scanned yet</Text>
+                <Text style={{ fontSize: 12, color: COLORS.warning, fontStyle: 'italic' }}>Not scanned yet</Text>
               )}
             </View>
           </View>
 
           {/* Serial Numbers - Only show after locator is scanned */}
           {selectedItem.actualLocator && (selectedItem.fromserialnumber || selectedItem.toserialnumber) && (
-            <View style={{ backgroundColor: COLORS.infoLight, marginHorizontal: 12, marginBottom: 12, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: COLORS.info }}>
-              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.info, marginBottom: 8 }}>📋 SERIAL NUMBERS</Text>
-
-              <View style={{ flexDirection: 'row', marginBottom: 6 }}>
-                <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, width: 50 }}>From:</Text>
-                <Text style={{ fontSize: 13, color: COLORS.text, flex: 1, fontFamily: 'monospace' }}>{selectedItem.fromserialnumber || 'N/A'}</Text>
+            <View style={{ backgroundColor: COLORS.infoLight, marginHorizontal: 12, marginBottom: 8, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: COLORS.info }}>
+              <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.info, width: 45 }}>From:</Text>
+                <Text style={{ fontSize: 12, color: COLORS.text, flex: 1, fontFamily: 'monospace' }}>{selectedItem.fromserialnumber || 'N/A'}</Text>
               </View>
-
               <View style={{ flexDirection: 'row' }}>
-                <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, width: 50 }}>To:</Text>
-                <Text style={{ fontSize: 13, color: COLORS.text, flex: 1, fontFamily: 'monospace' }}>{selectedItem.toserialnumber || 'N/A'}</Text>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.info, width: 45 }}>To:</Text>
+                <Text style={{ fontSize: 12, color: COLORS.text, flex: 1, fontFamily: 'monospace' }}>{selectedItem.toserialnumber || 'N/A'}</Text>
               </View>
             </View>
           )}
