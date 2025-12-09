@@ -130,7 +130,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.1.5';
+const APP_VERSION = 'v1.2.0';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -302,6 +302,12 @@ export default function App() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [receivingLoading, setReceivingLoading] = useState(false);
 
+  // Split Quantity state
+  const [splitLines, setSplitLines] = useState([]); // Array of {id, qty, locator, scanned}
+  const [showSplitModal, setShowSplitModal] = useState(false);
+  const [splitQtyInput, setSplitQtyInput] = useState('');
+  const [scanningForSplitLine, setScanningForSplitLine] = useState(null); // ID of split line being scanned
+
   // AI Stock Counting state
   const [stockCountingMode, setStockCountingMode] = useState('camera'); // 'camera', 'analyzing', 'results'
   const [capturedImage, setCapturedImage] = useState(null);
@@ -404,6 +410,108 @@ export default function App() {
     } finally {
       setReceivingLoading(false);
     }
+  };
+
+  // ============= SPLIT QUANTITY FUNCTIONS =============
+
+  // Initialize split lines when entering item detail (reset when item changes)
+  const initializeSplitLines = (item) => {
+    setSplitLines([]);
+    setSplitQtyInput('');
+    setShowSplitModal(false);
+    setScanningForSplitLine(null);
+  };
+
+  // Handle split quantity
+  const handleSplitQty = () => {
+    const splitQty = parseInt(splitQtyInput);
+    const totalQty = selectedItem?.transactionquantity || 0;
+
+    if (!splitQty || splitQty <= 0) {
+      Alert.alert('Invalid', 'Please enter a valid quantity');
+      return;
+    }
+
+    // Calculate current allocated qty
+    const currentAllocated = splitLines.reduce((sum, line) => sum + line.qty, 0);
+    const remainingQty = totalQty - currentAllocated;
+
+    if (splitQty >= remainingQty) {
+      Alert.alert('Invalid', `Split quantity must be less than remaining quantity (${remainingQty})`);
+      return;
+    }
+
+    // Add new split line
+    const newLine = {
+      id: Date.now().toString(),
+      qty: splitQty,
+      locator: '',
+      scanned: false,
+    };
+
+    // If this is first split, also create line for remaining qty
+    if (splitLines.length === 0) {
+      const remainingLine = {
+        id: 'original',
+        qty: totalQty - splitQty,
+        locator: selectedItem?.actualLocator || '',
+        scanned: !!selectedItem?.actualLocator,
+      };
+      setSplitLines([remainingLine, newLine]);
+    } else {
+      // Update the first line's qty (remaining) and add new split
+      setSplitLines(prev => {
+        const updated = [...prev];
+        updated[0] = { ...updated[0], qty: updated[0].qty - splitQty };
+        return [...updated, newLine];
+      });
+    }
+
+    setSplitQtyInput('');
+    setShowSplitModal(false);
+  };
+
+  // Handle scan for specific split line
+  const handleScanForSplitLine = (lineId) => {
+    setScanningForSplitLine(lineId);
+    setCurrentScreen('BarcodeScanner');
+  };
+
+  // Update split line locator after scan
+  const updateSplitLineLocator = (lineId, locator) => {
+    setSplitLines(prev =>
+      prev.map(line =>
+        line.id === lineId ? { ...line, locator, scanned: true } : line
+      )
+    );
+    setScanningForSplitLine(null);
+  };
+
+  // Remove a split line (merge back to first line)
+  const removeSplitLine = (lineId) => {
+    if (lineId === 'original') return; // Can't remove original line
+
+    setSplitLines(prev => {
+      const lineToRemove = prev.find(l => l.id === lineId);
+      if (!lineToRemove) return prev;
+
+      const filtered = prev.filter(l => l.id !== lineId);
+      if (filtered.length > 0) {
+        filtered[0] = { ...filtered[0], qty: filtered[0].qty + lineToRemove.qty };
+      }
+
+      // If only one line left, clear split lines (back to normal mode)
+      if (filtered.length === 1) {
+        return [];
+      }
+      return filtered;
+    });
+  };
+
+  // Check if all split lines have locators assigned
+  const allSplitLinesScanned = () => {
+    if (splitLines.length === 0) return true;
+    return splitLines.every(line => line.scanned && line.locator);
   };
 
   // ============= CALL CENTER FUNCTIONS =============
@@ -1335,6 +1443,30 @@ export default function App() {
       return;
     }
 
+    // Handle split line scanning
+    if (scanningForSplitLine) {
+      Alert.alert(
+        'Scan Successful!',
+        `Locator: ${data}`,
+        [
+          {
+            text: 'Scan Again',
+            onPress: () => setScanned(false),
+          },
+          {
+            text: 'Confirm',
+            style: 'default',
+            onPress: () => {
+              updateSplitLineLocator(scanningForSplitLine, data);
+              setScanned(false);
+              setCurrentScreen('ItemDetail');
+            },
+          },
+        ]
+      );
+      return;
+    }
+
     if (scanningForItem) {
       const updatedItem = { ...scanningForItem, actualLocator: data };
       setSelectedItem(updatedItem);
@@ -2001,6 +2133,8 @@ export default function App() {
               style={styles.itemCard}
               onPress={() => {
                 setSelectedItem({ ...item, vendorname: selectedPO.vendorname, asn_number: selectedPO.asn_number || item.asn_number });
+                setSplitLines([]); // Reset split lines for new item
+                setSplitQtyInput('');
                 navigateTo('ItemDetail');
               }}
             >
@@ -2052,20 +2186,91 @@ export default function App() {
         </View>
 
         <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }}>
-          {/* Item Title Card - Code + Description + Qty */}
+          {/* Item Title Card - Code + Description + Qty + Split */}
           <View style={{ backgroundColor: COLORS.surface, margin: 12, padding: 12, borderRadius: 12, ...SHADOWS.md }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.text, flex: 1, marginRight: 8 }}>
                 {selectedItem.itemnumber || 'Unknown'}
               </Text>
-              <View style={{ backgroundColor: COLORS.successLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
-                <Text style={{ fontSize: 13, fontWeight: 'bold', color: COLORS.success }}>Qty: {selectedItem.transactionquantity || 0}</Text>
+              <View style={{ alignItems: 'flex-end' }}>
+                <View style={{ backgroundColor: COLORS.successLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                  <Text style={{ fontSize: 13, fontWeight: 'bold', color: COLORS.success }}>Qty: {selectedItem.transactionquantity || 0}</Text>
+                </View>
+                {splitLines.length === 0 && (
+                  <TouchableOpacity
+                    onPress={() => setShowSplitModal(true)}
+                    style={{ marginTop: 4 }}
+                  >
+                    <Text style={{ fontSize: 11, color: COLORS.info, fontWeight: '600' }}>✂️ Split</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
             <Text style={{ fontSize: 13, color: COLORS.textSecondary, lineHeight: 18, marginTop: 6 }} numberOfLines={2}>
               {selectedItem.itemdescription || 'No description available'}
             </Text>
           </View>
+
+          {/* Split Lines Table - Show when splits exist */}
+          {splitLines.length > 0 && (
+            <View style={{ backgroundColor: COLORS.surface, marginHorizontal: 12, marginBottom: 8, padding: 12, borderRadius: 12, ...SHADOWS.sm }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary }}>SPLIT QUANTITIES</Text>
+                <TouchableOpacity onPress={() => setShowSplitModal(true)}>
+                  <Text style={{ fontSize: 11, color: COLORS.info, fontWeight: '600' }}>+ Add Split</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Table Header */}
+              <View style={{ flexDirection: 'row', paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: COLORS.border, marginBottom: 6 }}>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: COLORS.textSecondary, width: 50 }}>Qty</Text>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: COLORS.textSecondary, flex: 1 }}>Locator</Text>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: COLORS.textSecondary, width: 70, textAlign: 'center' }}>Action</Text>
+              </View>
+
+              {/* Split Lines */}
+              {splitLines.map((line, index) => (
+                <View key={line.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: index < splitLines.length - 1 ? 1 : 0, borderBottomColor: COLORS.neutral100 }}>
+                  <View style={{ width: 50 }}>
+                    <View style={{ backgroundColor: COLORS.infoLight, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, alignSelf: 'flex-start' }}>
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: COLORS.info }}>{line.qty}</Text>
+                    </View>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    {line.scanned && line.locator ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 12, color: COLORS.success, fontWeight: '600' }}>✓ {line.locator}</Text>
+                      </View>
+                    ) : (
+                      <Text style={{ fontSize: 12, color: COLORS.warning, fontStyle: 'italic' }}>Not assigned</Text>
+                    )}
+                  </View>
+                  <View style={{ width: 70, flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
+                    <TouchableOpacity
+                      onPress={() => handleScanForSplitLine(line.id)}
+                      style={{ backgroundColor: COLORS.secondary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}
+                    >
+                      <Text style={{ fontSize: 11, color: '#fff' }}>📍</Text>
+                    </TouchableOpacity>
+                    {line.id !== 'original' && (
+                      <TouchableOpacity
+                        onPress={() => removeSplitLine(line.id)}
+                        style={{ backgroundColor: COLORS.dangerLight, paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6 }}
+                      >
+                        <Text style={{ fontSize: 11, color: COLORS.danger }}>✕</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              ))}
+
+              {/* Total row */}
+              <View style={{ flexDirection: 'row', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: COLORS.border }}>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: COLORS.textSecondary, width: 50 }}>Total:</Text>
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: COLORS.text }}>{splitLines.reduce((sum, l) => sum + l.qty, 0)}</Text>
+              </View>
+            </View>
+          )}
 
           {/* Shipment Info - Compact */}
           <View style={{ backgroundColor: COLORS.surface, marginHorizontal: 12, marginBottom: 8, padding: 12, borderRadius: 12, ...SHADOWS.sm }}>
@@ -2127,45 +2332,122 @@ export default function App() {
 
           {/* Action Buttons */}
           <View style={{ paddingHorizontal: 12, paddingBottom: 24 }}>
-            <TouchableOpacity
-              style={{ backgroundColor: COLORS.secondary, padding: 16, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}
-              onPress={() => handleScanLocator(selectedItem)}
-            >
-              <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.white }}>📷 Scan Pallet Locator</Text>
-            </TouchableOpacity>
+            {/* Show Scan Pallet button only when no splits */}
+            {splitLines.length === 0 && (
+              <TouchableOpacity
+                style={{ backgroundColor: COLORS.secondary, padding: 16, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}
+                onPress={() => handleScanLocator(selectedItem)}
+              >
+                <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.white }}>📷 Scan Pallet Locator</Text>
+              </TouchableOpacity>
+            )}
 
+            {/* Confirm Receipt - disabled if splits exist but not all scanned */}
             <TouchableOpacity
               style={{
-                backgroundColor: receivingLoading ? COLORS.neutral400 : COLORS.success,
+                backgroundColor: (receivingLoading || (splitLines.length > 0 && !allSplitLinesScanned())) ? COLORS.neutral400 : COLORS.success,
                 padding: 16,
                 borderRadius: 12,
                 flexDirection: 'row',
                 justifyContent: 'center',
                 alignItems: 'center'
               }}
-              disabled={receivingLoading}
+              disabled={receivingLoading || (splitLines.length > 0 && !allSplitLinesScanned())}
               onPress={() => {
-                Alert.alert(
-                  'Confirm Receipt',
-                  `Confirm receipt of ${selectedItem.itemnumber}?\n\nQuantity: ${selectedItem.transactionquantity}\nLocator: ${selectedItem.actualLocator || selectedItem.locator}\nLine ID: ${selectedItem.lineid || 'N/A'}\nShipment: ${selectedItem.asn_number || selectedItem.shipmentnumber || 'N/A'}`,
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Confirm',
-                      onPress: () => confirmReceivingAPI(selectedItem),
-                    },
-                  ]
-                );
+                if (splitLines.length > 0) {
+                  // Split mode - show summary of all lines
+                  const splitSummary = splitLines.map(l => `• Qty ${l.qty} → ${l.locator}`).join('\n');
+                  Alert.alert(
+                    'Confirm Receipt',
+                    `Confirm receipt of ${selectedItem.itemnumber}?\n\nSplit Quantities:\n${splitSummary}\n\nTotal: ${splitLines.reduce((s, l) => s + l.qty, 0)}`,
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Confirm All',
+                        onPress: () => confirmReceivingAPI(selectedItem),
+                      },
+                    ]
+                  );
+                } else {
+                  // Normal mode
+                  Alert.alert(
+                    'Confirm Receipt',
+                    `Confirm receipt of ${selectedItem.itemnumber}?\n\nQuantity: ${selectedItem.transactionquantity}\nLocator: ${selectedItem.actualLocator || selectedItem.locator}\nLine ID: ${selectedItem.lineid || 'N/A'}\nShipment: ${selectedItem.asn_number || selectedItem.shipmentnumber || 'N/A'}`,
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Confirm',
+                        onPress: () => confirmReceivingAPI(selectedItem),
+                      },
+                    ]
+                  );
+                }
               }}
             >
               {receivingLoading ? (
                 <ActivityIndicator color={COLORS.white} size="small" />
               ) : (
-                <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.white }}>✓ Confirm Receipt</Text>
+                <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.white }}>
+                  {splitLines.length > 0 && !allSplitLinesScanned()
+                    ? `Assign all locators first`
+                    : '✓ Confirm Receipt'}
+                </Text>
               )}
             </TouchableOpacity>
           </View>
         </ScrollView>
+
+        {/* Split Quantity Modal */}
+        <Modal
+          visible={showSplitModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowSplitModal(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <View style={{ backgroundColor: COLORS.surface, borderRadius: 16, padding: 20, width: '100%', maxWidth: 320 }}>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 8 }}>✂️ Split Quantity</Text>
+              <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 16 }}>
+                Total: {selectedItem.transactionquantity} | Available: {selectedItem.transactionquantity - splitLines.reduce((s, l) => s + l.qty, 0)}
+              </Text>
+
+              <TextInput
+                style={{
+                  borderWidth: 1,
+                  borderColor: COLORS.border,
+                  borderRadius: 8,
+                  padding: 12,
+                  fontSize: 18,
+                  textAlign: 'center',
+                  marginBottom: 16,
+                }}
+                placeholder="Enter qty to split"
+                keyboardType="number-pad"
+                value={splitQtyInput}
+                onChangeText={setSplitQtyInput}
+                autoFocus
+              />
+
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: COLORS.neutral200, padding: 14, borderRadius: 8, alignItems: 'center' }}
+                  onPress={() => {
+                    setShowSplitModal(false);
+                    setSplitQtyInput('');
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: COLORS.primary, padding: 14, borderRadius: 8, alignItems: 'center' }}
+                  onPress={handleSplitQty}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>Split</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
     );
   }
