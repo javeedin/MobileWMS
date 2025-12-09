@@ -130,7 +130,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.1.2';
+const APP_VERSION = 'v1.1.3';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -2022,6 +2022,12 @@ export default function App() {
                 <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>📍 {item.locator || 'No Locator'}</Text>
                 <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>🏢 {item.organizationcode || 'N/A'}</Text>
               </View>
+
+              {/* Subinventory & Lot Number Row */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+                {item.subinventory && <Text style={{ fontSize: 12, color: COLORS.info }}>📦 {item.subinventory}</Text>}
+                {item.lotnumber && <Text style={{ fontSize: 12, color: COLORS.warning }}>🏷️ Lot: {item.lotnumber}</Text>}
+              </View>
             </TouchableOpacity>
           )}
         />
@@ -2043,24 +2049,22 @@ export default function App() {
         </View>
 
         <ScrollView style={{ flex: 1, backgroundColor: COLORS.background }}>
-          {/* Item Title Card - Code + Description */}
+          {/* Item Title Card - Code + Description + Qty */}
           <View style={{ backgroundColor: COLORS.surface, margin: 12, padding: 16, borderRadius: 12, ...SHADOWS.md }}>
-            <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 8 }}>
-              {selectedItem.itemnumber || 'Unknown'}
-            </Text>
-            <Text style={{ fontSize: 14, color: COLORS.textSecondary, lineHeight: 20 }}>
-              {selectedItem.itemdescription || 'No description available'}
-            </Text>
-
-            {/* Quantity Badge */}
-            <View style={{ flexDirection: 'row', marginTop: 12 }}>
-              <View style={{ backgroundColor: COLORS.successLight, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 }}>
-                <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.success }}>Qty: {selectedItem.transactionquantity || 0}</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, flex: 1, marginRight: 12 }}>
+                {selectedItem.itemnumber || 'Unknown'}
+              </Text>
+              <View style={{ backgroundColor: COLORS.successLight, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 }}>
+                <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.success }}>Qty: {selectedItem.transactionquantity || 0}</Text>
               </View>
             </View>
+            <Text style={{ fontSize: 14, color: COLORS.textSecondary, lineHeight: 20, marginTop: 8 }}>
+              {selectedItem.itemdescription || 'No description available'}
+            </Text>
           </View>
 
-          {/* ASN & Supplier Info */}
+          {/* Shipment Info */}
           <View style={{ backgroundColor: COLORS.surface, marginHorizontal: 12, marginBottom: 12, padding: 16, borderRadius: 12, ...SHADOWS.sm }}>
             <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 8 }}>SHIPMENT INFO</Text>
 
@@ -2068,13 +2072,6 @@ export default function App() {
               <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.primary, width: 80 }}>Line ID:</Text>
               <Text style={{ fontSize: 13, color: COLORS.text, flex: 1, fontWeight: '600' }}>{selectedItem.lineid || 'N/A'}</Text>
             </View>
-
-            {selectedItem.asn_number && (
-              <View style={{ flexDirection: 'row', marginBottom: 8 }}>
-                <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.info, width: 80 }}>ASN:</Text>
-                <Text style={{ fontSize: 13, color: COLORS.text, flex: 1 }}>{selectedItem.asn_number}</Text>
-              </View>
-            )}
 
             <View style={{ flexDirection: 'row', marginBottom: 8 }}>
               <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, width: 80 }}>Supplier:</Text>
@@ -2094,6 +2091,16 @@ export default function App() {
             <View style={{ flexDirection: 'row', marginBottom: 8 }}>
               <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, width: 100 }}>Organization:</Text>
               <Text style={{ fontSize: 13, color: COLORS.text, flex: 1 }}>{selectedItem.organizationcode || 'N/A'}</Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.info, width: 100 }}>Subinventory:</Text>
+              <Text style={{ fontSize: 13, color: COLORS.text, flex: 1 }}>{selectedItem.subinventory || 'N/A'}</Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.warning, width: 100 }}>Lot Number:</Text>
+              <Text style={{ fontSize: 13, color: COLORS.text, flex: 1 }}>{selectedItem.lotnumber || 'N/A'}</Text>
             </View>
 
             <View style={{ flexDirection: 'row', marginBottom: 8 }}>
