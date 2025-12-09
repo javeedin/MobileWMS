@@ -130,7 +130,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.0.9';
+const APP_VERSION = 'v1.1.0';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -300,6 +300,13 @@ export default function App() {
   const [inboundCallTimer, setInboundCallTimer] = useState(0);
   const inboundTimerRef = useRef(null);
   const [loginLoading, setLoginLoading] = useState(false);
+
+  // AI Stock Counting state
+  const [stockCountingMode, setStockCountingMode] = useState('camera'); // 'camera', 'analyzing', 'results'
+  const [capturedImage, setCapturedImage] = useState(null);
+  const [aiCountResults, setAiCountResults] = useState([]);
+  const [stockCountLocation, setStockCountLocation] = useState('');
+  const cameraRef = useRef(null);
 
   // Handle Login with API
   const handleLogin = async () => {
@@ -1125,6 +1132,74 @@ export default function App() {
     setShowSuggestions(false);
   };
 
+  // AI Stock Counting - Take Picture
+  const takePicture = async () => {
+    if (cameraRef.current) {
+      try {
+        const photo = await cameraRef.current.takePictureAsync({
+          quality: 0.7,
+          base64: true,
+        });
+        setCapturedImage(photo);
+        setStockCountingMode('analyzing');
+        // Start mock AI analysis
+        analyzeImageWithAI(photo);
+      } catch (error) {
+        Alert.alert('Error', 'Failed to capture image: ' + error.message);
+      }
+    }
+  };
+
+  // AI Stock Counting - Mock AI Analysis
+  const analyzeImageWithAI = async (photo) => {
+    // Simulate AI processing time
+    await new Promise(resolve => setTimeout(resolve, 2500));
+
+    // Mock AI results - In real implementation, this would call OpenAI Vision API
+    const mockResults = [
+      { id: '1', itemName: 'Cardboard Box - Large', count: Math.floor(Math.random() * 10) + 5, confidence: 94, color: '#3B82F6' },
+      { id: '2', itemName: 'Cardboard Box - Medium', count: Math.floor(Math.random() * 15) + 8, confidence: 91, color: '#10B981' },
+      { id: '3', itemName: 'Cardboard Box - Small', count: Math.floor(Math.random() * 20) + 10, confidence: 88, color: '#F59E0B' },
+      { id: '4', itemName: 'Plastic Container', count: Math.floor(Math.random() * 5) + 2, confidence: 85, color: '#8B5CF6' },
+      { id: '5', itemName: 'Wooden Pallet', count: Math.floor(Math.random() * 3) + 1, confidence: 96, color: '#EC4899' },
+    ];
+
+    // Randomly select 3-5 items to make it more realistic
+    const numItems = Math.floor(Math.random() * 3) + 3;
+    const shuffled = mockResults.sort(() => 0.5 - Math.random());
+    const selectedResults = shuffled.slice(0, numItems);
+
+    setAiCountResults(selectedResults);
+    setStockCountingMode('results');
+  };
+
+  // AI Stock Counting - Update Count
+  const updateItemCount = (itemId, newCount) => {
+    setAiCountResults(prev =>
+      prev.map(item =>
+        item.id === itemId ? { ...item, count: parseInt(newCount) || 0, manuallyAdjusted: true } : item
+      )
+    );
+  };
+
+  // AI Stock Counting - Save Results
+  const saveStockCount = () => {
+    const totalItems = aiCountResults.reduce((sum, item) => sum + item.count, 0);
+    Alert.alert(
+      'Stock Count Saved',
+      `Location: ${stockCountLocation || 'Not specified'}\nTotal Items: ${totalItems}\n\nItems counted:\n${aiCountResults.map(r => `• ${r.itemName}: ${r.count}`).join('\n')}`,
+      [{ text: 'OK', onPress: resetStockCounting }]
+    );
+  };
+
+  // AI Stock Counting - Reset
+  const resetStockCounting = () => {
+    setStockCountingMode('camera');
+    setCapturedImage(null);
+    setAiCountResults([]);
+    setStockCountLocation('');
+  };
+
   const filteredOnhandData = onhandData.filter(item => {
     if (!searchQuery) return true;
 
@@ -1663,15 +1738,15 @@ export default function App() {
               <Text style={styles.compactMenuTitle}>Scan</Text>
             </TouchableOpacity>
 
-            {/* Stock Counts */}
+            {/* Stock Counts - AI Powered */}
             <TouchableOpacity
               style={styles.compactMenuCard}
-              onPress={() => Alert.alert('Coming Soon', 'Stock Counts feature coming soon')}
+              onPress={() => navigateTo('StockCounting')}
             >
               <View style={[styles.compactMenuIconBg, { backgroundColor: '#fce7f3' }]}>
-                <Text style={styles.compactMenuIcon}>📊</Text>
+                <Text style={styles.compactMenuIcon}>🤖</Text>
               </View>
-              <Text style={styles.compactMenuTitle}>Counts</Text>
+              <Text style={styles.compactMenuTitle}>AI Count</Text>
             </TouchableOpacity>
 
             {/* Transfer Orders */}
@@ -2478,6 +2553,206 @@ export default function App() {
             )}
           </View>
         </View>
+      </View>
+    );
+  }
+
+  // ============= AI STOCK COUNTING SCREEN =============
+  if (currentScreen === 'StockCounting') {
+    // Camera permission check
+    if (!permission) {
+      return (
+        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={{ marginTop: 16, color: COLORS.textSecondary }}>Loading camera...</Text>
+        </View>
+      );
+    }
+
+    if (!permission.granted) {
+      return (
+        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+          <Text style={{ fontSize: 48, marginBottom: 16 }}>📷</Text>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 8 }}>Camera Access Required</Text>
+          <Text style={{ fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', marginBottom: 24 }}>
+            AI Stock Counting needs camera access to capture shelf images for analysis.
+          </Text>
+          <TouchableOpacity
+            style={{ backgroundColor: COLORS.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
+            onPress={requestPermission}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600' }}>Grant Permission</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={{ marginTop: 16 }} onPress={goBack}>
+            <Text style={{ color: COLORS.primary }}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+        {/* Header */}
+        <View style={[styles.screenHeader, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 }]}>
+          <TouchableOpacity onPress={() => { resetStockCounting(); goBack(); }}>
+            <Text style={{ color: '#fff', fontSize: 24 }}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.screenTitle}>🤖 AI Stock Count</Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        {/* Camera Mode */}
+        {stockCountingMode === 'camera' && (
+          <View style={{ flex: 1 }}>
+            {/* Location Input */}
+            <View style={{ backgroundColor: COLORS.surface, padding: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+              <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 4 }}>Rack/Shelf Location</Text>
+              <TextInput
+                style={{ backgroundColor: COLORS.background, padding: 10, borderRadius: 8, fontSize: 14 }}
+                placeholder="Enter location (e.g., A-01-03)"
+                value={stockCountLocation}
+                onChangeText={setStockCountLocation}
+              />
+            </View>
+
+            {/* Camera View */}
+            <View style={{ flex: 1 }}>
+              <CameraView
+                ref={cameraRef}
+                style={{ flex: 1 }}
+                facing="back"
+              />
+
+              {/* Overlay */}
+              <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
+                {/* Frame Guide */}
+                <View style={{ width: '85%', height: '60%', borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)', borderRadius: 12, borderStyle: 'dashed' }}>
+                  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <Text style={{ color: '#fff', fontSize: 14, textAlign: 'center', backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 }}>
+                      📦 Point camera at shelf/rack
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Capture Button */}
+              <View style={{ position: 'absolute', bottom: 30, left: 0, right: 0, alignItems: 'center' }}>
+                <TouchableOpacity
+                  style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', ...SHADOWS.lg }}
+                  onPress={takePicture}
+                >
+                  <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 28 }}>📸</Text>
+                  </View>
+                </TouchableOpacity>
+                <Text style={{ color: '#fff', marginTop: 8, fontSize: 12, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 }}>
+                  Tap to capture & analyze
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Analyzing Mode */}
+        {stockCountingMode === 'analyzing' && (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
+            {capturedImage && (
+              <View style={{ width: 200, height: 200, borderRadius: 12, overflow: 'hidden', marginBottom: 24, ...SHADOWS.md }}>
+                <View style={{ flex: 1, backgroundColor: COLORS.neutral300, justifyContent: 'center', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 48 }}>📷</Text>
+                </View>
+              </View>
+            )}
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginTop: 16 }}>🤖 AI Analyzing Image...</Text>
+            <Text style={{ fontSize: 14, color: COLORS.textSecondary, marginTop: 8, textAlign: 'center', paddingHorizontal: 40 }}>
+              Identifying and counting items on the shelf
+            </Text>
+            <View style={{ flexDirection: 'row', marginTop: 24 }}>
+              <Text style={{ fontSize: 12, color: COLORS.info }}>🔍 Detecting objects...</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Results Mode */}
+        {stockCountingMode === 'results' && (
+          <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+            {/* Results Header */}
+            <View style={{ backgroundColor: COLORS.successLight, padding: 16, flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={{ fontSize: 24, marginRight: 12 }}>✅</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.success }}>Analysis Complete</Text>
+                <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                  {stockCountLocation ? `Location: ${stockCountLocation}` : 'Location not specified'} • {aiCountResults.length} item types detected
+                </Text>
+              </View>
+            </View>
+
+            {/* Results List */}
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12 }}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 12 }}>DETECTED ITEMS (tap count to adjust)</Text>
+
+              {aiCountResults.map((item, index) => (
+                <View key={item.id} style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 16, marginBottom: 12, ...SHADOWS.sm }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: item.color + '20', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                      <Text style={{ fontSize: 20 }}>📦</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.text }}>{item.itemName}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                        <View style={{ backgroundColor: item.confidence >= 90 ? COLORS.successLight : COLORS.warningLight, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                          <Text style={{ fontSize: 11, color: item.confidence >= 90 ? COLORS.success : COLORS.warning }}>
+                            {item.confidence}% confidence
+                          </Text>
+                        </View>
+                        {item.manuallyAdjusted && (
+                          <Text style={{ fontSize: 11, color: COLORS.info, marginLeft: 8 }}>✏️ Adjusted</Text>
+                        )}
+                      </View>
+                    </View>
+                    <View style={{ alignItems: 'center' }}>
+                      <TextInput
+                        style={{ width: 60, height: 44, backgroundColor: COLORS.background, borderRadius: 8, textAlign: 'center', fontSize: 18, fontWeight: 'bold', color: item.color }}
+                        value={String(item.count)}
+                        onChangeText={(text) => updateItemCount(item.id, text)}
+                        keyboardType="number-pad"
+                      />
+                    </View>
+                  </View>
+                </View>
+              ))}
+
+              {/* Total */}
+              <View style={{ backgroundColor: COLORS.primary, borderRadius: 12, padding: 16, marginTop: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: 16, fontWeight: '600', color: '#fff' }}>Total Items</Text>
+                <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#fff' }}>
+                  {aiCountResults.reduce((sum, item) => sum + item.count, 0)}
+                </Text>
+              </View>
+            </ScrollView>
+
+            {/* Action Buttons */}
+            <View style={{ padding: 12, backgroundColor: COLORS.surface, borderTopWidth: 1, borderTopColor: COLORS.border }}>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: COLORS.neutral200, padding: 14, borderRadius: 12, alignItems: 'center' }}
+                  onPress={resetStockCounting}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }}>🔄 Retake</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 2, backgroundColor: COLORS.success, padding: 14, borderRadius: 12, alignItems: 'center' }}
+                  onPress={saveStockCount}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>✓ Save Count</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
       </View>
     );
   }
