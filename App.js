@@ -130,7 +130,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.2.4';
+const APP_VERSION = 'v1.2.5';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -352,7 +352,7 @@ export default function App() {
     setCurrentScreen('Home');
   };
 
-  // Confirm Receiving API - GET request with query parameters
+  // Confirm Receiving API - POST request with JSON body
   const confirmReceivingAPI = async (item) => {
     const lineId = item.lineid || item.LINEID || item.line_id || item.LINE_ID || '';
     if (!lineId) {
@@ -367,12 +367,20 @@ export default function App() {
     }
 
     setReceivingLoading(true);
-    const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/poreceiveoneline?p_shipment_number=${encodeURIComponent(shipmentNumber)}&p_line_id=${encodeURIComponent(lineId)}`;
+    const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/poreceiveoneline`;
 
     try {
       console.log('Calling API:', url);
+      console.log('Parameters:', { p_shipment_number: shipmentNumber, p_line_id: lineId });
       const response = await fetch(url, {
-        method: 'GET',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          p_shipment_number: shipmentNumber,
+          p_line_id: lineId
+        }),
       });
 
       // Get raw text first for debugging
@@ -386,7 +394,7 @@ export default function App() {
       } catch (parseError) {
         Alert.alert(
           'API Response Error',
-          `URL: ${url}\n\nResponse (not JSON):\n${rawText.substring(0, 300)}`,
+          `POST: ${url}\nBody: p_shipment_number=${shipmentNumber}, p_line_id=${lineId}\n\nResponse (not JSON):\n${rawText.substring(0, 250)}`,
           [{ text: 'OK' }]
         );
         return;
@@ -411,12 +419,12 @@ export default function App() {
       } else {
         Alert.alert(
           'Receiving Failed',
-          `${data.message || data.MESSAGE || data.error || 'Failed to process receiving.'}\n\nURL: ${url}`,
+          `${data.message || data.MESSAGE || data.error || 'Failed to process receiving.'}\n\nPOST: ${url}\nBody: p_shipment_number=${shipmentNumber}, p_line_id=${lineId}`,
           [{ text: 'OK' }]
         );
       }
     } catch (error) {
-      Alert.alert('Network Error', `${error.message}\n\nURL: ${url}`);
+      Alert.alert('Network Error', `${error.message}\n\nPOST: ${url}\nBody: p_shipment_number=${shipmentNumber}, p_line_id=${lineId}`);
     } finally {
       setReceivingLoading(false);
     }
