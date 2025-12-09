@@ -368,7 +368,7 @@ export default function App() {
 
     setReceivingLoading(true);
     try {
-      const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/poreceiveoneline?shipment_number=${encodeURIComponent(shipmentNumber)}&line_id=${encodeURIComponent(lineId)}`;
+      const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/poreceiveoneline?p_shipment_number=${encodeURIComponent(shipmentNumber)}&p_line_id=${encodeURIComponent(lineId)}`;
 
       const response = await fetch(url, {
         method: 'GET',
