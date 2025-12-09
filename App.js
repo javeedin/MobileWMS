@@ -130,7 +130,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.0.7';
+const APP_VERSION = 'v1.0.8';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -161,22 +161,31 @@ export default function App() {
 
   // Go back to previous screen
   const goBack = () => {
-    if (navigationHistory.length > 0) {
-      const prevScreen = navigationHistory[navigationHistory.length - 1];
-      setNavigationHistory(prev => prev.slice(0, -1));
+    setNavigationHistory(prev => {
+      if (prev.length > 0) {
+        const prevScreen = prev[prev.length - 1];
 
-      // Clear selection states when going back to parent screens
-      if (prevScreen === 'ReceiveGoods') {
+        // Clear selection states when going back to parent screens
+        if (prevScreen === 'ReceiveGoods') {
+          setSelectedPO(null);
+          setSelectedItem(null);
+        } else if (prevScreen === 'POItems') {
+          setSelectedItem(null);
+        } else if (prevScreen === 'Ship') {
+          setSelectedShipOrder(null);
+        }
+
+        setCurrentScreen(prevScreen);
+        return prev.slice(0, -1);
+      } else {
+        // No history, go to Home and clear all selections
         setSelectedPO(null);
         setSelectedItem(null);
-      } else if (prevScreen === 'POItems') {
-        setSelectedItem(null);
+        setSelectedShipOrder(null);
+        setCurrentScreen('Home');
+        return [];
       }
-
-      setCurrentScreen(prevScreen);
-    } else {
-      setCurrentScreen('Home');
-    }
+    });
   };
 
   // KPI state
