@@ -130,7 +130,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.2.6';
+const APP_VERSION = 'v1.2.7';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -392,9 +392,12 @@ export default function App() {
       try {
         data = JSON.parse(rawText);
       } catch (parseError) {
+        console.log('API Parse Error - URL:', url);
+        console.log('API Parse Error - Body:', { p_shipment_number: shipmentNumber, p_line_id: lineId });
+        console.log('API Parse Error - Response:', rawText);
         Alert.alert(
           'API Response Error',
-          `POST: ${url}\nBody: p_shipment_number=${shipmentNumber}, p_line_id=${lineId}\n\nResponse (not JSON):\n${rawText.substring(0, 250)}`,
+          'Invalid response from server. Check VS Code console for details.',
           [{ text: 'OK' }]
         );
         return;
@@ -450,14 +453,20 @@ export default function App() {
           ]
         );
       } else {
+        console.log('Receiving Failed - URL:', url);
+        console.log('Receiving Failed - Body:', { p_shipment_number: shipmentNumber, p_line_id: lineId });
+        console.log('Receiving Failed - Response:', data);
         Alert.alert(
           'Receiving Failed',
-          `${data.message || data.MESSAGE || data.error || 'Failed to process receiving.'}\n\nPOST: ${url}\nBody: p_shipment_number=${shipmentNumber}, p_line_id=${lineId}`,
+          data.message || data.MESSAGE || data.error || 'Failed to process receiving. Check VS Code console for details.',
           [{ text: 'OK' }]
         );
       }
     } catch (error) {
-      Alert.alert('Network Error', `${error.message}\n\nPOST: ${url}\nBody: p_shipment_number=${shipmentNumber}, p_line_id=${lineId}`);
+      console.log('Network Error - URL:', url);
+      console.log('Network Error - Body:', { p_shipment_number: shipmentNumber, p_line_id: lineId });
+      console.log('Network Error:', error.message);
+      Alert.alert('Network Error', error.message);
     } finally {
       setReceivingLoading(false);
     }
