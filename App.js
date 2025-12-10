@@ -131,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.3.0';
+const APP_VERSION = 'v1.3.1';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -313,6 +313,10 @@ export default function App() {
   // Expiration Date state
   const [expirationDate, setExpirationDate] = useState(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Locator fields state (for non-split mode)
+  const [locatorInput, setLocatorInput] = useState('');
+  const [scannedLocator, setScannedLocator] = useState('');
 
   // AI Stock Counting state
   const [stockCountingMode, setStockCountingMode] = useState('camera'); // 'camera', 'analyzing', 'results'
@@ -1607,6 +1611,7 @@ _Sent from MobileWMS_`;
     if (scanningForItem) {
       const updatedItem = { ...scanningForItem, actualLocator: data };
       setSelectedItem(updatedItem);
+      setScannedLocator(data); // Update scanned locator field
 
       // Update the item in poData as well
       const updatedPoData = poData.map(item =>
@@ -2279,6 +2284,9 @@ _Sent from MobileWMS_`;
                 setSplitLines([]); // Reset split lines for new item
                 setSplitQtyInput1('');
                 setSplitQtyInput2('');
+                setLocatorInput(item.locator || ''); // Initialize locator field
+                setScannedLocator(item.actualLocator || ''); // Initialize scanned field
+                setExpirationDate(null); // Reset expiration date
                 navigateTo('ItemDetail');
               }}
             >
@@ -2488,26 +2496,26 @@ _Sent from MobileWMS_`;
             </View>
           </View>
 
-          {/* Location Info - Compact */}
-          <View style={{ backgroundColor: COLORS.surface, marginHorizontal: 12, marginBottom: 8, padding: 12, borderRadius: 12, ...SHADOWS.sm }}>
-            <View style={{ flexDirection: 'row', marginBottom: 6 }}>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, width: 70 }}>Org:</Text>
-              <Text style={{ fontSize: 12, color: COLORS.text, flex: 1 }}>{selectedItem.organizationcode || 'N/A'}</Text>
+          {/* Location Info */}
+          <View style={{ backgroundColor: COLORS.surface, marginHorizontal: 12, marginBottom: 8, padding: 14, borderRadius: 12, ...SHADOWS.sm }}>
+            <View style={{ flexDirection: 'row', marginBottom: 10 }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textSecondary, width: 80 }}>Org:</Text>
+              <Text style={{ fontSize: 14, color: COLORS.text, flex: 1 }}>{selectedItem.organizationcode || 'N/A'}</Text>
             </View>
 
-            <View style={{ flexDirection: 'row', marginBottom: 6 }}>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.info, width: 70 }}>SubInv:</Text>
-              <Text style={{ fontSize: 12, color: COLORS.text, flex: 1 }}>{selectedItem.subinventory || selectedItem.SUBINVENTORY || 'N/A'}</Text>
+            <View style={{ flexDirection: 'row', marginBottom: 10 }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.info, width: 80 }}>SubInv:</Text>
+              <Text style={{ fontSize: 14, color: COLORS.text, flex: 1 }}>{selectedItem.subinventory || selectedItem.SUBINVENTORY || 'N/A'}</Text>
             </View>
 
-            <View style={{ flexDirection: 'row', marginBottom: 6 }}>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.warning, width: 70 }}>Lot No:</Text>
-              <Text style={{ fontSize: 12, color: COLORS.text, flex: 1 }}>{selectedItem.lotnumber || selectedItem.LOTNUMBER || selectedItem.lot_number || selectedItem.LOT_NUMBER || 'N/A'}</Text>
+            <View style={{ flexDirection: 'row', marginBottom: 10 }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.warning, width: 80 }}>Lot No:</Text>
+              <Text style={{ fontSize: 14, color: COLORS.text, flex: 1 }}>{selectedItem.lotnumber || selectedItem.LOTNUMBER || selectedItem.lot_number || selectedItem.LOT_NUMBER || 'N/A'}</Text>
             </View>
 
             {/* Expiration Date Field */}
-            <View style={{ flexDirection: 'row', marginBottom: 6, alignItems: 'center' }}>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.danger, width: 70 }}>Exp Date:</Text>
+            <View style={{ flexDirection: 'row', marginBottom: 10, alignItems: 'center' }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.danger, width: 80 }}>Exp Date:</Text>
               <TouchableOpacity
                 onPress={() => {
                   if ((selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS') {
@@ -2521,33 +2529,64 @@ _Sent from MobileWMS_`;
                   backgroundColor: (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS' ? COLORS.neutral100 : '#fff',
                   borderWidth: 1,
                   borderColor: expirationDate ? COLORS.success : COLORS.border,
-                  borderRadius: 6,
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
+                  borderRadius: 8,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
                 }}
                 disabled={(selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS'}
               >
-                <Text style={{ fontSize: 12, color: expirationDate ? COLORS.text : COLORS.neutral400, flex: 1 }}>
+                <Text style={{ fontSize: 14, color: expirationDate ? COLORS.text : COLORS.neutral400, flex: 1 }}>
                   {expirationDate ? expirationDate.toLocaleDateString() : 'Select date'}
                 </Text>
-                <Text style={{ fontSize: 14 }}>📅</Text>
+                <Text style={{ fontSize: 16 }}>📅</Text>
               </TouchableOpacity>
             </View>
 
-            <View style={{ flexDirection: 'row', marginBottom: 6 }}>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, width: 70 }}>Locator:</Text>
-              <Text style={{ fontSize: 12, color: COLORS.text, flex: 1 }}>{selectedItem.locator || 'Not assigned'}</Text>
+            {/* Locator - Editable Text Field */}
+            <View style={{ flexDirection: 'row', marginBottom: 10, alignItems: 'center' }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textSecondary, width: 80 }}>Locator:</Text>
+              <TextInput
+                style={{
+                  flex: 1,
+                  borderWidth: 1,
+                  borderColor: locatorInput ? COLORS.info : COLORS.border,
+                  borderRadius: 8,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  fontSize: 14,
+                  backgroundColor: (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS' ? COLORS.neutral100 : '#fff',
+                  color: COLORS.text,
+                }}
+                value={locatorInput}
+                onChangeText={setLocatorInput}
+                placeholder="Enter or scan locator"
+                placeholderTextColor={COLORS.neutral400}
+                editable={(selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS'}
+              />
             </View>
 
+            {/* Scanned - Editable Text Field (updated by scanner) */}
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, width: 70 }}>Scanned:</Text>
-              {selectedItem.actualLocator ? (
-                <View style={{ backgroundColor: COLORS.successLight, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.success }}>{selectedItem.actualLocator}</Text>
-                </View>
-              ) : (
-                <Text style={{ fontSize: 12, color: COLORS.warning, fontStyle: 'italic' }}>Not scanned yet</Text>
-              )}
+              <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.success, width: 80 }}>Scanned:</Text>
+              <TextInput
+                style={{
+                  flex: 1,
+                  borderWidth: 1,
+                  borderColor: scannedLocator ? COLORS.success : COLORS.border,
+                  borderRadius: 8,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  fontSize: 14,
+                  backgroundColor: scannedLocator ? COLORS.successLight : ((selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS' ? COLORS.neutral100 : '#fff'),
+                  color: scannedLocator ? COLORS.success : COLORS.text,
+                  fontWeight: scannedLocator ? '600' : 'normal',
+                }}
+                value={scannedLocator}
+                onChangeText={setScannedLocator}
+                placeholder="Scan to fill"
+                placeholderTextColor={COLORS.neutral400}
+                editable={(selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS'}
+              />
             </View>
           </View>
 
@@ -2580,7 +2619,7 @@ _Sent from MobileWMS_`;
             {/* Confirm Receipt - disabled if already received, loading, splits not scanned, or locator empty */}
             {(() => {
               const isAlreadyReceived = (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS';
-              const currentLocator = selectedItem.actualLocator || selectedItem.locator || '';
+              const currentLocator = scannedLocator || locatorInput || '';
               const isLocatorEmpty = !currentLocator || currentLocator.trim() === '' || currentLocator.trim() === '----';
               const hasSplitLocatorIssue = splitLines.length > 0 && !allSplitLinesScanned();
               const hasNormalLocatorIssue = splitLines.length === 0 && isLocatorEmpty;
@@ -2628,7 +2667,7 @@ _Sent from MobileWMS_`;
                   // Normal mode
                   Alert.alert(
                     'Confirm Receipt',
-                    `Confirm receipt of ${selectedItem.itemnumber}?\n\nQuantity: ${selectedItem.transactionquantity}\nLocator: ${selectedItem.actualLocator || selectedItem.locator}`,
+                    `Confirm receipt of ${selectedItem.itemnumber}?\n\nQuantity: ${selectedItem.transactionquantity}\nLocator: ${locatorInput || 'N/A'}\nScanned: ${scannedLocator || 'N/A'}`,
                     [
                       { text: 'Cancel', style: 'cancel' },
                       {
