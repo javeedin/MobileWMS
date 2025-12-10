@@ -131,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.3.1';
+const APP_VERSION = 'v1.3.2';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -316,7 +316,6 @@ export default function App() {
 
   // Locator fields state (for non-split mode)
   const [locatorInput, setLocatorInput] = useState('');
-  const [scannedLocator, setScannedLocator] = useState('');
 
   // AI Stock Counting state
   const [stockCountingMode, setStockCountingMode] = useState('camera'); // 'camera', 'analyzing', 'results'
@@ -2180,29 +2179,68 @@ _Sent from MobileWMS_`;
             data={poList}
             keyExtractor={(item) => item.documentnumber}
             contentContainerStyle={styles.poList}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.poCard}
-                onPress={() => {
-                  setSelectedPO(item);
-                  navigateTo('POItems');
-                }}
-              >
-                <View style={styles.poCardHeader}>
-                  <Text style={styles.poNumber}>PO: {item.documentnumber}</Text>
-                  <View style={[styles.itemCountBadge, { backgroundColor: COLORS.receiveColor }]}>
-                    <Text style={styles.itemCountText}>{item.itemCount} items</Text>
+            renderItem={({ item }) => {
+              // Calculate receiving status
+              const totalLines = item.items?.length || 0;
+              const receivedLines = item.items?.filter(i =>
+                (i.processingstatuscode || i.PROCESSINGSTATUSCODE) === 'SUCCESS'
+              ).length || 0;
+
+              let statusText = 'Pending';
+              let statusColor = COLORS.warning;
+              let statusBg = COLORS.warningLight;
+
+              if (totalLines > 0 && receivedLines === totalLines) {
+                statusText = 'Fully Received';
+                statusColor = COLORS.success;
+                statusBg = COLORS.successLight;
+              } else if (receivedLines > 0) {
+                statusText = 'Partial';
+                statusColor = COLORS.info;
+                statusBg = COLORS.infoLight;
+              }
+
+              return (
+                <TouchableOpacity
+                  style={styles.poCard}
+                  onPress={() => {
+                    setSelectedPO(item);
+                    navigateTo('POItems');
+                  }}
+                >
+                  <View style={styles.poCardHeader}>
+                    <Text style={styles.poNumber}>PO: {item.documentnumber}</Text>
+                    <View style={[styles.itemCountBadge, { backgroundColor: COLORS.receiveColor }]}>
+                      <Text style={styles.itemCountText}>{item.itemCount} items</Text>
+                    </View>
                   </View>
-                </View>
-                {item.asn_number && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                    <Text style={{ fontSize: 12, color: COLORS.info, fontWeight: '600' }}>ASN: </Text>
-                    <Text style={{ fontSize: 12, color: COLORS.info }}>{item.asn_number}</Text>
+                  {item.asn_number && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                      <Text style={{ fontSize: 12, color: COLORS.info, fontWeight: '600' }}>ASN: </Text>
+                      <Text style={{ fontSize: 12, color: COLORS.info }}>{item.asn_number}</Text>
+                    </View>
+                  )}
+                  <Text style={styles.poCardSubtext}>Vendor: {item.vendorname}</Text>
+
+                  {/* Receiving Status */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, justifyContent: 'space-between' }}>
+                    <View style={{
+                      backgroundColor: statusBg,
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      borderRadius: 12
+                    }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: statusColor }}>
+                        {statusText}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                      {receivedLines}/{totalLines} received
+                    </Text>
                   </View>
-                )}
-                <Text style={styles.poCardSubtext}>Vendor: {item.vendorname}</Text>
-              </TouchableOpacity>
-            )}
+                </TouchableOpacity>
+              );
+            }}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>No purchase orders found</Text>
