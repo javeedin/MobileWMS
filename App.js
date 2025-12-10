@@ -131,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.3.4';
+const APP_VERSION = 'v1.3.5';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -652,6 +652,133 @@ _Sent from MobileWMS_`;
   const allSplitLinesScanned = () => {
     if (splitLines.length === 0) return true;
     return splitLines.every(line => line.scanned && line.locator);
+  };
+
+  // ============= GENERATE RECEIVING JSON =============
+  // Helper to parse serial number (e.g., "IGRN202512012_111" -> { prefix: "IGRN202512012_", num: 111 })
+  const parseSerialNumber = (serial) => {
+    if (!serial) return null;
+    const match = serial.match(/^(.+_)(\d+)$/);
+    if (match) {
+      return { prefix: match[1], num: parseInt(match[2], 10) };
+    }
+    return null;
+  };
+
+  // Generate receiving JSON for API
+  const generateReceivingJSON = () => {
+    if (!selectedItem || !selectedPO) return null;
+
+    const item = selectedItem;
+    const po = selectedPO;
+
+    // Parse from/to serial numbers
+    const fromSerial = parseSerialNumber(item.fromserialnumber);
+    const toSerial = parseSerialNumber(item.toserialnumber);
+    const totalQty = item.transactionquantity || 0;
+
+    // Build lines array
+    let lines = [];
+
+    if (splitLines.length > 0) {
+      // Split scenario - create line for each split
+      let serialStart = fromSerial ? fromSerial.num : 0;
+
+      splitLines.forEach((split, index) => {
+        const splitQty = split.qty;
+        const serialEnd = serialStart + splitQty - 1;
+
+        // Build serial range for this split
+        let lotSerialItemSerials = [];
+        if (fromSerial && toSerial) {
+          lotSerialItemSerials = [{
+            FromSerialNumber: `${fromSerial.prefix}${serialStart}`,
+            ToSerialNumber: `${fromSerial.prefix}${serialEnd}`
+          }];
+        }
+
+        lines.push({
+          ReceiptSourceCode: "VENDOR",
+          ShipmentNumber: item.asn_number || po.asn_number || "",
+          TransactionType: "DELIVER",
+          AutoTransactCode: "DELIVER",
+          ShipmentHeaderId: item.shipmentheaderid || item.SHIPMENTHEADERID || null,
+          ShipmentLineId: item.lineid || item.LINEID || item.shipmentlineid || null,
+          DocumentLineNumber: item.documentlinenumber || "",
+          ItemNumber: item.itemnumber || "",
+          OrganizationCode: item.organizationcode || "",
+          Subinventory: item.subinventory || item.SUBINVENTORY || "",
+          Locator: split.locator || "",
+          Quantity: splitQty,
+          UnitOfMeasure: item.unitofmeasure || item.uom || "PCS",
+          lotSerialItemLots: [{
+            LotNumber: item.lotnumber || item.LOTNUMBER || "",
+            TransactionQuantity: splitQty,
+            lotSerialItemSerials: lotSerialItemSerials
+          }]
+        });
+
+        serialStart = serialEnd + 1;
+      });
+    } else {
+      // Non-split scenario - single line
+      const locator = scannedLocator || locatorInput || item.locator || "";
+
+      let lotSerialItemSerials = [];
+      if (item.fromserialnumber && item.toserialnumber) {
+        lotSerialItemSerials = [{
+          FromSerialNumber: item.fromserialnumber,
+          ToSerialNumber: item.toserialnumber
+        }];
+      }
+
+      lines.push({
+        ReceiptSourceCode: "VENDOR",
+        ShipmentNumber: item.asn_number || po.asn_number || "",
+        TransactionType: "DELIVER",
+        AutoTransactCode: "DELIVER",
+        ShipmentHeaderId: item.shipmentheaderid || item.SHIPMENTHEADERID || null,
+        ShipmentLineId: item.lineid || item.LINEID || item.shipmentlineid || null,
+        DocumentLineNumber: item.documentlinenumber || "",
+        ItemNumber: item.itemnumber || "",
+        OrganizationCode: item.organizationcode || "",
+        Subinventory: item.subinventory || item.SUBINVENTORY || "",
+        Locator: locator,
+        Quantity: totalQty,
+        UnitOfMeasure: item.unitofmeasure || item.uom || "PCS",
+        lotSerialItemLots: [{
+          LotNumber: item.lotnumber || item.LOTNUMBER || "",
+          TransactionQuantity: totalQty,
+          lotSerialItemSerials: lotSerialItemSerials
+        }]
+      });
+    }
+
+    // Build full JSON
+    const receivingJSON = {
+      OrganizationCode: item.organizationcode || "",
+      ReceiptSourceCode: "VENDOR",
+      EmployeeId: "",
+      VendorName: item.vendorname || po.vendorname || "",
+      ShipmentNumber: item.asn_number || po.asn_number || "",
+      ASNType: "ASN",
+      lines: lines
+    };
+
+    return receivingJSON;
+  };
+
+  // Log receiving JSON to console
+  const logReceivingJSON = () => {
+    const json = generateReceivingJSON();
+    if (json) {
+      console.log('========== RECEIVING JSON ==========');
+      console.log(JSON.stringify(json, null, 2));
+      console.log('====================================');
+      Alert.alert('JSON Logged', 'Receiving JSON has been logged to VS Code console. Check the terminal.');
+    } else {
+      Alert.alert('Error', 'Could not generate receiving JSON');
+    }
   };
 
   // ============= CALL CENTER FUNCTIONS =============
@@ -2747,6 +2874,24 @@ _Sent from MobileWMS_`;
                 </TouchableOpacity>
               );
             })()}
+
+            {/* View JSON Button - For debugging */}
+            <TouchableOpacity
+              style={{
+                backgroundColor: COLORS.neutral200,
+                padding: 12,
+                borderRadius: 12,
+                flexDirection: 'row',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginTop: 12,
+                borderWidth: 1,
+                borderColor: COLORS.border,
+              }}
+              onPress={logReceivingJSON}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textSecondary }}>📋 View Receiving JSON</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
 
