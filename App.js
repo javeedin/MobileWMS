@@ -131,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.2.9';
+const APP_VERSION = 'v1.3.0';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -309,6 +309,10 @@ export default function App() {
   const [splitQtyInput1, setSplitQtyInput1] = useState('');
   const [splitQtyInput2, setSplitQtyInput2] = useState('');
   const [scanningForSplitLine, setScanningForSplitLine] = useState(null); // ID of split line being scanned
+
+  // Expiration Date state
+  const [expirationDate, setExpirationDate] = useState(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // AI Stock Counting state
   const [stockCountingMode, setStockCountingMode] = useState('camera'); // 'camera', 'analyzing', 'results'
@@ -634,6 +638,17 @@ _Sent from MobileWMS_`;
       }
       return filtered;
     });
+  };
+
+  // Update split line locator manually (for barcode scanner input)
+  const updateSplitLineLocator = (lineId, locatorValue) => {
+    setSplitLines(prev => prev.map(line => {
+      if (line.id === lineId) {
+        const hasValue = locatorValue && locatorValue.trim() && locatorValue.trim() !== '----';
+        return { ...line, locator: locatorValue, scanned: hasValue };
+      }
+      return line;
+    }));
   };
 
   // Check if all split lines have locators assigned
@@ -2352,7 +2367,8 @@ _Sent from MobileWMS_`;
                 <View style={{ backgroundColor: COLORS.successLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
                   <Text style={{ fontSize: 13, fontWeight: 'bold', color: COLORS.success }}>Qty: {selectedItem.transactionquantity || 0}</Text>
                 </View>
-                {splitLines.length === 0 && (
+                {/* Hide Split button when item is already received */}
+                {splitLines.length === 0 && (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS' && (
                   <TouchableOpacity
                     onPress={() => setShowSplitModal(true)}
                     style={{ marginTop: 4 }}
@@ -2372,53 +2388,75 @@ _Sent from MobileWMS_`;
             <View style={{ backgroundColor: '#FFFDE7', marginHorizontal: 12, marginBottom: 8, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#FFF59D', ...SHADOWS.sm }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary }}>SPLIT QUANTITIES</Text>
-                <TouchableOpacity onPress={() => setShowSplitModal(true)}>
-                  <Text style={{ fontSize: 11, color: COLORS.info, fontWeight: '600' }}>+ Add Split</Text>
-                </TouchableOpacity>
+                {/* Hide Add Split when item is already received */}
+                {(selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS' && (
+                  <TouchableOpacity onPress={() => setShowSplitModal(true)}>
+                    <Text style={{ fontSize: 11, color: COLORS.info, fontWeight: '600' }}>+ Add Split</Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               {/* Table Header */}
               <View style={{ flexDirection: 'row', paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#FFF59D', marginBottom: 6 }}>
                 <Text style={{ fontSize: 11, fontWeight: '600', color: COLORS.textSecondary, width: 50 }}>Qty</Text>
                 <Text style={{ fontSize: 11, fontWeight: '600', color: COLORS.textSecondary, flex: 1 }}>Locator</Text>
-                <Text style={{ fontSize: 11, fontWeight: '600', color: COLORS.textSecondary, width: 70, textAlign: 'center' }}>Action</Text>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: COLORS.textSecondary, width: 50, textAlign: 'center' }}>Scan</Text>
               </View>
 
               {/* Split Lines */}
-              {splitLines.map((line, index) => (
-                <View key={line.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: index < splitLines.length - 1 ? 1 : 0, borderBottomColor: '#FFF59D' }}>
-                  <View style={{ width: 50 }}>
-                    <View style={{ backgroundColor: COLORS.infoLight, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, alignSelf: 'flex-start' }}>
-                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: COLORS.info }}>{line.qty}</Text>
+              {splitLines.map((line, index) => {
+                const isReceived = (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS';
+                return (
+                  <View key={line.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: index < splitLines.length - 1 ? 1 : 0, borderBottomColor: '#FFF59D' }}>
+                    <View style={{ width: 50 }}>
+                      <View style={{ backgroundColor: COLORS.infoLight, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, alignSelf: 'flex-start' }}>
+                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: COLORS.info }}>{line.qty}</Text>
+                      </View>
+                    </View>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <TextInput
+                        style={{
+                          borderWidth: 1,
+                          borderColor: line.scanned ? COLORS.success : COLORS.border,
+                          borderRadius: 6,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          fontSize: 12,
+                          backgroundColor: isReceived ? COLORS.neutral100 : '#fff',
+                          color: line.scanned ? COLORS.success : COLORS.text,
+                        }}
+                        value={line.locator || ''}
+                        onChangeText={(text) => updateSplitLineLocator(line.id, text)}
+                        placeholder="Scan or enter locator"
+                        placeholderTextColor={COLORS.neutral400}
+                        editable={!isReceived}
+                      />
+                    </View>
+                    <View style={{ width: 50, flexDirection: 'row', justifyContent: 'center', gap: 4 }}>
+                      {/* Hide scan icon when item is received */}
+                      {!isReceived && (
+                        <TouchableOpacity
+                          onPress={() => handleScanForSplitLine(line.id)}
+                          style={{ backgroundColor: COLORS.secondary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}
+                        >
+                          <Text style={{ fontSize: 11, color: '#fff' }}>📍</Text>
+                        </TouchableOpacity>
+                      )}
+                      {line.id !== 'original' && !isReceived && (
+                        <TouchableOpacity
+                          onPress={() => removeSplitLine(line.id)}
+                          style={{ backgroundColor: COLORS.dangerLight, paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6 }}
+                        >
+                          <Text style={{ fontSize: 11, color: COLORS.danger }}>✕</Text>
+                        </TouchableOpacity>
+                      )}
+                      {isReceived && (
+                        <Text style={{ fontSize: 11, color: COLORS.success }}>✓</Text>
+                      )}
                     </View>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    {line.scanned && line.locator ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Text style={{ fontSize: 12, color: COLORS.success, fontWeight: '600' }}>✓ {line.locator}</Text>
-                      </View>
-                    ) : (
-                      <Text style={{ fontSize: 12, color: COLORS.warning, fontStyle: 'italic' }}>Not assigned</Text>
-                    )}
-                  </View>
-                  <View style={{ width: 70, flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
-                    <TouchableOpacity
-                      onPress={() => handleScanForSplitLine(line.id)}
-                      style={{ backgroundColor: COLORS.secondary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}
-                    >
-                      <Text style={{ fontSize: 11, color: '#fff' }}>📍</Text>
-                    </TouchableOpacity>
-                    {line.id !== 'original' && (
-                      <TouchableOpacity
-                        onPress={() => removeSplitLine(line.id)}
-                        style={{ backgroundColor: COLORS.dangerLight, paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6 }}
-                      >
-                        <Text style={{ fontSize: 11, color: COLORS.danger }}>✕</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              ))}
+                );
+              })}
 
               {/* Total row */}
               <View style={{ flexDirection: 'row', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: COLORS.border }}>
@@ -2473,6 +2511,35 @@ _Sent from MobileWMS_`;
               <Text style={{ fontSize: 12, color: COLORS.text, flex: 1 }}>{selectedItem.lotnumber || selectedItem.LOTNUMBER || selectedItem.lot_number || selectedItem.LOT_NUMBER || 'N/A'}</Text>
             </View>
 
+            {/* Expiration Date Field */}
+            <View style={{ flexDirection: 'row', marginBottom: 6, alignItems: 'center' }}>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.danger, width: 70 }}>Exp Date:</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  if ((selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS') {
+                    setShowDatePicker(true);
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS' ? COLORS.neutral100 : '#fff',
+                  borderWidth: 1,
+                  borderColor: expirationDate ? COLORS.success : COLORS.border,
+                  borderRadius: 6,
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                }}
+                disabled={(selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS'}
+              >
+                <Text style={{ fontSize: 12, color: expirationDate ? COLORS.text : COLORS.neutral400, flex: 1 }}>
+                  {expirationDate ? expirationDate.toLocaleDateString() : 'Select date'}
+                </Text>
+                <Text style={{ fontSize: 14 }}>📅</Text>
+              </TouchableOpacity>
+            </View>
+
             <View style={{ flexDirection: 'row', marginBottom: 6 }}>
               <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, width: 70 }}>Locator:</Text>
               <Text style={{ fontSize: 12, color: COLORS.text, flex: 1 }}>{selectedItem.locator || 'Not assigned'}</Text>
@@ -2516,12 +2583,27 @@ _Sent from MobileWMS_`;
               </TouchableOpacity>
             )}
 
-            {/* Confirm Receipt - disabled if already received, loading, or splits not scanned */}
+            {/* Confirm Receipt - disabled if already received, loading, splits not scanned, or locator empty */}
             {(() => {
               const isAlreadyReceived = (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS';
-              const isDisabled = receivingLoading || isAlreadyReceived || (splitLines.length > 0 && !allSplitLinesScanned());
+              const currentLocator = selectedItem.actualLocator || selectedItem.locator || '';
+              const isLocatorEmpty = !currentLocator || currentLocator.trim() === '' || currentLocator.trim() === '----';
+              const hasSplitLocatorIssue = splitLines.length > 0 && !allSplitLinesScanned();
+              const hasNormalLocatorIssue = splitLines.length === 0 && isLocatorEmpty;
+              const isDisabled = receivingLoading || isAlreadyReceived || hasSplitLocatorIssue || hasNormalLocatorIssue;
               // Green for already received, grey for other disabled states, green for enabled
               const buttonBg = isAlreadyReceived ? COLORS.success : (isDisabled ? COLORS.neutral400 : COLORS.success);
+
+              // Determine button text
+              let buttonText = '✓ Confirm Receipt';
+              if (isAlreadyReceived) {
+                buttonText = '✓ Already Received';
+              } else if (hasSplitLocatorIssue) {
+                buttonText = 'Assign all locators first';
+              } else if (hasNormalLocatorIssue) {
+                buttonText = 'Scan locator first';
+              }
+
               return (
                 <TouchableOpacity
                   style={{
@@ -2549,14 +2631,10 @@ _Sent from MobileWMS_`;
                     ]
                   );
                 } else {
-                  // Normal mode - show URL for debugging
-                  const lineId = selectedItem.lineid || selectedItem.LINEID || selectedItem.line_id || selectedItem.LINE_ID || '';
-                  const shipmentNum = selectedItem.asn_number || selectedItem.shipmentnumber || selectedItem.shipment_number || '';
-                  const debugUrl = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/poreceiveoneline?p_shipment_number=${shipmentNum}&p_line_id=${lineId}`;
-
+                  // Normal mode
                   Alert.alert(
                     'Confirm Receipt',
-                    `Confirm receipt of ${selectedItem.itemnumber}?\n\nQuantity: ${selectedItem.transactionquantity}\nLocator: ${selectedItem.actualLocator || selectedItem.locator}\n\n📡 API URL:\n${debugUrl}`,
+                    `Confirm receipt of ${selectedItem.itemnumber}?\n\nQuantity: ${selectedItem.transactionquantity}\nLocator: ${selectedItem.actualLocator || selectedItem.locator}`,
                     [
                       { text: 'Cancel', style: 'cancel' },
                       {
@@ -2572,11 +2650,7 @@ _Sent from MobileWMS_`;
                     <ActivityIndicator color={COLORS.white} size="small" />
                   ) : (
                     <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.white }}>
-                      {isAlreadyReceived
-                        ? '✓ Already Received'
-                        : splitLines.length > 0 && !allSplitLinesScanned()
-                          ? 'Assign all locators first'
-                          : '✓ Confirm Receipt'}
+                      {buttonText}
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -2660,6 +2734,143 @@ _Sent from MobileWMS_`;
                   onPress={handleSplitQty}
                 >
                   <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>Split</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Date Picker Modal */}
+        <Modal
+          visible={showDatePicker}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowDatePicker(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <View style={{ backgroundColor: COLORS.surface, borderRadius: 16, padding: 20, width: '100%', maxWidth: 320 }}>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 16 }}>📅 Select Expiration Date</Text>
+
+              {/* Quick Date Options */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 8 }}>Quick Select:</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {[30, 60, 90, 180, 365].map(days => (
+                    <TouchableOpacity
+                      key={days}
+                      onPress={() => {
+                        const date = new Date();
+                        date.setDate(date.getDate() + days);
+                        setExpirationDate(date);
+                      }}
+                      style={{
+                        backgroundColor: COLORS.infoLight,
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 16,
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, color: COLORS.info, fontWeight: '600' }}>+{days}d</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Manual Date Input */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 8 }}>Or enter date (DD/MM/YYYY):</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      borderWidth: 1,
+                      borderColor: COLORS.border,
+                      borderRadius: 8,
+                      padding: 10,
+                      fontSize: 14,
+                      textAlign: 'center',
+                    }}
+                    placeholder="DD"
+                    keyboardType="number-pad"
+                    maxLength={2}
+                    value={expirationDate ? String(expirationDate.getDate()).padStart(2, '0') : ''}
+                    onChangeText={(text) => {
+                      const day = parseInt(text) || 1;
+                      const current = expirationDate || new Date();
+                      const newDate = new Date(current.getFullYear(), current.getMonth(), Math.min(day, 31));
+                      setExpirationDate(newDate);
+                    }}
+                  />
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      borderWidth: 1,
+                      borderColor: COLORS.border,
+                      borderRadius: 8,
+                      padding: 10,
+                      fontSize: 14,
+                      textAlign: 'center',
+                    }}
+                    placeholder="MM"
+                    keyboardType="number-pad"
+                    maxLength={2}
+                    value={expirationDate ? String(expirationDate.getMonth() + 1).padStart(2, '0') : ''}
+                    onChangeText={(text) => {
+                      const month = parseInt(text) || 1;
+                      const current = expirationDate || new Date();
+                      const newDate = new Date(current.getFullYear(), Math.min(month - 1, 11), current.getDate());
+                      setExpirationDate(newDate);
+                    }}
+                  />
+                  <TextInput
+                    style={{
+                      flex: 1.5,
+                      borderWidth: 1,
+                      borderColor: COLORS.border,
+                      borderRadius: 8,
+                      padding: 10,
+                      fontSize: 14,
+                      textAlign: 'center',
+                    }}
+                    placeholder="YYYY"
+                    keyboardType="number-pad"
+                    maxLength={4}
+                    value={expirationDate ? String(expirationDate.getFullYear()) : ''}
+                    onChangeText={(text) => {
+                      const year = parseInt(text) || new Date().getFullYear();
+                      const current = expirationDate || new Date();
+                      const newDate = new Date(year, current.getMonth(), current.getDate());
+                      setExpirationDate(newDate);
+                    }}
+                  />
+                </View>
+              </View>
+
+              {/* Selected Date Display */}
+              {expirationDate && (
+                <View style={{ backgroundColor: COLORS.successLight, padding: 12, borderRadius: 8, marginBottom: 16 }}>
+                  <Text style={{ fontSize: 14, color: COLORS.success, fontWeight: '600', textAlign: 'center' }}>
+                    Selected: {expirationDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </Text>
+                </View>
+              )}
+
+              {/* Buttons */}
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: COLORS.neutral200, padding: 14, borderRadius: 8, alignItems: 'center' }}
+                  onPress={() => {
+                    setExpirationDate(null);
+                    setShowDatePicker(false);
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }}>Clear</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: COLORS.primary, padding: 14, borderRadius: 8, alignItems: 'center' }}
+                  onPress={() => setShowDatePicker(false)}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>Done</Text>
                 </TouchableOpacity>
               </View>
             </View>
