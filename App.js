@@ -765,7 +765,7 @@ _Sent from MobileWMS_`;
       ReceiptSourceCode: "VENDOR",
       EmployeeId: "",
       VendorName: item.vendorname || po.vendorname || "",
-      ShipmentNumber: item.asn_number || po.asn_number || "",
+      ShipmentNumber: item.shipmentnumber || item.SHIPMENTNUMBER || item.asn_number || po.asn_number || po.shipmentnumber || "",
       lines: lines
     };
 
