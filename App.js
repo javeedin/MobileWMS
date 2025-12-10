@@ -2567,8 +2567,8 @@ _Sent from MobileWMS_`;
 
           {/* Action Buttons */}
           <View style={{ paddingHorizontal: 12, paddingBottom: 24 }}>
-            {/* Show Scan Pallet button only when no splits */}
-            {splitLines.length === 0 && (
+            {/* Show Scan Pallet button only when no splits and not already received */}
+            {splitLines.length === 0 && (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS' && (
               <TouchableOpacity
                 style={{ backgroundColor: COLORS.secondary, padding: 16, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}
                 onPress={() => handleScanLocator(selectedItem)}
