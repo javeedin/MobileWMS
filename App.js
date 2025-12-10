@@ -131,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.3.3';
+const APP_VERSION = 'v1.3.4';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -2386,13 +2386,13 @@ _Sent from MobileWMS_`;
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
-        {/* Header with Supplier + ASN */}
+        {/* Header with Supplier + PO */}
         <View style={[styles.screenHeader, { justifyContent: 'center', paddingVertical: 10 }]}>
           <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }} numberOfLines={1}>
-            {selectedItem.vendorname || 'Unknown Supplier'}
+            {selectedItem.vendorname || 'Unknown Supplier'}, PO: {selectedPO?.documentnumber || 'N/A'}
           </Text>
-          <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>
-            {selectedItem.asn_number ? `ASN: ${selectedItem.asn_number}` : 'Item Details'}
+          <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.9)' }}>
+            {selectedItem.asn_number ? `ASN: ${selectedItem.asn_number}` : ''}
           </Text>
         </View>
 
@@ -2407,20 +2407,33 @@ _Sent from MobileWMS_`;
                 <View style={{ backgroundColor: COLORS.successLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
                   <Text style={{ fontSize: 13, fontWeight: 'bold', color: COLORS.success }}>Qty: {selectedItem.transactionquantity || 0}</Text>
                 </View>
-                {/* Hide Split button when item is already received */}
-                {splitLines.length === 0 && (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS' && (
-                  <TouchableOpacity
-                    onPress={() => setShowSplitModal(true)}
-                    style={{ marginTop: 4 }}
-                  >
-                    <Text style={{ fontSize: 11, color: COLORS.info, fontWeight: '600' }}>✂️ Split</Text>
-                  </TouchableOpacity>
-                )}
               </View>
             </View>
             <Text style={{ fontSize: 13, color: COLORS.textSecondary, lineHeight: 18, marginTop: 6 }} numberOfLines={2}>
               {selectedItem.itemdescription || 'No description available'}
             </Text>
+
+            {/* Split Button - Show when no splits and not received */}
+            {splitLines.length === 0 && (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS' && (
+              <TouchableOpacity
+                onPress={() => setShowSplitModal(true)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: COLORS.warningLight,
+                  paddingVertical: 10,
+                  paddingHorizontal: 16,
+                  borderRadius: 8,
+                  marginTop: 12,
+                  borderWidth: 1,
+                  borderColor: COLORS.warning,
+                }}
+              >
+                <Text style={{ fontSize: 18, marginRight: 8 }}>✂️</Text>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.warning }}>Split Quantity</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Split Lines Table - Show when splits exist */}
@@ -2552,7 +2565,7 @@ _Sent from MobileWMS_`;
             </View>
 
             {/* Expiration Date Field */}
-            <View style={{ flexDirection: 'row', marginBottom: 10, alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.danger, width: 80 }}>Exp Date:</Text>
               <TouchableOpacity
                 onPress={() => {
@@ -2579,59 +2592,61 @@ _Sent from MobileWMS_`;
                 <Text style={{ fontSize: 16 }}>📅</Text>
               </TouchableOpacity>
             </View>
-
-            {/* Locator & Scanned - Only show when NOT in split mode */}
-            {splitLines.length === 0 && (
-              <>
-                {/* Locator - Editable Text Field */}
-                <View style={{ flexDirection: 'row', marginBottom: 10, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textSecondary, width: 80 }}>Locator:</Text>
-                  <TextInput
-                    style={{
-                      flex: 1,
-                      borderWidth: 1,
-                      borderColor: locatorInput ? COLORS.info : COLORS.border,
-                      borderRadius: 8,
-                      paddingHorizontal: 12,
-                      paddingVertical: 10,
-                      fontSize: 14,
-                      backgroundColor: (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS' ? COLORS.neutral100 : '#fff',
-                      color: COLORS.text,
-                    }}
-                    value={locatorInput}
-                    onChangeText={setLocatorInput}
-                    placeholder="Enter or scan locator"
-                    placeholderTextColor={COLORS.neutral400}
-                    editable={(selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS'}
-                  />
-                </View>
-
-                {/* Scanned - Editable Text Field (updated by scanner) */}
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.success, width: 80 }}>Scanned:</Text>
-                  <TextInput
-                    style={{
-                      flex: 1,
-                      borderWidth: 1,
-                      borderColor: scannedLocator ? COLORS.success : COLORS.border,
-                      borderRadius: 8,
-                      paddingHorizontal: 12,
-                      paddingVertical: 10,
-                      fontSize: 14,
-                      backgroundColor: scannedLocator ? COLORS.successLight : ((selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS' ? COLORS.neutral100 : '#fff'),
-                      color: scannedLocator ? COLORS.success : COLORS.text,
-                      fontWeight: scannedLocator ? '600' : 'normal',
-                    }}
-                    value={scannedLocator}
-                    onChangeText={setScannedLocator}
-                    placeholder="Scan to fill"
-                    placeholderTextColor={COLORS.neutral400}
-                    editable={(selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS'}
-                  />
-                </View>
-              </>
-            )}
           </View>
+
+          {/* Locators Box - Only show when NOT in split mode */}
+          {splitLines.length === 0 && (
+            <View style={{ backgroundColor: COLORS.surface, marginHorizontal: 12, marginBottom: 8, padding: 14, borderRadius: 12, ...SHADOWS.sm }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.text, marginBottom: 12 }}>📍 Locators</Text>
+
+              {/* Auto Assigned - Editable Text Field */}
+              <View style={{ flexDirection: 'row', marginBottom: 10, alignItems: 'center' }}>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textSecondary, width: 100 }}>Auto Assigned:</Text>
+                <TextInput
+                  style={{
+                    flex: 1,
+                    borderWidth: 1,
+                    borderColor: locatorInput ? COLORS.info : COLORS.border,
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    fontSize: 14,
+                    backgroundColor: (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS' ? COLORS.neutral100 : '#fff',
+                    color: COLORS.text,
+                  }}
+                  value={locatorInput}
+                  onChangeText={setLocatorInput}
+                  placeholder="Enter or scan locator"
+                  placeholderTextColor={COLORS.neutral400}
+                  editable={(selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS'}
+                />
+              </View>
+
+              {/* Scanned - Editable Text Field (updated by scanner) */}
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.success, width: 100 }}>Scanned:</Text>
+                <TextInput
+                  style={{
+                    flex: 1,
+                    borderWidth: 1,
+                    borderColor: scannedLocator ? COLORS.success : COLORS.border,
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    fontSize: 14,
+                    backgroundColor: scannedLocator ? COLORS.successLight : ((selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS' ? COLORS.neutral100 : '#fff'),
+                    color: scannedLocator ? COLORS.success : COLORS.text,
+                    fontWeight: scannedLocator ? '600' : 'normal',
+                  }}
+                  value={scannedLocator}
+                  onChangeText={setScannedLocator}
+                  placeholder="Scan to fill"
+                  placeholderTextColor={COLORS.neutral400}
+                  editable={(selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS'}
+                />
+              </View>
+            </View>
+          )}
 
           {/* Serial Numbers - Only show after locator is scanned */}
           {selectedItem.actualLocator && (selectedItem.fromserialnumber || selectedItem.toserialnumber) && (
