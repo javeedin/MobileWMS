@@ -131,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.3.2';
+const APP_VERSION = 'v1.3.3';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -2580,52 +2580,57 @@ _Sent from MobileWMS_`;
               </TouchableOpacity>
             </View>
 
-            {/* Locator - Editable Text Field */}
-            <View style={{ flexDirection: 'row', marginBottom: 10, alignItems: 'center' }}>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textSecondary, width: 80 }}>Locator:</Text>
-              <TextInput
-                style={{
-                  flex: 1,
-                  borderWidth: 1,
-                  borderColor: locatorInput ? COLORS.info : COLORS.border,
-                  borderRadius: 8,
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  fontSize: 14,
-                  backgroundColor: (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS' ? COLORS.neutral100 : '#fff',
-                  color: COLORS.text,
-                }}
-                value={locatorInput}
-                onChangeText={setLocatorInput}
-                placeholder="Enter or scan locator"
-                placeholderTextColor={COLORS.neutral400}
-                editable={(selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS'}
-              />
-            </View>
+            {/* Locator & Scanned - Only show when NOT in split mode */}
+            {splitLines.length === 0 && (
+              <>
+                {/* Locator - Editable Text Field */}
+                <View style={{ flexDirection: 'row', marginBottom: 10, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textSecondary, width: 80 }}>Locator:</Text>
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      borderWidth: 1,
+                      borderColor: locatorInput ? COLORS.info : COLORS.border,
+                      borderRadius: 8,
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      fontSize: 14,
+                      backgroundColor: (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS' ? COLORS.neutral100 : '#fff',
+                      color: COLORS.text,
+                    }}
+                    value={locatorInput}
+                    onChangeText={setLocatorInput}
+                    placeholder="Enter or scan locator"
+                    placeholderTextColor={COLORS.neutral400}
+                    editable={(selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS'}
+                  />
+                </View>
 
-            {/* Scanned - Editable Text Field (updated by scanner) */}
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.success, width: 80 }}>Scanned:</Text>
-              <TextInput
-                style={{
-                  flex: 1,
-                  borderWidth: 1,
-                  borderColor: scannedLocator ? COLORS.success : COLORS.border,
-                  borderRadius: 8,
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  fontSize: 14,
-                  backgroundColor: scannedLocator ? COLORS.successLight : ((selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS' ? COLORS.neutral100 : '#fff'),
-                  color: scannedLocator ? COLORS.success : COLORS.text,
-                  fontWeight: scannedLocator ? '600' : 'normal',
-                }}
-                value={scannedLocator}
-                onChangeText={setScannedLocator}
-                placeholder="Scan to fill"
-                placeholderTextColor={COLORS.neutral400}
-                editable={(selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS'}
-              />
-            </View>
+                {/* Scanned - Editable Text Field (updated by scanner) */}
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.success, width: 80 }}>Scanned:</Text>
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      borderWidth: 1,
+                      borderColor: scannedLocator ? COLORS.success : COLORS.border,
+                      borderRadius: 8,
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      fontSize: 14,
+                      backgroundColor: scannedLocator ? COLORS.successLight : ((selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS' ? COLORS.neutral100 : '#fff'),
+                      color: scannedLocator ? COLORS.success : COLORS.text,
+                      fontWeight: scannedLocator ? '600' : 'normal',
+                    }}
+                    value={scannedLocator}
+                    onChangeText={setScannedLocator}
+                    placeholder="Scan to fill"
+                    placeholderTextColor={COLORS.neutral400}
+                    editable={(selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS'}
+                  />
+                </View>
+              </>
+            )}
           </View>
 
           {/* Serial Numbers - Only show after locator is scanned */}
