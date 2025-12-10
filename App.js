@@ -131,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.3.5';
+const APP_VERSION = 'v1.3.6';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -698,18 +698,20 @@ _Sent from MobileWMS_`;
         }
 
         lines.push({
+          POHeaderId: item.poheaderid || item.POHEADERID || null,
+          POLineLocationId: item.polinelocationid || item.POLINELOCATIONID || null,
+          SourceDocumentCode: "PO",
           ReceiptSourceCode: "VENDOR",
-          ShipmentNumber: item.asn_number || po.asn_number || "",
           TransactionType: "DELIVER",
           AutoTransactCode: "DELIVER",
-          ShipmentHeaderId: item.shipmentheaderid || item.SHIPMENTHEADERID || null,
-          ShipmentLineId: item.lineid || item.LINEID || item.shipmentlineid || null,
+          DocumentNumber: po.documentnumber || "",
           DocumentLineNumber: item.documentlinenumber || "",
           ItemNumber: item.itemnumber || "",
           OrganizationCode: item.organizationcode || "",
           Subinventory: item.subinventory || item.SUBINVENTORY || "",
           Locator: split.locator || "",
           Quantity: splitQty,
+          FromOrganizationCode: null,
           UnitOfMeasure: item.unitofmeasure || item.uom || "PCS",
           lotSerialItemLots: [{
             LotNumber: item.lotnumber || item.LOTNUMBER || "",
@@ -733,18 +735,20 @@ _Sent from MobileWMS_`;
       }
 
       lines.push({
+        POHeaderId: item.poheaderid || item.POHEADERID || null,
+        POLineLocationId: item.polinelocationid || item.POLINELOCATIONID || null,
+        SourceDocumentCode: "PO",
         ReceiptSourceCode: "VENDOR",
-        ShipmentNumber: item.asn_number || po.asn_number || "",
         TransactionType: "DELIVER",
         AutoTransactCode: "DELIVER",
-        ShipmentHeaderId: item.shipmentheaderid || item.SHIPMENTHEADERID || null,
-        ShipmentLineId: item.lineid || item.LINEID || item.shipmentlineid || null,
+        DocumentNumber: po.documentnumber || "",
         DocumentLineNumber: item.documentlinenumber || "",
         ItemNumber: item.itemnumber || "",
         OrganizationCode: item.organizationcode || "",
         Subinventory: item.subinventory || item.SUBINVENTORY || "",
         Locator: locator,
         Quantity: totalQty,
+        FromOrganizationCode: null,
         UnitOfMeasure: item.unitofmeasure || item.uom || "PCS",
         lotSerialItemLots: [{
           LotNumber: item.lotnumber || item.LOTNUMBER || "",
@@ -756,12 +760,12 @@ _Sent from MobileWMS_`;
 
     // Build full JSON
     const receivingJSON = {
+      FromOrganizationCode: null,
       OrganizationCode: item.organizationcode || "",
       ReceiptSourceCode: "VENDOR",
       EmployeeId: "",
       VendorName: item.vendorname || po.vendorname || "",
       ShipmentNumber: item.asn_number || po.asn_number || "",
-      ASNType: "ASN",
       lines: lines
     };
 
