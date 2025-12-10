@@ -609,14 +609,19 @@ _Sent from MobileWMS_`;
     setCurrentScreen('BarcodeScanner');
   };
 
-  // Update split line locator after scan
-  const updateSplitLineLocator = (lineId, locator) => {
-    setSplitLines(prev =>
-      prev.map(line =>
-        line.id === lineId ? { ...line, locator, scanned: true } : line
-      )
-    );
-    setScanningForSplitLine(null);
+  // Update split line locator (for both scan and manual input)
+  const updateSplitLineLocator = (lineId, locatorValue) => {
+    setSplitLines(prev => prev.map(line => {
+      if (line.id === lineId) {
+        const hasValue = locatorValue && locatorValue.trim() && locatorValue.trim() !== '----';
+        return { ...line, locator: locatorValue, scanned: hasValue };
+      }
+      return line;
+    }));
+    // Clear scanning state if this was from a camera scan
+    if (scanningForSplitLine === lineId) {
+      setScanningForSplitLine(null);
+    }
   };
 
   // Remove a split line (merge back to first line)
@@ -638,17 +643,6 @@ _Sent from MobileWMS_`;
       }
       return filtered;
     });
-  };
-
-  // Update split line locator manually (for barcode scanner input)
-  const updateSplitLineLocator = (lineId, locatorValue) => {
-    setSplitLines(prev => prev.map(line => {
-      if (line.id === lineId) {
-        const hasValue = locatorValue && locatorValue.trim() && locatorValue.trim() !== '----';
-        return { ...line, locator: locatorValue, scanned: hasValue };
-      }
-      return line;
-    }));
   };
 
   // Check if all split lines have locators assigned
