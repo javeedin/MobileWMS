@@ -131,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.2.8';
+const APP_VERSION = 'v1.2.9';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -474,36 +474,43 @@ export default function App() {
   };
 
   // ============= SHARE FUNCTION =============
-  const handleShareItem = async () => {
-    if (!selectedItem) return;
+  const handleSharePO = async () => {
+    if (!selectedPO) return;
 
-    const item = selectedItem;
-    const status = (item.processingstatuscode || item.PROCESSINGSTATUSCODE) === 'SUCCESS' ? '✅ Received' : '⏳ Pending';
-    const lotNumber = item.lotnumber || item.LOTNUMBER || item.lot_number || item.LOT_NUMBER || 'N/A';
-    const subInventory = item.subinventory || item.SUBINVENTORY || 'N/A';
-    const locator = item.actualLocator || item.locator || 'Not assigned';
+    const po = selectedPO;
+    const items = po.items || [];
+
+    // Format items list
+    const itemsList = items.map((item, index) => {
+      const status = (item.processingstatuscode || item.PROCESSINGSTATUSCODE) === 'SUCCESS' ? '✅' : '⏳';
+      const lotNumber = item.lotnumber || item.LOTNUMBER || item.lot_number || item.LOT_NUMBER || '-';
+      const locator = item.locator || '-';
+      const qty = item.transactionquantity || 0;
+
+      return `${index + 1}. *${item.itemnumber || 'N/A'}*
+   📝 ${item.itemdescription || 'No description'}
+   📊 Qty: ${qty} | 🎫 Lot: ${lotNumber}
+   📍 Locator: ${locator} | ${status}`;
+    }).join('\n\n');
+
+    // Count received vs pending
+    const receivedCount = items.filter(i => (i.processingstatuscode || i.PROCESSINGSTATUSCODE) === 'SUCCESS').length;
+    const totalCount = items.length;
 
     // Format message nicely
     const message = `📦 *PO RECEIVING DETAILS*
 ━━━━━━━━━━━━━━━━━━━━━
 
-🏢 *Supplier:* ${item.vendorname || 'Unknown'}
-📋 *ASN:* ${item.asn_number || 'N/A'}
+📋 *PO:* ${po.documentnumber || 'N/A'}
+🏢 *Supplier:* ${po.vendorname || 'Unknown'}
+📋 *ASN:* ${po.asn_number || 'N/A'}
+📊 *Progress:* ${receivedCount}/${totalCount} received
 
 ━━━━━━━━━━━━━━━━━━━━━
-📦 *ITEM DETAILS*
+📦 *ITEMS (${totalCount})*
 ━━━━━━━━━━━━━━━━━━━━━
 
-🔖 *Item:* ${item.itemnumber || 'N/A'}
-📝 *Description:* ${item.itemdescription || 'N/A'}
-📊 *Quantity:* ${item.transactionquantity || 0}
-🏷️ *Line ID:* ${item.lineid || item.LINEID || 'N/A'}
-
-📍 *SubInventory:* ${subInventory}
-🎫 *Lot Number:* ${lotNumber}
-📌 *Locator:* ${locator}
-
-📊 *Status:* ${status}
+${itemsList}
 
 ━━━━━━━━━━━━━━━━━━━━━
 _Sent from MobileWMS_`;
@@ -511,11 +518,11 @@ _Sent from MobileWMS_`;
     try {
       await Share.share({
         message: message,
-        title: `PO Item: ${item.itemnumber || 'Details'}`,
+        title: `PO: ${po.documentnumber || 'Details'}`,
       });
     } catch (error) {
       console.log('Share error:', error.message);
-      Alert.alert('Share Error', 'Could not share the item details.');
+      Alert.alert('Share Error', 'Could not share the PO details.');
     }
   };
 
@@ -2222,9 +2229,15 @@ _Sent from MobileWMS_`;
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
-        {/* Header */}
-        <View style={[styles.screenHeader, { justifyContent: 'center' }]}>
+        {/* Header with Share Icon */}
+        <View style={[styles.screenHeader, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
           <Text style={styles.screenTitle}>PO: {selectedPO.documentnumber}</Text>
+          <TouchableOpacity
+            onPress={handleSharePO}
+            style={{ padding: 8 }}
+          >
+            <Text style={{ fontSize: 20, color: '#fff' }}>📤</Text>
+          </TouchableOpacity>
         </View>
 
         {/* PO Summary Card */}
@@ -2569,22 +2582,6 @@ _Sent from MobileWMS_`;
                 </TouchableOpacity>
               );
             })()}
-
-            {/* Share Button */}
-            <TouchableOpacity
-              style={{
-                backgroundColor: COLORS.info,
-                padding: 14,
-                borderRadius: 12,
-                flexDirection: 'row',
-                justifyContent: 'center',
-                alignItems: 'center',
-                marginTop: 12
-              }}
-              onPress={handleShareItem}
-            >
-              <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.white }}>📤 Share Details</Text>
-            </TouchableOpacity>
           </View>
         </ScrollView>
 
