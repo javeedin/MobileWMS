@@ -15,6 +15,7 @@ import {
   Dimensions,
   RefreshControl,
   BackHandler,
+  Share,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Contacts from 'expo-contacts';
@@ -130,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.2.7';
+const APP_VERSION = 'v1.2.8';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -469,6 +470,52 @@ export default function App() {
       Alert.alert('Network Error', error.message);
     } finally {
       setReceivingLoading(false);
+    }
+  };
+
+  // ============= SHARE FUNCTION =============
+  const handleShareItem = async () => {
+    if (!selectedItem) return;
+
+    const item = selectedItem;
+    const status = (item.processingstatuscode || item.PROCESSINGSTATUSCODE) === 'SUCCESS' ? '✅ Received' : '⏳ Pending';
+    const lotNumber = item.lotnumber || item.LOTNUMBER || item.lot_number || item.LOT_NUMBER || 'N/A';
+    const subInventory = item.subinventory || item.SUBINVENTORY || 'N/A';
+    const locator = item.actualLocator || item.locator || 'Not assigned';
+
+    // Format message nicely
+    const message = `📦 *PO RECEIVING DETAILS*
+━━━━━━━━━━━━━━━━━━━━━
+
+🏢 *Supplier:* ${item.vendorname || 'Unknown'}
+📋 *ASN:* ${item.asn_number || 'N/A'}
+
+━━━━━━━━━━━━━━━━━━━━━
+📦 *ITEM DETAILS*
+━━━━━━━━━━━━━━━━━━━━━
+
+🔖 *Item:* ${item.itemnumber || 'N/A'}
+📝 *Description:* ${item.itemdescription || 'N/A'}
+📊 *Quantity:* ${item.transactionquantity || 0}
+🏷️ *Line ID:* ${item.lineid || item.LINEID || 'N/A'}
+
+📍 *SubInventory:* ${subInventory}
+🎫 *Lot Number:* ${lotNumber}
+📌 *Locator:* ${locator}
+
+📊 *Status:* ${status}
+
+━━━━━━━━━━━━━━━━━━━━━
+_Sent from MobileWMS_`;
+
+    try {
+      await Share.share({
+        message: message,
+        title: `PO Item: ${item.itemnumber || 'Details'}`,
+      });
+    } catch (error) {
+      console.log('Share error:', error.message);
+      Alert.alert('Share Error', 'Could not share the item details.');
     }
   };
 
@@ -2522,6 +2569,22 @@ export default function App() {
                 </TouchableOpacity>
               );
             })()}
+
+            {/* Share Button */}
+            <TouchableOpacity
+              style={{
+                backgroundColor: COLORS.info,
+                padding: 14,
+                borderRadius: 12,
+                flexDirection: 'row',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginTop: 12
+              }}
+              onPress={handleShareItem}
+            >
+              <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.white }}>📤 Share Details</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
 
