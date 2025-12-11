@@ -131,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.3.7';
+const APP_VERSION = 'v1.3.8';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -316,6 +316,10 @@ export default function App() {
 
   // Locator fields state (for non-split mode)
   const [locatorInput, setLocatorInput] = useState('');
+
+  // Processing modal state
+  const [showProcessingModal, setShowProcessingModal] = useState(false);
+  const [processingItems, setProcessingItems] = useState([]); // Array of { id, label, status: 'pending'|'processing'|'success'|'error', message }
 
   // AI Stock Counting state
   const [stockCountingMode, setStockCountingMode] = useState('camera'); // 'camera', 'analyzing', 'results'
@@ -806,6 +810,188 @@ _Sent from MobileWMS_`;
     } else {
       Alert.alert('Error', 'Could not generate receiving JSON');
     }
+  };
+
+  // ============= PROCESS RECEIVING =============
+  // Oracle Cloud API credentials
+  const ORACLE_API_URL = 'https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05/receivingReceiptRequests';
+  const ORACLE_AUTH = btoa('javeed:Fusion@1234'); // Base64 encode for Basic Auth
+
+  // APEX API for updating status
+  const APEX_UPDATE_URL = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/poreceiveoneline';
+
+  // Process receiving - main function
+  const processReceiving = async () => {
+    if (!selectedItem || !selectedPO) {
+      Alert.alert('Error', 'No item selected');
+      return;
+    }
+
+    // Validation: Check locators
+    if (splitLines.length > 0) {
+      // Split mode - check all split locators
+      const missingLocator = splitLines.find(s => !s.locator || s.locator.trim() === '' || s.locator.trim() === '----');
+      if (missingLocator) {
+        Alert.alert('Validation Error', 'Please assign locators to all split lines before processing.');
+        return;
+      }
+    } else {
+      // Non-split mode - check locator
+      const locator = scannedLocator || locatorInput || '';
+      if (!locator || locator.trim() === '' || locator.trim() === '----') {
+        Alert.alert('Validation Error', 'Please scan or enter a locator before processing.');
+        return;
+      }
+    }
+
+    // Generate JSONs
+    const jsonData = generateReceivingJSON();
+    if (!jsonData) {
+      Alert.alert('Error', 'Could not generate receiving data');
+      return;
+    }
+
+    // Convert to array for unified processing
+    const jsonArray = Array.isArray(jsonData) ? jsonData : [jsonData];
+
+    // Initialize processing items for modal
+    const items = jsonArray.map((json, index) => ({
+      id: index,
+      label: `${json.ShipmentNumber} - Qty: ${json.lines[0].Quantity}`,
+      locator: json.lines[0].Locator,
+      status: 'pending',
+      message: ''
+    }));
+
+    setProcessingItems(items);
+    setShowProcessingModal(true);
+
+    // Process each JSON sequentially
+    for (let i = 0; i < jsonArray.length; i++) {
+      const json = jsonArray[i];
+      const lineId = selectedItem.lineid || selectedItem.LINEID || '';
+
+      // Update status to processing
+      setProcessingItems(prev => prev.map((item, idx) =>
+        idx === i ? { ...item, status: 'processing', message: 'Sending to Oracle...' } : item
+      ));
+
+      try {
+        // Step 1: POST to Oracle Cloud
+        console.log(`Processing ${i + 1}/${jsonArray.length}:`, json.ShipmentNumber);
+        console.log('Oracle POST payload:', JSON.stringify(json, null, 2));
+
+        const oracleResponse = await fetch(ORACLE_API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Basic ${ORACLE_AUTH}`,
+          },
+          body: JSON.stringify(json),
+        });
+
+        const oracleText = await oracleResponse.text();
+        console.log('Oracle Response:', oracleText);
+
+        let oracleData;
+        try {
+          oracleData = JSON.parse(oracleText);
+        } catch (e) {
+          throw new Error(`Invalid Oracle response: ${oracleText.substring(0, 200)}`);
+        }
+
+        // Step 2: Check ProcessingStatusCode
+        const processingStatus = oracleData.ProcessingStatusCode || oracleData.processingstatuscode;
+        console.log('ProcessingStatusCode:', processingStatus);
+
+        if (processingStatus !== 'SUCCESS') {
+          throw new Error(`Oracle processing failed: ${processingStatus || 'Unknown error'}`);
+        }
+
+        // Update status - Oracle success
+        setProcessingItems(prev => prev.map((item, idx) =>
+          idx === i ? { ...item, message: 'Oracle ✓ Updating APEX...' } : item
+        ));
+
+        // Step 3: POST to APEX to update status
+        const apexUrl = `${APEX_UPDATE_URL}?p_status=UPDATE&p_line_id=${lineId}`;
+        console.log('APEX Update URL:', apexUrl);
+
+        const apexResponse = await fetch(apexUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const apexText = await apexResponse.text();
+        console.log('APEX Response:', apexText);
+
+        // Mark as success
+        setProcessingItems(prev => prev.map((item, idx) =>
+          idx === i ? { ...item, status: 'success', message: 'Completed ✓' } : item
+        ));
+
+      } catch (error) {
+        console.log('Processing Error:', error.message);
+        setProcessingItems(prev => prev.map((item, idx) =>
+          idx === i ? { ...item, status: 'error', message: error.message } : item
+        ));
+      }
+
+      // Small delay between requests
+      if (i < jsonArray.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    // Check if all successful
+    setTimeout(() => {
+      setProcessingItems(prev => {
+        const allSuccess = prev.every(item => item.status === 'success');
+        if (allSuccess) {
+          // Update local state to mark item as received
+          const lineIdToUpdate = selectedItem.lineid || selectedItem.LINEID || '';
+
+          // Update poData items
+          setPoData(prevData => {
+            if (!prevData || !prevData.items) return prevData;
+            return {
+              ...prevData,
+              items: prevData.items.map(i => {
+                const itemLineId = i.lineid || i.LINEID || i.line_id || i.LINE_ID || '';
+                if (itemLineId === lineIdToUpdate) {
+                  return { ...i, processingstatuscode: 'SUCCESS', PROCESSINGSTATUSCODE: 'SUCCESS' };
+                }
+                return i;
+              })
+            };
+          });
+
+          // Update selectedItem
+          setSelectedItem(prevItem => ({
+            ...prevItem,
+            processingstatuscode: 'SUCCESS',
+            PROCESSINGSTATUSCODE: 'SUCCESS'
+          }));
+
+          // Update selectedPO items as well
+          if (selectedPO) {
+            setSelectedPO(prevPO => ({
+              ...prevPO,
+              items: prevPO.items?.map(i => {
+                const itemLineId = i.lineid || i.LINEID || '';
+                if (itemLineId === lineIdToUpdate) {
+                  return { ...i, processingstatuscode: 'SUCCESS', PROCESSINGSTATUSCODE: 'SUCCESS' };
+                }
+                return i;
+              })
+            }));
+          }
+        }
+        return prev;
+      });
+    }, 500);
   };
 
   // ============= CALL CENTER FUNCTIONS =============
@@ -2871,7 +3057,7 @@ _Sent from MobileWMS_`;
                       { text: 'Cancel', style: 'cancel' },
                       {
                         text: 'Confirm All',
-                        onPress: () => confirmReceivingAPI(selectedItem),
+                        onPress: () => processReceiving(),
                       },
                     ]
                   );
@@ -2884,7 +3070,7 @@ _Sent from MobileWMS_`;
                       { text: 'Cancel', style: 'cancel' },
                       {
                         text: 'Confirm',
-                        onPress: () => confirmReceivingAPI(selectedItem),
+                        onPress: () => processReceiving(),
                       },
                     ]
                   );
@@ -3136,6 +3322,155 @@ _Sent from MobileWMS_`;
                   <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>Done</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Processing Modal */}
+        <Modal
+          visible={showProcessingModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => {}}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <View style={{ backgroundColor: COLORS.surface, borderRadius: 16, padding: 20, width: '100%', maxWidth: 360, maxHeight: '80%' }}>
+              {/* Header */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, flex: 1 }}>📤 Processing Receipt</Text>
+                {processingItems.every(item => item.status === 'success' || item.status === 'error') && (
+                  <TouchableOpacity onPress={() => setShowProcessingModal(false)}>
+                    <Text style={{ fontSize: 24, color: COLORS.neutral400 }}>×</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Processing Items List */}
+              <ScrollView style={{ maxHeight: 300 }}>
+                {processingItems.map((item, index) => (
+                  <View
+                    key={item.id}
+                    style={{
+                      backgroundColor: item.status === 'success' ? COLORS.successLight :
+                                      item.status === 'error' ? COLORS.errorLight :
+                                      item.status === 'processing' ? COLORS.infoLight :
+                                      COLORS.neutral100,
+                      borderRadius: 12,
+                      padding: 14,
+                      marginBottom: 10,
+                      borderWidth: 1,
+                      borderColor: item.status === 'success' ? COLORS.success :
+                                  item.status === 'error' ? COLORS.error :
+                                  item.status === 'processing' ? COLORS.info :
+                                  COLORS.border,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      {/* Status Icon */}
+                      <View style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        backgroundColor: item.status === 'success' ? COLORS.success :
+                                        item.status === 'error' ? COLORS.error :
+                                        item.status === 'processing' ? COLORS.info :
+                                        COLORS.neutral300,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        marginRight: 12,
+                      }}>
+                        {item.status === 'pending' && (
+                          <Text style={{ fontSize: 14, color: '#fff' }}>⏳</Text>
+                        )}
+                        {item.status === 'processing' && (
+                          <ActivityIndicator size="small" color="#fff" />
+                        )}
+                        {item.status === 'success' && (
+                          <Text style={{ fontSize: 16, color: '#fff' }}>✓</Text>
+                        )}
+                        {item.status === 'error' && (
+                          <Text style={{ fontSize: 16, color: '#fff' }}>✗</Text>
+                        )}
+                      </View>
+
+                      {/* Item Info */}
+                      <View style={{ flex: 1 }}>
+                        <Text style={{
+                          fontSize: 14,
+                          fontWeight: '600',
+                          color: item.status === 'success' ? COLORS.success :
+                                item.status === 'error' ? COLORS.error :
+                                item.status === 'processing' ? COLORS.info :
+                                COLORS.text,
+                        }}>
+                          {item.label}
+                        </Text>
+                        <Text style={{
+                          fontSize: 12,
+                          color: COLORS.textSecondary,
+                          marginTop: 2,
+                        }}>
+                          📍 {item.locator}
+                        </Text>
+                        {item.message && (
+                          <Text style={{
+                            fontSize: 11,
+                            color: item.status === 'error' ? COLORS.error : COLORS.textSecondary,
+                            marginTop: 4,
+                            fontStyle: 'italic',
+                          }}>
+                            {item.message}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+
+              {/* Status Summary */}
+              {processingItems.length > 0 && (
+                <View style={{ marginTop: 16, padding: 12, backgroundColor: COLORS.neutral100, borderRadius: 8 }}>
+                  {processingItems.every(item => item.status === 'success') ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 24, marginRight: 8 }}>🎉</Text>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.success }}>All items processed successfully!</Text>
+                    </View>
+                  ) : processingItems.some(item => item.status === 'error') && processingItems.every(item => item.status === 'success' || item.status === 'error') ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 24, marginRight: 8 }}>⚠️</Text>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.error }}>
+                        {processingItems.filter(i => i.status === 'error').length} item(s) failed
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                      <ActivityIndicator size="small" color={COLORS.primary} style={{ marginRight: 8 }} />
+                      <Text style={{ fontSize: 14, color: COLORS.textSecondary }}>
+                        Processing {processingItems.filter(i => i.status === 'success').length}/{processingItems.length}...
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Close Button - only show when all done */}
+              {processingItems.every(item => item.status === 'success' || item.status === 'error') && (
+                <TouchableOpacity
+                  style={{
+                    marginTop: 16,
+                    backgroundColor: processingItems.every(i => i.status === 'success') ? COLORS.success : COLORS.primary,
+                    padding: 14,
+                    borderRadius: 8,
+                    alignItems: 'center',
+                  }}
+                  onPress={() => setShowProcessingModal(false)}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>
+                    {processingItems.every(i => i.status === 'success') ? '✓ Done' : 'Close'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </Modal>
