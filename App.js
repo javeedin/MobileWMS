@@ -131,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.3.6';
+const APP_VERSION = 'v1.3.7';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -676,17 +676,17 @@ _Sent from MobileWMS_`;
     const fromSerial = parseSerialNumber(item.fromserialnumber);
     const toSerial = parseSerialNumber(item.toserialnumber);
     const totalQty = item.transactionquantity || 0;
-
-    // Build lines array
-    let lines = [];
+    const baseShipmentNumber = item.shipmentnumber || item.SHIPMENTNUMBER || item.asn_number || po.asn_number || po.shipmentnumber || "";
 
     if (splitLines.length > 0) {
-      // Split scenario - create line for each split
+      // Split scenario - create SEPARATE FULL JSON for each split
+      let allJsons = [];
       let serialStart = fromSerial ? fromSerial.num : 0;
 
       splitLines.forEach((split, index) => {
         const splitQty = split.qty;
         const serialEnd = serialStart + splitQty - 1;
+        const sequenceNum = index + 1;
 
         // Build serial range for this split
         let lotSerialItemSerials = [];
@@ -697,7 +697,63 @@ _Sent from MobileWMS_`;
           }];
         }
 
-        lines.push({
+        // Create full JSON for this split
+        const splitJson = {
+          FromOrganizationCode: null,
+          OrganizationCode: item.organizationcode || "",
+          ReceiptSourceCode: "VENDOR",
+          EmployeeId: "",
+          VendorName: item.vendorname || po.vendorname || "",
+          ShipmentNumber: `${baseShipmentNumber}-${sequenceNum}`,
+          lines: [{
+            POHeaderId: item.poheaderid || item.POHEADERID || null,
+            POLineLocationId: item.polinelocationid || item.POLINELOCATIONID || null,
+            SourceDocumentCode: "PO",
+            ReceiptSourceCode: "VENDOR",
+            TransactionType: "RECEIVE",
+            AutoTransactCode: "DELIVER",
+            DocumentNumber: po.documentnumber || "",
+            DocumentLineNumber: item.documentlinenumber || "",
+            ItemNumber: item.itemnumber || "",
+            OrganizationCode: item.organizationcode || "",
+            Subinventory: item.subinventory || item.SUBINVENTORY || "",
+            Locator: split.locator || "",
+            Quantity: splitQty,
+            FromOrganizationCode: null,
+            UnitOfMeasure: item.unitofmeasure || item.UNITOFMEASURE || item.uom || "PCS",
+            lotSerialItemLots: [{
+              LotNumber: item.lotnumber || item.LOTNUMBER || "",
+              TransactionQuantity: splitQty,
+              lotSerialItemSerials: lotSerialItemSerials
+            }]
+          }]
+        };
+
+        allJsons.push(splitJson);
+        serialStart = serialEnd + 1;
+      });
+
+      return allJsons; // Return array of JSONs for split
+    } else {
+      // Non-split scenario - single JSON
+      const locator = scannedLocator || locatorInput || item.locator || "";
+
+      let lotSerialItemSerials = [];
+      if (item.fromserialnumber && item.toserialnumber) {
+        lotSerialItemSerials = [{
+          FromSerialNumber: item.fromserialnumber,
+          ToSerialNumber: item.toserialnumber
+        }];
+      }
+
+      const receivingJSON = {
+        FromOrganizationCode: null,
+        OrganizationCode: item.organizationcode || "",
+        ReceiptSourceCode: "VENDOR",
+        EmployeeId: "",
+        VendorName: item.vendorname || po.vendorname || "",
+        ShipmentNumber: baseShipmentNumber,
+        lines: [{
           POHeaderId: item.poheaderid || item.POHEADERID || null,
           POLineLocationId: item.polinelocationid || item.POLINELOCATIONID || null,
           SourceDocumentCode: "PO",
@@ -709,67 +765,20 @@ _Sent from MobileWMS_`;
           ItemNumber: item.itemnumber || "",
           OrganizationCode: item.organizationcode || "",
           Subinventory: item.subinventory || item.SUBINVENTORY || "",
-          Locator: split.locator || "",
-          Quantity: splitQty,
+          Locator: locator,
+          Quantity: totalQty,
           FromOrganizationCode: null,
           UnitOfMeasure: item.unitofmeasure || item.UNITOFMEASURE || item.uom || "PCS",
           lotSerialItemLots: [{
             LotNumber: item.lotnumber || item.LOTNUMBER || "",
-            TransactionQuantity: splitQty,
+            TransactionQuantity: totalQty,
             lotSerialItemSerials: lotSerialItemSerials
           }]
-        });
-
-        serialStart = serialEnd + 1;
-      });
-    } else {
-      // Non-split scenario - single line
-      const locator = scannedLocator || locatorInput || item.locator || "";
-
-      let lotSerialItemSerials = [];
-      if (item.fromserialnumber && item.toserialnumber) {
-        lotSerialItemSerials = [{
-          FromSerialNumber: item.fromserialnumber,
-          ToSerialNumber: item.toserialnumber
-        }];
-      }
-
-      lines.push({
-        POHeaderId: item.poheaderid || item.POHEADERID || null,
-        POLineLocationId: item.polinelocationid || item.POLINELOCATIONID || null,
-        SourceDocumentCode: "PO",
-        ReceiptSourceCode: "VENDOR",
-        TransactionType: "RECEIVE",
-        AutoTransactCode: "DELIVER",
-        DocumentNumber: po.documentnumber || "",
-        DocumentLineNumber: item.documentlinenumber || "",
-        ItemNumber: item.itemnumber || "",
-        OrganizationCode: item.organizationcode || "",
-        Subinventory: item.subinventory || item.SUBINVENTORY || "",
-        Locator: locator,
-        Quantity: totalQty,
-        FromOrganizationCode: null,
-        UnitOfMeasure: item.unitofmeasure || item.UNITOFMEASURE || item.uom || "PCS",
-        lotSerialItemLots: [{
-          LotNumber: item.lotnumber || item.LOTNUMBER || "",
-          TransactionQuantity: totalQty,
-          lotSerialItemSerials: lotSerialItemSerials
         }]
-      });
+      };
+
+      return receivingJSON;
     }
-
-    // Build full JSON
-    const receivingJSON = {
-      FromOrganizationCode: null,
-      OrganizationCode: item.organizationcode || "",
-      ReceiptSourceCode: "VENDOR",
-      EmployeeId: "",
-      VendorName: item.vendorname || po.vendorname || "",
-      ShipmentNumber: item.shipmentnumber || item.SHIPMENTNUMBER || item.asn_number || po.asn_number || po.shipmentnumber || "",
-      lines: lines
-    };
-
-    return receivingJSON;
   };
 
   // Log receiving JSON to console
@@ -777,9 +786,23 @@ _Sent from MobileWMS_`;
     const json = generateReceivingJSON();
     if (json) {
       console.log('========== RECEIVING JSON ==========');
-      console.log(JSON.stringify(json, null, 2));
-      console.log('====================================');
-      Alert.alert('JSON Logged', 'Receiving JSON has been logged to VS Code console. Check the terminal.');
+
+      if (Array.isArray(json)) {
+        // Split scenario - multiple JSONs
+        console.log(`Split Mode: ${json.length} separate JSONs`);
+        json.forEach((splitJson, index) => {
+          console.log(`\n----- Split ${index + 1} of ${json.length} -----`);
+          console.log(JSON.stringify(splitJson, null, 2));
+        });
+        Alert.alert('JSON Logged', `${json.length} separate JSONs logged to VS Code console (Split Mode). Check the terminal.`);
+      } else {
+        // Non-split scenario - single JSON
+        console.log('Single Mode: 1 JSON');
+        console.log(JSON.stringify(json, null, 2));
+        Alert.alert('JSON Logged', 'Receiving JSON has been logged to VS Code console. Check the terminal.');
+      }
+
+      console.log('\n====================================');
     } else {
       Alert.alert('Error', 'Could not generate receiving JSON');
     }
