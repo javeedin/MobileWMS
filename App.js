@@ -918,7 +918,9 @@ _Sent from MobileWMS_`;
 
         // Step 3: POST to APEX to update status
         const apexUrl = `${APEX_UPDATE_URL}?p_status=UPDATE&p_line_id=${lineId}`;
-        console.log('APEX Update URL:', apexUrl);
+        console.log('========== APEX UPDATE ==========');
+        console.log('LineId:', lineId);
+        console.log('Full APEX URL:', apexUrl);
 
         const apexResponse = await fetch(apexUrl, {
           method: 'POST',
@@ -927,8 +929,10 @@ _Sent from MobileWMS_`;
           },
         });
 
+        console.log('APEX Response Status:', apexResponse.status);
         const apexText = await apexResponse.text();
-        console.log('APEX Response:', apexText);
+        console.log('APEX Response Body:', apexText);
+        console.log('==================================');
 
         // Mark as success
         setProcessingItems(prev => prev.map((item, idx) =>
