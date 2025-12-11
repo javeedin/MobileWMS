@@ -131,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.3.8';
+const APP_VERSION = 'v1.3.9';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -681,9 +681,11 @@ _Sent from MobileWMS_`;
     const toSerial = parseSerialNumber(item.toserialnumber);
     const totalQty = item.transactionquantity || 0;
     const baseShipmentNumber = item.shipmentnumber || item.SHIPMENTNUMBER || item.asn_number || po.asn_number || po.shipmentnumber || "";
+    const documentLineNumber = item.documentlinenumber || item.DOCUMENTLINENUMBER || "";
 
     if (splitLines.length > 0) {
       // Split scenario - create SEPARATE FULL JSON for each split
+      // ShipmentNumber format: baseShipmentNumber-documentLineNumber-splitSequence (e.g., IPONMay2500103-1-1)
       let allJsons = [];
       let serialStart = fromSerial ? fromSerial.num : 0;
 
@@ -708,7 +710,7 @@ _Sent from MobileWMS_`;
           ReceiptSourceCode: "VENDOR",
           EmployeeId: "",
           VendorName: item.vendorname || po.vendorname || "",
-          ShipmentNumber: `${baseShipmentNumber}-${sequenceNum}`,
+          ShipmentNumber: `${baseShipmentNumber}-${documentLineNumber}-${sequenceNum}`,
           lines: [{
             POHeaderId: item.poheaderid || item.POHEADERID || null,
             POLineLocationId: item.polinelocationid || item.POLINELOCATIONID || null,
@@ -750,13 +752,14 @@ _Sent from MobileWMS_`;
         }];
       }
 
+      // ShipmentNumber format: baseShipmentNumber-documentLineNumber (e.g., IPONMay2500103-1)
       const receivingJSON = {
         FromOrganizationCode: null,
         OrganizationCode: item.organizationcode || "",
         ReceiptSourceCode: "VENDOR",
         EmployeeId: "",
         VendorName: item.vendorname || po.vendorname || "",
-        ShipmentNumber: baseShipmentNumber,
+        ShipmentNumber: `${baseShipmentNumber}-${documentLineNumber}`,
         lines: [{
           POHeaderId: item.poheaderid || item.POHEADERID || null,
           POLineLocationId: item.polinelocationid || item.POLINELOCATIONID || null,
