@@ -131,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.4.0';
+const APP_VERSION = 'v1.4.1';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -264,6 +264,9 @@ export default function App() {
   const [locatorSearchQuery, setLocatorSearchQuery] = useState('');
   const [selectedLocatorDetail, setSelectedLocatorDetail] = useState(null); // For drill-down
   const [locatorSubinventory, setLocatorSubinventory] = useState('AMKE'); // Default subinventory
+  // Segment filter state
+  const [segmentFilters, setSegmentFilters] = useState({ seg1: '', seg2: '', seg3: '' });
+  const [showSegmentDropdown, setShowSegmentDropdown] = useState(null); // 'seg1', 'seg2', 'seg3' or null
 
   // Selected warehouse and subinventory for org selection
   const [selectedWarehouse, setSelectedWarehouse] = useState(null);
@@ -4111,21 +4114,58 @@ _Sent from MobileWMS_`;
 
   // ============= STOCK LOCATORS SCREEN =============
   if (currentScreen === 'StockLocators') {
-    // Filter locators based on search and tab
-    const filteredLocators = mappedLocators.filter(loc => {
-      const matchesSearch = !locatorSearchQuery ||
-        (loc.locatorName || '').toLowerCase().includes(locatorSearchQuery.toLowerCase());
+    // Extract distinct segment values from locators
+    const getSegmentValues = () => {
+      const seg1Set = new Set();
+      const seg2Set = new Set();
+      const seg3Set = new Set();
 
-      if (stockLocatorsTab === 'all') {
-        return matchesSearch;
-      } else {
-        // 'available' tab - show only Free locators
-        return matchesSearch && loc.status === 'Free';
-      }
+      mappedLocators.forEach(loc => {
+        const parts = (loc.locatorName || '').split('-');
+        if (parts[0]) seg1Set.add(parts[0]);
+        if (parts[1]) seg2Set.add(parts[1]);
+        if (parts[2]) seg3Set.add(parts[2]);
+      });
+
+      return {
+        seg1: Array.from(seg1Set).sort(),
+        seg2: Array.from(seg2Set).sort(),
+        seg3: Array.from(seg3Set).sort(),
+      };
+    };
+
+    const segmentValues = getSegmentValues();
+
+    // Filter locators based on search, segment filters, and tab
+    const filteredLocators = mappedLocators.filter(loc => {
+      const locatorName = loc.locatorName || '';
+      const parts = locatorName.split('-');
+
+      // Text search filter
+      const matchesSearch = !locatorSearchQuery ||
+        locatorName.toLowerCase().includes(locatorSearchQuery.toLowerCase());
+
+      // Segment filters
+      const matchesSeg1 = !segmentFilters.seg1 || parts[0] === segmentFilters.seg1;
+      const matchesSeg2 = !segmentFilters.seg2 || parts[1] === segmentFilters.seg2;
+      const matchesSeg3 = !segmentFilters.seg3 || parts[2] === segmentFilters.seg3;
+
+      // Tab filter
+      const matchesTab = stockLocatorsTab === 'all' || loc.status === 'Free';
+
+      return matchesSearch && matchesSeg1 && matchesSeg2 && matchesSeg3 && matchesTab;
     });
 
     const usedCount = mappedLocators.filter(l => l.status === 'Used').length;
     const freeCount = mappedLocators.filter(l => l.status === 'Free').length;
+
+    const hasActiveFilters = segmentFilters.seg1 || segmentFilters.seg2 || segmentFilters.seg3;
+
+    const clearAllFilters = () => {
+      setSegmentFilters({ seg1: '', seg2: '', seg3: '' });
+      setLocatorSearchQuery('');
+      setShowSegmentDropdown(null);
+    };
 
     return (
       <View style={styles.container}>
@@ -4149,13 +4189,13 @@ _Sent from MobileWMS_`;
           </View>
         </View>
 
-        {/* Search Bar */}
+        {/* Search Bar with Scan */}
         <View style={{ backgroundColor: '#fff', padding: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.neutral100, borderRadius: 8, paddingHorizontal: 12 }}>
             <Text style={{ fontSize: 16, marginRight: 8 }}>🔍</Text>
             <TextInput
               style={{ flex: 1, paddingVertical: 10, fontSize: 14 }}
-              placeholder="Search locator (e.g., R-A-01-02-04)..."
+              placeholder="Search or scan locator..."
               value={locatorSearchQuery}
               onChangeText={setLocatorSearchQuery}
               autoCapitalize="characters"
@@ -4176,6 +4216,184 @@ _Sent from MobileWMS_`;
             >
               <Text style={{ fontSize: 14, color: '#fff' }}>📷</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Segment Filter Dropdowns */}
+        <View style={{ backgroundColor: '#fff', paddingHorizontal: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginRight: 8 }}>Filter by Segment:</Text>
+            {hasActiveFilters && (
+              <TouchableOpacity onPress={clearAllFilters}>
+                <Text style={{ fontSize: 11, color: '#ef4444', fontWeight: '500' }}>Clear All</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {/* Segment 1 Dropdown */}
+            <View style={{ flex: 1 }}>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: segmentFilters.seg1 ? '#d1fae5' : COLORS.neutral100,
+                  borderRadius: 8,
+                  padding: 10,
+                  borderWidth: 1,
+                  borderColor: segmentFilters.seg1 ? '#059669' : COLORS.border,
+                }}
+                onPress={() => setShowSegmentDropdown(showSegmentDropdown === 'seg1' ? null : 'seg1')}
+              >
+                <Text style={{ fontSize: 10, color: COLORS.textSecondary, marginBottom: 2 }}>Area</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: segmentFilters.seg1 ? '#059669' : COLORS.text }}>
+                    {segmentFilters.seg1 || 'All'}
+                  </Text>
+                  <Text style={{ fontSize: 10, color: COLORS.neutral400 }}>▼</Text>
+                </View>
+              </TouchableOpacity>
+              {showSegmentDropdown === 'seg1' && (
+                <View style={{
+                  position: 'absolute',
+                  top: 52,
+                  left: 0,
+                  right: 0,
+                  backgroundColor: '#fff',
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: COLORS.border,
+                  zIndex: 100,
+                  elevation: 5,
+                  maxHeight: 200,
+                }}>
+                  <ScrollView>
+                    <TouchableOpacity
+                      style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border }}
+                      onPress={() => { setSegmentFilters(p => ({ ...p, seg1: '' })); setShowSegmentDropdown(null); }}
+                    >
+                      <Text style={{ fontSize: 13, color: COLORS.textSecondary }}>All</Text>
+                    </TouchableOpacity>
+                    {segmentValues.seg1.map(val => (
+                      <TouchableOpacity
+                        key={val}
+                        style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: segmentFilters.seg1 === val ? '#d1fae5' : '#fff' }}
+                        onPress={() => { setSegmentFilters(p => ({ ...p, seg1: val })); setShowSegmentDropdown(null); }}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: segmentFilters.seg1 === val ? '600' : '400', color: segmentFilters.seg1 === val ? '#059669' : COLORS.text }}>{val}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
+
+            {/* Segment 2 Dropdown */}
+            <View style={{ flex: 1 }}>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: segmentFilters.seg2 ? '#dbeafe' : COLORS.neutral100,
+                  borderRadius: 8,
+                  padding: 10,
+                  borderWidth: 1,
+                  borderColor: segmentFilters.seg2 ? '#3b82f6' : COLORS.border,
+                }}
+                onPress={() => setShowSegmentDropdown(showSegmentDropdown === 'seg2' ? null : 'seg2')}
+              >
+                <Text style={{ fontSize: 10, color: COLORS.textSecondary, marginBottom: 2 }}>Bin</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: segmentFilters.seg2 ? '#3b82f6' : COLORS.text }}>
+                    {segmentFilters.seg2 || 'All'}
+                  </Text>
+                  <Text style={{ fontSize: 10, color: COLORS.neutral400 }}>▼</Text>
+                </View>
+              </TouchableOpacity>
+              {showSegmentDropdown === 'seg2' && (
+                <View style={{
+                  position: 'absolute',
+                  top: 52,
+                  left: 0,
+                  right: 0,
+                  backgroundColor: '#fff',
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: COLORS.border,
+                  zIndex: 100,
+                  elevation: 5,
+                  maxHeight: 200,
+                }}>
+                  <ScrollView>
+                    <TouchableOpacity
+                      style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border }}
+                      onPress={() => { setSegmentFilters(p => ({ ...p, seg2: '' })); setShowSegmentDropdown(null); }}
+                    >
+                      <Text style={{ fontSize: 13, color: COLORS.textSecondary }}>All</Text>
+                    </TouchableOpacity>
+                    {segmentValues.seg2.map(val => (
+                      <TouchableOpacity
+                        key={val}
+                        style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: segmentFilters.seg2 === val ? '#dbeafe' : '#fff' }}
+                        onPress={() => { setSegmentFilters(p => ({ ...p, seg2: val })); setShowSegmentDropdown(null); }}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: segmentFilters.seg2 === val ? '600' : '400', color: segmentFilters.seg2 === val ? '#3b82f6' : COLORS.text }}>{val}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
+
+            {/* Segment 3 Dropdown */}
+            <View style={{ flex: 1 }}>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: segmentFilters.seg3 ? '#fef3c7' : COLORS.neutral100,
+                  borderRadius: 8,
+                  padding: 10,
+                  borderWidth: 1,
+                  borderColor: segmentFilters.seg3 ? '#f59e0b' : COLORS.border,
+                }}
+                onPress={() => setShowSegmentDropdown(showSegmentDropdown === 'seg3' ? null : 'seg3')}
+              >
+                <Text style={{ fontSize: 10, color: COLORS.textSecondary, marginBottom: 2 }}>Column</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: segmentFilters.seg3 ? '#f59e0b' : COLORS.text }}>
+                    {segmentFilters.seg3 || 'All'}
+                  </Text>
+                  <Text style={{ fontSize: 10, color: COLORS.neutral400 }}>▼</Text>
+                </View>
+              </TouchableOpacity>
+              {showSegmentDropdown === 'seg3' && (
+                <View style={{
+                  position: 'absolute',
+                  top: 52,
+                  left: 0,
+                  right: 0,
+                  backgroundColor: '#fff',
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: COLORS.border,
+                  zIndex: 100,
+                  elevation: 5,
+                  maxHeight: 200,
+                }}>
+                  <ScrollView>
+                    <TouchableOpacity
+                      style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border }}
+                      onPress={() => { setSegmentFilters(p => ({ ...p, seg3: '' })); setShowSegmentDropdown(null); }}
+                    >
+                      <Text style={{ fontSize: 13, color: COLORS.textSecondary }}>All</Text>
+                    </TouchableOpacity>
+                    {segmentValues.seg3.map(val => (
+                      <TouchableOpacity
+                        key={val}
+                        style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: segmentFilters.seg3 === val ? '#fef3c7' : '#fff' }}
+                        onPress={() => { setSegmentFilters(p => ({ ...p, seg3: val })); setShowSegmentDropdown(null); }}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: segmentFilters.seg3 === val ? '600' : '400', color: segmentFilters.seg3 === val ? '#f59e0b' : COLORS.text }}>{val}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
           </View>
         </View>
 
@@ -4214,7 +4432,7 @@ _Sent from MobileWMS_`;
               fontWeight: '600',
               color: stockLocatorsTab === 'available' ? '#059669' : COLORS.textSecondary,
             }}>
-              Available Stock ({freeCount})
+              Available Locators ({freeCount})
             </Text>
           </TouchableOpacity>
         </View>
@@ -4230,8 +4448,8 @@ _Sent from MobileWMS_`;
             <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>Free</Text>
           </View>
           <View style={{ flex: 1, backgroundColor: '#fff', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#bbf7d0' }}>
-            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#6b7280' }}>{mappedLocators.length}</Text>
-            <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>Total</Text>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#6b7280' }}>{filteredLocators.length}</Text>
+            <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>Showing</Text>
           </View>
         </View>
 
@@ -4245,14 +4463,20 @@ _Sent from MobileWMS_`;
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
             <Text style={{ fontSize: 48, marginBottom: 12 }}>📍</Text>
             <Text style={{ fontSize: 16, color: COLORS.textSecondary, textAlign: 'center' }}>
-              {locatorSearchQuery ? 'No locators match your search' : 'No locators found'}
+              {(locatorSearchQuery || hasActiveFilters) ? 'No locators match your filters' : 'No locators found'}
             </Text>
+            {hasActiveFilters && (
+              <TouchableOpacity onPress={clearAllFilters} style={{ marginTop: 12, padding: 10 }}>
+                <Text style={{ color: '#059669', fontWeight: '600' }}>Clear Filters</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : (
           <FlatList
             data={filteredLocators}
             keyExtractor={(item) => String(item.id)}
             contentContainerStyle={{ padding: 12 }}
+            onScrollBeginDrag={() => setShowSegmentDropdown(null)}
             renderItem={({ item }) => (
               <TouchableOpacity
                 style={{
