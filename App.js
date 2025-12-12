@@ -131,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.4.1';
+const APP_VERSION = 'v1.4.2';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -267,6 +267,7 @@ export default function App() {
   // Segment filter state
   const [segmentFilters, setSegmentFilters] = useState({ seg1: '', seg2: '', seg3: '' });
   const [showSegmentDropdown, setShowSegmentDropdown] = useState(null); // 'seg1', 'seg2', 'seg3' or null
+  const [searchExpanded, setSearchExpanded] = useState(false); // Collapsible search section - start collapsed
 
   // Selected warehouse and subinventory for org selection
   const [selectedWarehouse, setSelectedWarehouse] = useState(null);
@@ -4189,25 +4190,43 @@ _Sent from MobileWMS_`;
           </View>
         </View>
 
-        {/* Search Bar with Scan */}
-        <View style={{ backgroundColor: '#fff', padding: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.neutral100, borderRadius: 8, paddingHorizontal: 12 }}>
-            <Text style={{ fontSize: 16, marginRight: 8 }}>🔍</Text>
-            <TextInput
-              style={{ flex: 1, paddingVertical: 10, fontSize: 14 }}
-              placeholder="Search or scan locator..."
-              value={locatorSearchQuery}
-              onChangeText={setLocatorSearchQuery}
-              autoCapitalize="characters"
-            />
-            {locatorSearchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setLocatorSearchQuery('')}>
-                <Text style={{ fontSize: 16, color: COLORS.neutral400 }}>✕</Text>
-              </TouchableOpacity>
+        {/* Collapsible Search Section */}
+        <TouchableOpacity
+          style={{
+            backgroundColor: '#fff',
+            padding: 12,
+            borderBottomWidth: 1,
+            borderBottomColor: COLORS.border,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+          onPress={() => setSearchExpanded(!searchExpanded)}
+          activeOpacity={0.7}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+            <Text style={{ fontSize: 14, marginRight: 8 }}>🔍</Text>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }}>Search & Filters</Text>
+            {(hasActiveFilters || locatorSearchQuery) && (
+              <View style={{
+                backgroundColor: '#059669',
+                borderRadius: 10,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                marginLeft: 8,
+              }}>
+                <Text style={{ fontSize: 10, color: '#fff', fontWeight: '600' }}>
+                  {[segmentFilters.seg1, segmentFilters.seg2, segmentFilters.seg3, locatorSearchQuery].filter(Boolean).length} active
+                </Text>
+              </View>
             )}
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {/* Quick Scan Button - always visible */}
             <TouchableOpacity
-              style={{ marginLeft: 8, backgroundColor: '#059669', padding: 8, borderRadius: 6 }}
-              onPress={() => {
+              style={{ backgroundColor: '#059669', padding: 8, borderRadius: 6, marginRight: 8 }}
+              onPress={(e) => {
+                e.stopPropagation();
                 setScanningForInventory(false);
                 setScanningForItem('stockLocator');
                 setScanned(false);
@@ -4216,19 +4235,42 @@ _Sent from MobileWMS_`;
             >
               <Text style={{ fontSize: 14, color: '#fff' }}>📷</Text>
             </TouchableOpacity>
+            <Text style={{ fontSize: 16, color: COLORS.neutral400 }}>{searchExpanded ? '▲' : '▼'}</Text>
           </View>
-        </View>
+        </TouchableOpacity>
 
-        {/* Segment Filter Dropdowns */}
-        <View style={{ backgroundColor: '#fff', paddingHorizontal: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-            <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginRight: 8 }}>Filter by Segment:</Text>
-            {hasActiveFilters && (
-              <TouchableOpacity onPress={clearAllFilters}>
-                <Text style={{ fontSize: 11, color: '#ef4444', fontWeight: '500' }}>Clear All</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+        {/* Expanded Search Content */}
+        {searchExpanded && (
+          <View style={{ backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+            {/* Search Input */}
+            <View style={{ paddingHorizontal: 12, paddingBottom: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.neutral100, borderRadius: 8, paddingHorizontal: 12 }}>
+                <Text style={{ fontSize: 16, marginRight: 8 }}>🔍</Text>
+                <TextInput
+                  style={{ flex: 1, paddingVertical: 10, fontSize: 14 }}
+                  placeholder="Type locator name..."
+                  value={locatorSearchQuery}
+                  onChangeText={setLocatorSearchQuery}
+                  autoCapitalize="characters"
+                />
+                {locatorSearchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setLocatorSearchQuery('')}>
+                    <Text style={{ fontSize: 16, color: COLORS.neutral400 }}>✕</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* Segment Filter Dropdowns */}
+            <View style={{ paddingHorizontal: 12, paddingBottom: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginRight: 8 }}>Filter by Segment:</Text>
+                {hasActiveFilters && (
+                  <TouchableOpacity onPress={clearAllFilters}>
+                    <Text style={{ fontSize: 11, color: '#ef4444', fontWeight: '500' }}>Clear All</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             {/* Segment 1 Dropdown */}
             <View style={{ flex: 1 }}>
@@ -4394,8 +4436,10 @@ _Sent from MobileWMS_`;
                 </View>
               )}
             </View>
+            </View>
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Tabs */}
         <View style={{ flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
