@@ -131,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.4.2';
+const APP_VERSION = 'v1.4.3';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -4446,7 +4446,7 @@ _Sent from MobileWMS_`;
           <TouchableOpacity
             style={{
               flex: 1,
-              paddingVertical: 12,
+              paddingVertical: 10,
               alignItems: 'center',
               borderBottomWidth: 2,
               borderBottomColor: stockLocatorsTab === 'all' ? '#059669' : 'transparent',
@@ -4454,17 +4454,17 @@ _Sent from MobileWMS_`;
             onPress={() => setStockLocatorsTab('all')}
           >
             <Text style={{
-              fontSize: 14,
+              fontSize: 12,
               fontWeight: '600',
               color: stockLocatorsTab === 'all' ? '#059669' : COLORS.textSecondary,
             }}>
-              All Locators ({mappedLocators.length})
+              All ({mappedLocators.length})
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={{
               flex: 1,
-              paddingVertical: 12,
+              paddingVertical: 10,
               alignItems: 'center',
               borderBottomWidth: 2,
               borderBottomColor: stockLocatorsTab === 'available' ? '#059669' : 'transparent',
@@ -4472,16 +4472,35 @@ _Sent from MobileWMS_`;
             onPress={() => setStockLocatorsTab('available')}
           >
             <Text style={{
-              fontSize: 14,
+              fontSize: 12,
               fontWeight: '600',
               color: stockLocatorsTab === 'available' ? '#059669' : COLORS.textSecondary,
             }}>
-              Available Locators ({freeCount})
+              Available ({freeCount})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              paddingVertical: 10,
+              alignItems: 'center',
+              borderBottomWidth: 2,
+              borderBottomColor: stockLocatorsTab === 'map' ? '#059669' : 'transparent',
+            }}
+            onPress={() => setStockLocatorsTab('map')}
+          >
+            <Text style={{
+              fontSize: 12,
+              fontWeight: '600',
+              color: stockLocatorsTab === 'map' ? '#059669' : COLORS.textSecondary,
+            }}>
+              🗺️ Map
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Summary Stats */}
+        {/* Summary Stats - hide on map view */}
+        {stockLocatorsTab !== 'map' && (
         <View style={{ flexDirection: 'row', padding: 12, backgroundColor: '#f0fdf4', gap: 12 }}>
           <View style={{ flex: 1, backgroundColor: '#fff', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#bbf7d0' }}>
             <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#059669' }}>{usedCount}</Text>
@@ -4496,98 +4515,283 @@ _Sent from MobileWMS_`;
             <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>Showing</Text>
           </View>
         </View>
+        )}
 
-        {/* Locators List */}
-        {locatorsLoading ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <ActivityIndicator size="large" color="#059669" />
-            <Text style={{ marginTop: 12, color: COLORS.textSecondary }}>Loading locators...</Text>
-          </View>
-        ) : filteredLocators.length === 0 ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-            <Text style={{ fontSize: 48, marginBottom: 12 }}>📍</Text>
-            <Text style={{ fontSize: 16, color: COLORS.textSecondary, textAlign: 'center' }}>
-              {(locatorSearchQuery || hasActiveFilters) ? 'No locators match your filters' : 'No locators found'}
-            </Text>
-            {hasActiveFilters && (
-              <TouchableOpacity onPress={clearAllFilters} style={{ marginTop: 12, padding: 10 }}>
-                <Text style={{ color: '#059669', fontWeight: '600' }}>Clear Filters</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        ) : (
-          <FlatList
-            data={filteredLocators}
-            keyExtractor={(item) => String(item.id)}
-            contentContainerStyle={{ padding: 12 }}
-            onScrollBeginDrag={() => setShowSegmentDropdown(null)}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={{
-                  backgroundColor: '#fff',
-                  borderRadius: 10,
-                  padding: 14,
-                  marginBottom: 10,
-                  borderLeftWidth: 4,
-                  borderLeftColor: item.status === 'Used' ? '#f59e0b' : '#10b981',
-                  elevation: 1,
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 2,
-                }}
-                onPress={() => {
-                  if (item.status === 'Used' && item.items.length > 0) {
-                    setSelectedLocatorDetail(item);
-                    navigateTo('LocatorDetail');
-                  } else {
-                    Alert.alert('Free Locator', `${item.locatorName} is available for use.`);
-                  }
-                }}
-              >
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.text }}>
-                      📍 {item.locatorName}
-                    </Text>
-                    <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
-                      {item.subinventory} • {item.statusCode}
-                    </Text>
-                  </View>
-                  <View style={{
-                    backgroundColor: item.status === 'Used' ? '#fef3c7' : '#d1fae5',
-                    paddingHorizontal: 10,
-                    paddingVertical: 4,
-                    borderRadius: 12,
-                  }}>
-                    <Text style={{
-                      fontSize: 11,
-                      fontWeight: '600',
-                      color: item.status === 'Used' ? '#d97706' : '#059669',
+        {/* Locators List - for All and Available tabs */}
+        {stockLocatorsTab !== 'map' && (
+          locatorsLoading ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <ActivityIndicator size="large" color="#059669" />
+              <Text style={{ marginTop: 12, color: COLORS.textSecondary }}>Loading locators...</Text>
+            </View>
+          ) : filteredLocators.length === 0 ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+              <Text style={{ fontSize: 48, marginBottom: 12 }}>📍</Text>
+              <Text style={{ fontSize: 16, color: COLORS.textSecondary, textAlign: 'center' }}>
+                {(locatorSearchQuery || hasActiveFilters) ? 'No locators match your filters' : 'No locators found'}
+              </Text>
+              {hasActiveFilters && (
+                <TouchableOpacity onPress={clearAllFilters} style={{ marginTop: 12, padding: 10 }}>
+                  <Text style={{ color: '#059669', fontWeight: '600' }}>Clear Filters</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : (
+            <FlatList
+              data={filteredLocators}
+              keyExtractor={(item) => String(item.id)}
+              contentContainerStyle={{ padding: 12 }}
+              onScrollBeginDrag={() => setShowSegmentDropdown(null)}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#fff',
+                    borderRadius: 10,
+                    padding: 14,
+                    marginBottom: 10,
+                    borderLeftWidth: 4,
+                    borderLeftColor: item.status === 'Used' ? '#f59e0b' : '#10b981',
+                    elevation: 1,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 2,
+                  }}
+                  onPress={() => {
+                    if (item.status === 'Used' && item.items.length > 0) {
+                      setSelectedLocatorDetail(item);
+                      navigateTo('LocatorDetail');
+                    } else {
+                      Alert.alert('Free Locator', `${item.locatorName} is available for use.`);
+                    }
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.text }}>
+                        📍 {item.locatorName}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
+                        {item.subinventory} • {item.statusCode}
+                      </Text>
+                    </View>
+                    <View style={{
+                      backgroundColor: item.status === 'Used' ? '#fef3c7' : '#d1fae5',
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      borderRadius: 12,
                     }}>
-                      {item.status}
+                      <Text style={{
+                        fontSize: 11,
+                        fontWeight: '600',
+                        color: item.status === 'Used' ? '#d97706' : '#059669',
+                      }}>
+                        {item.status}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {item.status === 'Used' && (
+                    <View style={{ flexDirection: 'row', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border }}>
+                      <View style={{ flex: 1, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#d97706' }}>{item.itemCount}</Text>
+                        <Text style={{ fontSize: 10, color: COLORS.textSecondary }}>Items</Text>
+                      </View>
+                      <View style={{ flex: 1, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#059669' }}>{item.totalQuantity.toFixed(0)}</Text>
+                        <Text style={{ fontSize: 10, color: COLORS.textSecondary }}>Total Qty</Text>
+                      </View>
+                      <View style={{ flex: 1, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 14, color: '#6366f1' }}>View →</Text>
+                      </View>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+          )
+        )}
+
+        {/* Warehouse Map View */}
+        {stockLocatorsTab === 'map' && (
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12 }}>
+            {/* Legend */}
+            <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 12, gap: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ width: 16, height: 16, backgroundColor: '#10b981', borderRadius: 3, marginRight: 6 }} />
+                <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>Free</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ width: 16, height: 16, backgroundColor: '#fbbf24', borderRadius: 3, marginRight: 6 }} />
+                <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>Low</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ width: 16, height: 16, backgroundColor: '#f97316', borderRadius: 3, marginRight: 6 }} />
+                <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>Medium</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ width: 16, height: 16, backgroundColor: '#ef4444', borderRadius: 3, marginRight: 6 }} />
+                <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>High</Text>
+              </View>
+            </View>
+
+            {/* Map by Area (Segment 1) */}
+            {(() => {
+              // Group locators by Area (seg1) and Bin (seg2)
+              const areaGroups = {};
+              mappedLocators.forEach(loc => {
+                const parts = (loc.locatorName || '').split('-');
+                const area = parts[0] || 'Unknown';
+                const bin = parts[1] || '';
+                const col = parts[2] || '';
+                const row = parts[3] || '';
+
+                if (!areaGroups[area]) {
+                  areaGroups[area] = { bins: {}, totalUsed: 0, totalFree: 0, totalQty: 0 };
+                }
+                if (!areaGroups[area].bins[bin]) {
+                  areaGroups[area].bins[bin] = [];
+                }
+                areaGroups[area].bins[bin].push(loc);
+                if (loc.status === 'Used') {
+                  areaGroups[area].totalUsed++;
+                  areaGroups[area].totalQty += loc.totalQuantity || 0;
+                } else {
+                  areaGroups[area].totalFree++;
+                }
+              });
+
+              // Get heat color based on quantity
+              const getHeatColor = (loc) => {
+                if (loc.status === 'Free') return '#10b981'; // Green
+                const qty = loc.totalQuantity || 0;
+                if (qty <= 10) return '#fbbf24'; // Yellow - Low
+                if (qty <= 50) return '#f97316'; // Orange - Medium
+                return '#ef4444'; // Red - High
+              };
+
+              return Object.entries(areaGroups).sort().map(([area, data]) => (
+                <View key={area} style={{ marginBottom: 16 }}>
+                  {/* Area Header */}
+                  <View style={{
+                    backgroundColor: '#059669',
+                    padding: 10,
+                    borderTopLeftRadius: 10,
+                    borderTopRightRadius: 10,
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>
+                      📍 Area {area}
                     </Text>
+                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                      <Text style={{ color: '#fff', fontSize: 11 }}>
+                        Used: {data.totalUsed}
+                      </Text>
+                      <Text style={{ color: '#fff', fontSize: 11 }}>
+                        Free: {data.totalFree}
+                      </Text>
+                      <Text style={{ color: '#fff', fontSize: 11 }}>
+                        Qty: {data.totalQty.toFixed(0)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Bins Grid */}
+                  <View style={{
+                    backgroundColor: '#fff',
+                    padding: 10,
+                    borderBottomLeftRadius: 10,
+                    borderBottomRightRadius: 10,
+                    borderWidth: 1,
+                    borderTopWidth: 0,
+                    borderColor: COLORS.border
+                  }}>
+                    {Object.entries(data.bins).sort().map(([bin, locators]) => (
+                      <View key={bin} style={{ marginBottom: 8 }}>
+                        <Text style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, fontWeight: '600' }}>
+                          Bin {bin}
+                        </Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+                          {locators.sort((a, b) => (a.locatorName || '').localeCompare(b.locatorName || '')).map(loc => {
+                            const parts = (loc.locatorName || '').split('-');
+                            const shortName = parts.slice(2).join('-') || loc.locatorName;
+                            return (
+                              <TouchableOpacity
+                                key={loc.id}
+                                style={{
+                                  backgroundColor: getHeatColor(loc),
+                                  paddingHorizontal: 6,
+                                  paddingVertical: 4,
+                                  borderRadius: 4,
+                                  minWidth: 50,
+                                  alignItems: 'center',
+                                }}
+                                onPress={() => {
+                                  if (loc.status === 'Used' && loc.items.length > 0) {
+                                    setSelectedLocatorDetail(loc);
+                                    navigateTo('LocatorDetail');
+                                  } else {
+                                    Alert.alert(
+                                      `${loc.locatorName}`,
+                                      `Status: ${loc.status}\nItems: ${loc.itemCount}\nQty: ${loc.totalQuantity.toFixed(0)}`,
+                                      [{ text: 'OK' }]
+                                    );
+                                  }
+                                }}
+                              >
+                                <Text style={{ fontSize: 9, color: '#fff', fontWeight: '600' }}>
+                                  {shortName}
+                                </Text>
+                                {loc.status === 'Used' && (
+                                  <Text style={{ fontSize: 8, color: 'rgba(255,255,255,0.8)' }}>
+                                    {loc.totalQuantity.toFixed(0)}
+                                  </Text>
+                                )}
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    ))}
                   </View>
                 </View>
+              ));
+            })()}
 
-                {item.status === 'Used' && (
-                  <View style={{ flexDirection: 'row', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border }}>
-                    <View style={{ flex: 1, alignItems: 'center' }}>
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#d97706' }}>{item.itemCount}</Text>
-                      <Text style={{ fontSize: 10, color: COLORS.textSecondary }}>Items</Text>
-                    </View>
-                    <View style={{ flex: 1, alignItems: 'center' }}>
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#059669' }}>{item.totalQuantity.toFixed(0)}</Text>
-                      <Text style={{ fontSize: 10, color: COLORS.textSecondary }}>Total Qty</Text>
-                    </View>
-                    <View style={{ flex: 1, alignItems: 'center' }}>
-                      <Text style={{ fontSize: 14, color: '#6366f1' }}>View →</Text>
-                    </View>
-                  </View>
-                )}
-              </TouchableOpacity>
-            )}
-          />
+            {/* Summary Card */}
+            <View style={{
+              backgroundColor: '#f0fdf4',
+              padding: 16,
+              borderRadius: 10,
+              marginTop: 8,
+              borderWidth: 1,
+              borderColor: '#bbf7d0'
+            }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#059669', marginBottom: 8 }}>
+                📊 Warehouse Overview
+              </Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#059669' }}>{usedCount}</Text>
+                  <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>Used Locators</Text>
+                </View>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#10b981' }}>{freeCount}</Text>
+                  <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>Free Locators</Text>
+                </View>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#6b7280' }}>
+                    {((usedCount / mappedLocators.length) * 100).toFixed(0)}%
+                  </Text>
+                  <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>Utilization</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={{ height: 20 }} />
+          </ScrollView>
         )}
 
         {/* Bottom Navigation */}
