@@ -131,11 +131,15 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.3.9';
+const APP_VERSION = 'v1.4.0';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
 const API_URL = `${API_BASE}/PUTAWAYDETAILS?PICKER_NAME=PICKER1`;
+
+// Oracle Fusion API Configuration
+const ORACLE_FUSION_BASE = 'https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05';
+const ORACLE_FUSION_AUTH = btoa('javeed:Fusion@1234'); // Base64 encode for Basic Auth
 
 export default function App() {
   // Authentication state
@@ -250,6 +254,16 @@ export default function App() {
   // Organizations list (cached)
   const [organizationsList, setOrganizationsList] = useState([]);
   const [orgsLoading, setOrgsLoading] = useState(false);
+
+  // Stock Locators state
+  const [stockLocatorsTab, setStockLocatorsTab] = useState('all'); // 'all' or 'available'
+  const [fusionLocators, setFusionLocators] = useState([]); // From Oracle Fusion
+  const [onhandLocators, setOnhandLocators] = useState([]); // From getonhandsbylocator
+  const [mappedLocators, setMappedLocators] = useState([]); // Combined with Used/Free status
+  const [locatorsLoading, setLocatorsLoading] = useState(false);
+  const [locatorSearchQuery, setLocatorSearchQuery] = useState('');
+  const [selectedLocatorDetail, setSelectedLocatorDetail] = useState(null); // For drill-down
+  const [locatorSubinventory, setLocatorSubinventory] = useState('AMKE'); // Default subinventory
 
   // Selected warehouse and subinventory for org selection
   const [selectedWarehouse, setSelectedWarehouse] = useState(null);
@@ -816,9 +830,8 @@ _Sent from MobileWMS_`;
   };
 
   // ============= PROCESS RECEIVING =============
-  // Oracle Cloud API credentials
-  const ORACLE_API_URL = 'https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05/receivingReceiptRequests';
-  const ORACLE_AUTH = btoa('javeed:Fusion@1234'); // Base64 encode for Basic Auth
+  // Oracle Cloud API URL for receiving
+  const ORACLE_RECEIVING_URL = `${ORACLE_FUSION_BASE}/receivingReceiptRequests`;
 
   // APEX API for updating status
   const APEX_UPDATE_URL = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/poreceiveoneline';
@@ -884,11 +897,11 @@ _Sent from MobileWMS_`;
         console.log(`Processing ${i + 1}/${jsonArray.length}:`, json.ShipmentNumber);
         console.log('Oracle POST payload:', JSON.stringify(json, null, 2));
 
-        const oracleResponse = await fetch(ORACLE_API_URL, {
+        const oracleResponse = await fetch(ORACLE_RECEIVING_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Basic ${ORACLE_AUTH}`,
+            'Authorization': `Basic ${ORACLE_FUSION_AUTH}`,
           },
           body: JSON.stringify(json),
         });
@@ -1477,6 +1490,120 @@ _Sent from MobileWMS_`;
     }
   };
 
+  // ============= STOCK LOCATORS FUNCTIONS =============
+
+  // Fetch Stock Locators - from Oracle Fusion and map with onhand data
+  const fetchStockLocators = async () => {
+    setLocatorsLoading(true);
+    setFusionLocators([]);
+    setOnhandLocators([]);
+    setMappedLocators([]);
+
+    const orgCode = selectedOrg || 'MLCECLAIM';
+
+    try {
+      // Fetch both APIs in parallel
+      const [fusionResponse, onhandResponse] = await Promise.all([
+        // Oracle Fusion API - Get all locators
+        fetch(`${ORACLE_FUSION_BASE}/subinventories/00020000000EACED00057708000110D9319D664C00000004414D4B45/child/locators?offset=0&limit=500`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Basic ${ORACLE_FUSION_AUTH}`,
+            'Content-Type': 'application/json',
+          },
+        }),
+        // APEX API - Get onhand by locator
+        fetch(`${API_BASE}/getonhandsbylocator?organizationcode=${orgCode}`),
+      ]);
+
+      // Parse Fusion response
+      const fusionText = await fusionResponse.text();
+      console.log('========== FUSION LOCATORS API ==========');
+      console.log('Status:', fusionResponse.status);
+      console.log('Response:', fusionText.substring(0, 500));
+
+      let fusionData = { items: [] };
+      try {
+        fusionData = JSON.parse(fusionText);
+      } catch (e) {
+        console.log('Failed to parse Fusion response');
+      }
+
+      const fusionItems = fusionData.items || [];
+      console.log('Fusion locators count:', fusionItems.length);
+      if (fusionItems.length > 0) {
+        console.log('First Fusion locator:', JSON.stringify(fusionItems[0]));
+        // Extract SubinventoryCode for title
+        setLocatorSubinventory(fusionItems[0].SubinventoryCode || 'AMKE');
+      }
+      setFusionLocators(fusionItems);
+
+      // Parse Onhand response
+      const onhandText = await onhandResponse.text();
+      console.log('========== ONHAND LOCATORS API ==========');
+      console.log('Status:', onhandResponse.status);
+      console.log('Response:', onhandText.substring(0, 500));
+
+      let onhandData = { items: [] };
+      try {
+        onhandData = JSON.parse(onhandText);
+      } catch (e) {
+        console.log('Failed to parse Onhand response');
+      }
+
+      const onhandItems = onhandData.items || [];
+      console.log('Onhand items count:', onhandItems.length);
+      setOnhandLocators(onhandItems);
+
+      // Map locators - mark as Used or Free
+      const onhandLocatorSet = new Set();
+      const onhandByLocator = {};
+
+      onhandItems.forEach(item => {
+        const locatorName = item.locator_id || item.locator || '';
+        if (locatorName) {
+          onhandLocatorSet.add(locatorName);
+          if (!onhandByLocator[locatorName]) {
+            onhandByLocator[locatorName] = [];
+          }
+          onhandByLocator[locatorName].push(item);
+        }
+      });
+
+      const mapped = fusionItems.map(loc => {
+        const locatorName = loc.LocatorName || '';
+        const isUsed = onhandLocatorSet.has(locatorName);
+        const items = onhandByLocator[locatorName] || [];
+        const totalQty = items.reduce((sum, i) => sum + (parseFloat(i.primaryquantity) || 0), 0);
+
+        return {
+          ...loc,
+          id: loc.InventoryLocationId || locatorName,
+          locatorName: locatorName,
+          subinventory: loc.SubinventoryCode || '',
+          status: isUsed ? 'Used' : 'Free',
+          statusCode: loc.MaterialStatusCode || 'Active',
+          itemCount: items.length,
+          totalQuantity: totalQty,
+          items: items,
+          creationDate: loc.CreationDate,
+        };
+      });
+
+      console.log('Mapped locators count:', mapped.length);
+      console.log('Used locators:', mapped.filter(l => l.status === 'Used').length);
+      console.log('Free locators:', mapped.filter(l => l.status === 'Free').length);
+
+      setMappedLocators(mapped);
+      setLocatorsLoading(false);
+
+    } catch (error) {
+      console.log('Stock Locators Error:', error.message);
+      Alert.alert('Error', 'Failed to fetch stock locators: ' + error.message);
+      setLocatorsLoading(false);
+    }
+  };
+
   // Build hierarchical tree from locator data
   // Locator format: AREA-BIN-COLUMN-ROW-SHELVING
   const buildLocatorHierarchy = (data) => {
@@ -1947,6 +2074,31 @@ _Sent from MobileWMS_`;
               updateSplitLineLocator(scanningForSplitLine, data);
               setScanned(false);
               setCurrentScreen('ItemDetail');
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    // Handle stock locator scanning
+    if (scanningForItem === 'stockLocator') {
+      Alert.alert(
+        'Scan Successful!',
+        `Locator: ${data}`,
+        [
+          {
+            text: 'Scan Again',
+            onPress: () => setScanned(false),
+          },
+          {
+            text: 'Search',
+            style: 'default',
+            onPress: () => {
+              setLocatorSearchQuery(data);
+              setScanningForItem(null);
+              setScanned(false);
+              setCurrentScreen('StockLocators');
             },
           },
         ]
@@ -2465,6 +2617,20 @@ _Sent from MobileWMS_`;
                 <Text style={styles.compactMenuIcon}>📈</Text>
               </View>
               <Text style={styles.compactMenuTitle}>Reports</Text>
+            </TouchableOpacity>
+
+            {/* Stock Locators */}
+            <TouchableOpacity
+              style={styles.compactMenuCard}
+              onPress={() => {
+                fetchStockLocators();
+                navigateTo('StockLocators');
+              }}
+            >
+              <View style={[styles.compactMenuIconBg, { backgroundColor: '#d1fae5' }]}>
+                <Text style={styles.compactMenuIcon}>📍</Text>
+              </View>
+              <Text style={styles.compactMenuTitle}>Locators</Text>
             </TouchableOpacity>
 
           </View>
@@ -3938,6 +4104,353 @@ _Sent from MobileWMS_`;
               </TouchableOpacity>
             )}
           </View>
+        </View>
+      </View>
+    );
+  }
+
+  // ============= STOCK LOCATORS SCREEN =============
+  if (currentScreen === 'StockLocators') {
+    // Filter locators based on search and tab
+    const filteredLocators = mappedLocators.filter(loc => {
+      const matchesSearch = !locatorSearchQuery ||
+        (loc.locatorName || '').toLowerCase().includes(locatorSearchQuery.toLowerCase());
+
+      if (stockLocatorsTab === 'all') {
+        return matchesSearch;
+      } else {
+        // 'available' tab - show only Free locators
+        return matchesSearch && loc.status === 'Free';
+      }
+    });
+
+    const usedCount = mappedLocators.filter(l => l.status === 'Used').length;
+    const freeCount = mappedLocators.filter(l => l.status === 'Free').length;
+
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#059669" />
+
+        {/* Header */}
+        <View style={{ backgroundColor: '#059669', paddingTop: 40, paddingBottom: 12, paddingHorizontal: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <TouchableOpacity onPress={goBack} style={{ padding: 4 }}>
+              <Text style={{ fontSize: 24, color: '#fff' }}>←</Text>
+            </TouchableOpacity>
+            <View style={{ alignItems: 'center', flex: 1 }}>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#fff' }}>Stock Locators</Text>
+              <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)' }}>
+                {locatorSubinventory} • {selectedOrg || 'MLCECLAIM'}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={fetchStockLocators} style={{ padding: 4 }}>
+              <Text style={{ fontSize: 20, color: '#fff' }}>🔄</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Search Bar */}
+        <View style={{ backgroundColor: '#fff', padding: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.neutral100, borderRadius: 8, paddingHorizontal: 12 }}>
+            <Text style={{ fontSize: 16, marginRight: 8 }}>🔍</Text>
+            <TextInput
+              style={{ flex: 1, paddingVertical: 10, fontSize: 14 }}
+              placeholder="Search locator (e.g., R-A-01-02-04)..."
+              value={locatorSearchQuery}
+              onChangeText={setLocatorSearchQuery}
+              autoCapitalize="characters"
+            />
+            {locatorSearchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setLocatorSearchQuery('')}>
+                <Text style={{ fontSize: 16, color: COLORS.neutral400 }}>✕</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={{ marginLeft: 8, backgroundColor: '#059669', padding: 8, borderRadius: 6 }}
+              onPress={() => {
+                setScanningForInventory(false);
+                setScanningForItem('stockLocator');
+                setScanned(false);
+                navigateTo('BarcodeScanner');
+              }}
+            >
+              <Text style={{ fontSize: 14, color: '#fff' }}>📷</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Tabs */}
+        <View style={{ flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              paddingVertical: 12,
+              alignItems: 'center',
+              borderBottomWidth: 2,
+              borderBottomColor: stockLocatorsTab === 'all' ? '#059669' : 'transparent',
+            }}
+            onPress={() => setStockLocatorsTab('all')}
+          >
+            <Text style={{
+              fontSize: 14,
+              fontWeight: '600',
+              color: stockLocatorsTab === 'all' ? '#059669' : COLORS.textSecondary,
+            }}>
+              All Locators ({mappedLocators.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              paddingVertical: 12,
+              alignItems: 'center',
+              borderBottomWidth: 2,
+              borderBottomColor: stockLocatorsTab === 'available' ? '#059669' : 'transparent',
+            }}
+            onPress={() => setStockLocatorsTab('available')}
+          >
+            <Text style={{
+              fontSize: 14,
+              fontWeight: '600',
+              color: stockLocatorsTab === 'available' ? '#059669' : COLORS.textSecondary,
+            }}>
+              Available Stock ({freeCount})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Summary Stats */}
+        <View style={{ flexDirection: 'row', padding: 12, backgroundColor: '#f0fdf4', gap: 12 }}>
+          <View style={{ flex: 1, backgroundColor: '#fff', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#bbf7d0' }}>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#059669' }}>{usedCount}</Text>
+            <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>Used</Text>
+          </View>
+          <View style={{ flex: 1, backgroundColor: '#fff', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#bbf7d0' }}>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#10b981' }}>{freeCount}</Text>
+            <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>Free</Text>
+          </View>
+          <View style={{ flex: 1, backgroundColor: '#fff', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#bbf7d0' }}>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#6b7280' }}>{mappedLocators.length}</Text>
+            <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>Total</Text>
+          </View>
+        </View>
+
+        {/* Locators List */}
+        {locatorsLoading ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#059669" />
+            <Text style={{ marginTop: 12, color: COLORS.textSecondary }}>Loading locators...</Text>
+          </View>
+        ) : filteredLocators.length === 0 ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+            <Text style={{ fontSize: 48, marginBottom: 12 }}>📍</Text>
+            <Text style={{ fontSize: 16, color: COLORS.textSecondary, textAlign: 'center' }}>
+              {locatorSearchQuery ? 'No locators match your search' : 'No locators found'}
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredLocators}
+            keyExtractor={(item) => String(item.id)}
+            contentContainerStyle={{ padding: 12 }}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#fff',
+                  borderRadius: 10,
+                  padding: 14,
+                  marginBottom: 10,
+                  borderLeftWidth: 4,
+                  borderLeftColor: item.status === 'Used' ? '#f59e0b' : '#10b981',
+                  elevation: 1,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 2,
+                }}
+                onPress={() => {
+                  if (item.status === 'Used' && item.items.length > 0) {
+                    setSelectedLocatorDetail(item);
+                    navigateTo('LocatorDetail');
+                  } else {
+                    Alert.alert('Free Locator', `${item.locatorName} is available for use.`);
+                  }
+                }}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.text }}>
+                      📍 {item.locatorName}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
+                      {item.subinventory} • {item.statusCode}
+                    </Text>
+                  </View>
+                  <View style={{
+                    backgroundColor: item.status === 'Used' ? '#fef3c7' : '#d1fae5',
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 12,
+                  }}>
+                    <Text style={{
+                      fontSize: 11,
+                      fontWeight: '600',
+                      color: item.status === 'Used' ? '#d97706' : '#059669',
+                    }}>
+                      {item.status}
+                    </Text>
+                  </View>
+                </View>
+
+                {item.status === 'Used' && (
+                  <View style={{ flexDirection: 'row', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border }}>
+                    <View style={{ flex: 1, alignItems: 'center' }}>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#d97706' }}>{item.itemCount}</Text>
+                      <Text style={{ fontSize: 10, color: COLORS.textSecondary }}>Items</Text>
+                    </View>
+                    <View style={{ flex: 1, alignItems: 'center' }}>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#059669' }}>{item.totalQuantity.toFixed(0)}</Text>
+                      <Text style={{ fontSize: 10, color: COLORS.textSecondary }}>Total Qty</Text>
+                    </View>
+                    <View style={{ flex: 1, alignItems: 'center' }}>
+                      <Text style={{ fontSize: 14, color: '#6366f1' }}>View →</Text>
+                    </View>
+                  </View>
+                )}
+              </TouchableOpacity>
+            )}
+          />
+        )}
+
+        {/* Bottom Navigation */}
+        <View style={styles.bottomNav}>
+          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('Home')}>
+            <Text style={styles.navIcon}>🏠</Text>
+            <Text style={styles.navText}>Home</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('InventoryModule')}>
+            <Text style={styles.navIcon}>📦</Text>
+            <Text style={styles.navText}>Inventory</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => { setCurrentScreen('ReceiveGoods'); fetchPOData(); }}>
+            <Text style={styles.navIcon}>📥</Text>
+            <Text style={styles.navText}>Receive</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('Scanner')}>
+            <Text style={styles.navIcon}>📷</Text>
+            <Text style={styles.navText}>Scan</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // ============= LOCATOR DETAIL SCREEN (Drill-down) =============
+  if (currentScreen === 'LocatorDetail') {
+    const locator = selectedLocatorDetail;
+    if (!locator) {
+      return (
+        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+          <Text style={{ color: COLORS.textSecondary }}>No locator selected</Text>
+          <TouchableOpacity onPress={goBack} style={{ marginTop: 16 }}>
+            <Text style={{ color: COLORS.primary }}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#d97706" />
+
+        {/* Header */}
+        <View style={{ backgroundColor: '#d97706', paddingTop: 40, paddingBottom: 12, paddingHorizontal: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity onPress={goBack} style={{ padding: 4 }}>
+              <Text style={{ fontSize: 24, color: '#fff' }}>←</Text>
+            </TouchableOpacity>
+            <View style={{ marginLeft: 12, flex: 1 }}>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#fff' }}>📍 {locator.locatorName}</Text>
+              <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)' }}>
+                {locator.subinventory} • {locator.itemCount} items • {locator.totalQuantity.toFixed(0)} qty
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Items in this Locator */}
+        <FlatList
+          data={locator.items}
+          keyExtractor={(item, index) => `${item.itemnumber || index}-${index}`}
+          contentContainerStyle={{ padding: 12 }}
+          ListHeaderComponent={() => (
+            <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 12 }}>
+              Items in this Locator
+            </Text>
+          )}
+          renderItem={({ item }) => (
+            <View style={{
+              backgroundColor: '#fff',
+              borderRadius: 10,
+              padding: 14,
+              marginBottom: 10,
+              elevation: 1,
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }}>
+                    {item.itemnumber || item.item_number || 'N/A'}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }} numberOfLines={2}>
+                    {item.itemdescription || item.item_description || ''}
+                  </Text>
+                </View>
+                <View style={{ backgroundColor: '#dbeafe', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#2563eb' }}>
+                    {parseFloat(item.primaryquantity || 0).toFixed(0)} {item.uom || ''}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', marginTop: 8, flexWrap: 'wrap', gap: 8 }}>
+                {item.lotnumber && (
+                  <View style={{ backgroundColor: COLORS.neutral100, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
+                    <Text style={{ fontSize: 10, color: COLORS.textSecondary }}>Lot: {item.lotnumber}</Text>
+                  </View>
+                )}
+                {item.subinventorycode && (
+                  <View style={{ backgroundColor: COLORS.neutral100, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
+                    <Text style={{ fontSize: 10, color: COLORS.textSecondary }}>Sub: {item.subinventorycode}</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+          ListEmptyComponent={() => (
+            <View style={{ padding: 24, alignItems: 'center' }}>
+              <Text style={{ color: COLORS.textSecondary }}>No items in this locator</Text>
+            </View>
+          )}
+        />
+
+        {/* Bottom Navigation */}
+        <View style={styles.bottomNav}>
+          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('Home')}>
+            <Text style={styles.navIcon}>🏠</Text>
+            <Text style={styles.navText}>Home</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('InventoryModule')}>
+            <Text style={styles.navIcon}>📦</Text>
+            <Text style={styles.navText}>Inventory</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => { setCurrentScreen('ReceiveGoods'); fetchPOData(); }}>
+            <Text style={styles.navIcon}>📥</Text>
+            <Text style={styles.navText}>Receive</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('Scanner')}>
+            <Text style={styles.navIcon}>📷</Text>
+            <Text style={styles.navText}>Scan</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
