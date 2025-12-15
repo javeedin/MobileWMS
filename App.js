@@ -131,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.4.3';
+const APP_VERSION = 'v1.4.4';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -334,6 +334,12 @@ export default function App() {
 
   // Locator fields state (for non-split mode)
   const [locatorInput, setLocatorInput] = useState('');
+
+  // Locator validation state (for Item Details receiving)
+  const [locatorStatus, setLocatorStatus] = useState(null); // null, 'checking', 'used', 'free', 'invalid'
+  const [showLocatorPicker, setShowLocatorPicker] = useState(false);
+  const [availableLocators, setAvailableLocators] = useState([]); // Free locators for picker
+  const [locatorPickerLoading, setLocatorPickerLoading] = useState(false);
 
   // Processing modal state
   const [showProcessingModal, setShowProcessingModal] = useState(false);
@@ -1608,6 +1614,104 @@ _Sent from MobileWMS_`;
     }
   };
 
+  // Check if a locator is Used or Free (for Item Details receiving)
+  const checkLocatorStatus = async (locatorName) => {
+    if (!locatorName || locatorName.trim() === '' || locatorName.trim() === '----') {
+      setLocatorStatus(null);
+      return;
+    }
+
+    setLocatorStatus('checking');
+    const orgCode = selectedOrg || 'MLCECLAIM';
+
+    try {
+      // Fetch on-hand data to check if locator has items
+      const response = await fetch(`${API_BASE}/getonhandsbylocator?organizationcode=${orgCode}`);
+      const data = await response.json();
+      const onhandItems = data.items || [];
+
+      // Check if this locator exists in on-hand data
+      const locatorHasItems = onhandItems.some(item => {
+        const itemLocator = item.locator_id || item.locator || '';
+        return itemLocator.toLowerCase() === locatorName.toLowerCase();
+      });
+
+      setLocatorStatus(locatorHasItems ? 'used' : 'free');
+      console.log(`Locator ${locatorName} status:`, locatorHasItems ? 'Used' : 'Free');
+
+    } catch (error) {
+      console.log('Error checking locator status:', error.message);
+      setLocatorStatus('invalid');
+    }
+  };
+
+  // Fetch available (Free) locators for the picker modal
+  const fetchAvailableLocators = async () => {
+    setLocatorPickerLoading(true);
+    setAvailableLocators([]);
+    const orgCode = selectedOrg || 'MLCECLAIM';
+
+    try {
+      // Fetch both APIs in parallel
+      const [fusionResponse, onhandResponse] = await Promise.all([
+        fetch(`${ORACLE_FUSION_BASE}/subinventories/00020000000EACED00057708000110D9319D664C00000004414D4B45/child/locators?offset=0&limit=500`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Basic ${ORACLE_FUSION_AUTH}`,
+            'Content-Type': 'application/json',
+          },
+        }),
+        fetch(`${API_BASE}/getonhandsbylocator?organizationcode=${orgCode}`),
+      ]);
+
+      // Parse responses
+      let fusionData = { items: [] };
+      let onhandData = { items: [] };
+
+      try {
+        const fusionText = await fusionResponse.text();
+        fusionData = JSON.parse(fusionText);
+      } catch (e) { }
+
+      try {
+        const onhandText = await onhandResponse.text();
+        onhandData = JSON.parse(onhandText);
+      } catch (e) { }
+
+      const fusionItems = fusionData.items || [];
+      const onhandItems = onhandData.items || [];
+
+      // Create set of used locators
+      const usedLocatorSet = new Set();
+      onhandItems.forEach(item => {
+        const locatorName = item.locator_id || item.locator || '';
+        if (locatorName) usedLocatorSet.add(locatorName.toUpperCase());
+      });
+
+      // Filter to only Free locators
+      const freeLocators = fusionItems
+        .filter(loc => {
+          const locatorName = loc.LocatorName || '';
+          return !usedLocatorSet.has(locatorName.toUpperCase());
+        })
+        .map(loc => ({
+          id: loc.InventoryLocationId || loc.LocatorName,
+          locatorName: loc.LocatorName || '',
+          subinventory: loc.SubinventoryCode || '',
+          statusCode: loc.MaterialStatusCode || 'Active',
+        }))
+        .sort((a, b) => a.locatorName.localeCompare(b.locatorName));
+
+      console.log('Available (Free) locators:', freeLocators.length);
+      setAvailableLocators(freeLocators);
+      setLocatorPickerLoading(false);
+
+    } catch (error) {
+      console.log('Error fetching available locators:', error.message);
+      setLocatorPickerLoading(false);
+    }
+  };
+
   // Build hierarchical tree from locator data
   // Locator format: AREA-BIN-COLUMN-ROW-SHELVING
   const buildLocatorHierarchy = (data) => {
@@ -2114,12 +2218,16 @@ _Sent from MobileWMS_`;
       const updatedItem = { ...scanningForItem, actualLocator: data };
       setSelectedItem(updatedItem);
       setScannedLocator(data); // Update scanned locator field
+      setLocatorInput(data); // Sync Assigned field with Scanned field
 
       // Update the item in poData as well
       const updatedPoData = poData.map(item =>
         item.id === scanningForItem.id ? { ...item, actualLocator: data } : item
       );
       setPoData(updatedPoData);
+
+      // Check locator status (Used/Free)
+      checkLocatorStatus(data);
     }
 
     Alert.alert(
@@ -3114,11 +3222,33 @@ _Sent from MobileWMS_`;
           {/* Locators Box - Only show when NOT in split mode */}
           {splitLines.length === 0 && (
             <View style={{ backgroundColor: COLORS.surface, marginHorizontal: 12, marginBottom: 8, padding: 14, borderRadius: 12, ...SHADOWS.sm }}>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.text, marginBottom: 12 }}>📍 Locators</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.text }}>📍 Locators</Text>
+                {/* Locator Status Badge */}
+                {locatorStatus && (
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: locatorStatus === 'free' ? '#d1fae5' : locatorStatus === 'used' ? '#fef3c7' : locatorStatus === 'checking' ? '#e0e7ff' : '#fee2e2',
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 12,
+                  }}>
+                    {locatorStatus === 'checking' && <ActivityIndicator size="small" color="#6366f1" style={{ marginRight: 4 }} />}
+                    <Text style={{
+                      fontSize: 11,
+                      fontWeight: '600',
+                      color: locatorStatus === 'free' ? '#059669' : locatorStatus === 'used' ? '#d97706' : locatorStatus === 'checking' ? '#6366f1' : '#dc2626',
+                    }}>
+                      {locatorStatus === 'free' ? '✓ Free' : locatorStatus === 'used' ? '⚠ Used' : locatorStatus === 'checking' ? 'Checking...' : '✗ Invalid'}
+                    </Text>
+                  </View>
+                )}
+              </View>
 
               {/* Auto Assigned - Editable Text Field */}
               <View style={{ flexDirection: 'row', marginBottom: 10, alignItems: 'center' }}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textSecondary, width: 100 }}>Auto Assigned:</Text>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textSecondary, width: 90 }}>Assigned:</Text>
                 <TextInput
                   style={{
                     flex: 1,
@@ -3132,36 +3262,78 @@ _Sent from MobileWMS_`;
                     color: COLORS.text,
                   }}
                   value={locatorInput}
-                  onChangeText={setLocatorInput}
+                  onChangeText={(text) => {
+                    setLocatorInput(text);
+                    // Check status when manually typing (debounced effect would be better)
+                  }}
                   placeholder="Enter or scan locator"
                   placeholderTextColor={COLORS.neutral400}
                   editable={(selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS'}
                 />
               </View>
 
-              {/* Scanned - Editable Text Field (updated by scanner) */}
+              {/* Scanned - Editable Text Field with status icon and picker */}
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.success, width: 100 }}>Scanned:</Text>
-                <TextInput
-                  style={{
-                    flex: 1,
-                    borderWidth: 1,
-                    borderColor: scannedLocator ? COLORS.success : COLORS.border,
-                    borderRadius: 8,
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                    fontSize: 14,
-                    backgroundColor: scannedLocator ? COLORS.successLight : ((selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS' ? COLORS.neutral100 : '#fff'),
-                    color: scannedLocator ? COLORS.success : COLORS.text,
-                    fontWeight: scannedLocator ? '600' : 'normal',
-                  }}
-                  value={scannedLocator}
-                  onChangeText={setScannedLocator}
-                  placeholder="Scan to fill"
-                  placeholderTextColor={COLORS.neutral400}
-                  editable={(selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS'}
-                />
+                <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.success, width: 90 }}>Scanned:</Text>
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      borderWidth: 1,
+                      borderColor: scannedLocator ? (locatorStatus === 'free' ? COLORS.success : locatorStatus === 'used' ? '#f59e0b' : COLORS.success) : COLORS.border,
+                      borderRadius: 8,
+                      borderTopRightRadius: 0,
+                      borderBottomRightRadius: 0,
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      fontSize: 14,
+                      backgroundColor: scannedLocator ? (locatorStatus === 'free' ? COLORS.successLight : locatorStatus === 'used' ? '#fef3c7' : COLORS.successLight) : ((selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS' ? COLORS.neutral100 : '#fff'),
+                      color: scannedLocator ? (locatorStatus === 'free' ? COLORS.success : locatorStatus === 'used' ? '#d97706' : COLORS.success) : COLORS.text,
+                      fontWeight: scannedLocator ? '600' : 'normal',
+                    }}
+                    value={scannedLocator}
+                    onChangeText={(text) => {
+                      setScannedLocator(text);
+                      setLocatorInput(text); // Sync with Assigned
+                      if (text.length > 3) {
+                        checkLocatorStatus(text);
+                      } else {
+                        setLocatorStatus(null);
+                      }
+                    }}
+                    placeholder="Scan to fill"
+                    placeholderTextColor={COLORS.neutral400}
+                    editable={(selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS'}
+                  />
+                  {/* Available Locators Picker Button */}
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS' ? COLORS.neutral200 : '#059669',
+                      padding: 12,
+                      borderTopRightRadius: 8,
+                      borderBottomRightRadius: 8,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                    onPress={() => {
+                      if ((selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS') {
+                        fetchAvailableLocators();
+                        setShowLocatorPicker(true);
+                      }
+                    }}
+                    disabled={(selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS'}
+                  >
+                    <Text style={{ fontSize: 16 }}>📍</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
+
+              {/* Status hint */}
+              {locatorStatus === 'used' && (
+                <View style={{ marginTop: 8, backgroundColor: '#fef3c7', padding: 8, borderRadius: 6, flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 11, color: '#92400e' }}>⚠️ This locator already has items. You can still use it.</Text>
+                </View>
+              )}
             </View>
           )}
 
@@ -3648,6 +3820,120 @@ _Sent from MobileWMS_`;
                   </Text>
                 </TouchableOpacity>
               )}
+            </View>
+          </View>
+        </Modal>
+
+        {/* Locator Picker Modal */}
+        <Modal
+          visible={showLocatorPicker}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowLocatorPicker(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: COLORS.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%', paddingBottom: 20 }}>
+              {/* Header */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+                <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text }}>📍 Available Locators</Text>
+                <TouchableOpacity onPress={() => setShowLocatorPicker(false)}>
+                  <Text style={{ fontSize: 24, color: COLORS.neutral400 }}>×</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Search Filter */}
+              <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+                <TextInput
+                  style={{
+                    backgroundColor: COLORS.neutral100,
+                    borderRadius: 10,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    fontSize: 14,
+                    borderWidth: 1,
+                    borderColor: COLORS.border,
+                  }}
+                  placeholder="🔍 Search locators..."
+                  placeholderTextColor={COLORS.textSecondary}
+                  value={locatorInput}
+                  onChangeText={(text) => setLocatorInput(text)}
+                />
+              </View>
+
+              {/* Content */}
+              {locatorPickerLoading ? (
+                <View style={{ padding: 40, alignItems: 'center' }}>
+                  <ActivityIndicator size="large" color={COLORS.primary} />
+                  <Text style={{ fontSize: 14, color: COLORS.textSecondary, marginTop: 12 }}>Loading available locators...</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={availableLocators.filter(loc =>
+                    !locatorInput || loc.locatorName.toLowerCase().includes(locatorInput.toLowerCase())
+                  )}
+                  keyExtractor={(item) => item.id.toString()}
+                  style={{ maxHeight: 400 }}
+                  contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8 }}
+                  ListEmptyComponent={
+                    <View style={{ padding: 40, alignItems: 'center' }}>
+                      <Text style={{ fontSize: 40, marginBottom: 12 }}>📭</Text>
+                      <Text style={{ fontSize: 14, color: COLORS.textSecondary }}>No available locators found</Text>
+                    </View>
+                  }
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: COLORS.successLight,
+                        borderRadius: 10,
+                        padding: 14,
+                        marginBottom: 8,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        borderWidth: 1,
+                        borderColor: COLORS.success,
+                      }}
+                      onPress={() => {
+                        // Set both locator fields
+                        setLocatorInput(item.locatorName);
+                        setScannedLocator(item.locatorName);
+                        // Update selectedItem
+                        setSelectedItem(prev => ({
+                          ...prev,
+                          actualLocator: item.locatorName,
+                        }));
+                        // Check status (should be free)
+                        setLocatorStatus('free');
+                        // Close modal
+                        setShowLocatorPicker(false);
+                      }}
+                    >
+                      <View style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        backgroundColor: COLORS.success,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        marginRight: 12,
+                      }}>
+                        <Text style={{ color: '#fff', fontSize: 16 }}>✓</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text, fontFamily: 'monospace' }}>{item.locatorName}</Text>
+                        <Text style={{ fontSize: 11, color: COLORS.success, marginTop: 2 }}>Free • Ready to use</Text>
+                      </View>
+                      <Text style={{ fontSize: 20 }}>→</Text>
+                    </TouchableOpacity>
+                  )}
+                />
+              )}
+
+              {/* Footer */}
+              <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+                <Text style={{ fontSize: 11, color: COLORS.textSecondary, textAlign: 'center' }}>
+                  Showing {availableLocators.filter(loc => !locatorInput || loc.locatorName.toLowerCase().includes(locatorInput.toLowerCase())).length} free locators
+                </Text>
+              </View>
             </View>
           </View>
         </Modal>
