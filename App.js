@@ -16,6 +16,8 @@ import {
   RefreshControl,
   BackHandler,
   Share,
+  Animated,
+  Easing,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Contacts from 'expo-contacts';
@@ -131,7 +133,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.5.1';
+const APP_VERSION = 'v1.5.2';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -4698,14 +4700,22 @@ _Sent from MobileWMS_`;
             <Text style={{ color: '#fff', fontSize: 24 }}>←</Text>
           </TouchableOpacity>
           <Text style={[styles.screenTitle, { flex: 1, textAlign: 'center' }]}>🔌 API Reference</Text>
-          <View style={{ width: 40 }} />
+          <TouchableOpacity onPress={() => setCurrentScreen('DataFlowDiagram')} style={{ padding: 8 }}>
+            <Text style={{ color: '#fff', fontSize: 20 }}>📊</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Version Info */}
+        {/* Version Info + Flow Diagram Button */}
         <View style={{ backgroundColor: '#fef3c7', padding: 12, flexDirection: 'row', alignItems: 'center' }}>
           <Text style={{ fontSize: 12, color: '#92400e', flex: 1 }}>
             App Version: {APP_VERSION} | Total APIs: {apiList.reduce((sum, page) => sum + page.apis.length, 0)}
           </Text>
+          <TouchableOpacity
+            onPress={() => setCurrentScreen('DataFlowDiagram')}
+            style={{ backgroundColor: '#1e3a5f', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, flexDirection: 'row', alignItems: 'center' }}
+          >
+            <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>📊 Flow Diagram</Text>
+          </TouchableOpacity>
         </View>
 
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12 }}>
@@ -4788,6 +4798,358 @@ _Sent from MobileWMS_`;
             </Text>
           </View>
         </ScrollView>
+      </View>
+    );
+  }
+
+  // ============= DATA FLOW DIAGRAM SCREEN =============
+  if (currentScreen === 'DataFlowDiagram') {
+    // Animation values
+    const [flowStep, setFlowStep] = useState(0);
+    const [isAnimating, setIsAnimating] = useState(false);
+    const pulseAnim = useRef(new Animated.Value(1)).current;
+    const flowAnim = useRef(new Animated.Value(0)).current;
+    const arrowAnim1 = useRef(new Animated.Value(0)).current;
+    const arrowAnim2 = useRef(new Animated.Value(0)).current;
+    const arrowAnim3 = useRef(new Animated.Value(0)).current;
+    const arrowAnim4 = useRef(new Animated.Value(0)).current;
+    const arrowAnim5 = useRef(new Animated.Value(0)).current;
+
+    const flowSteps = [
+      { id: 0, title: 'Start', desc: 'User opens Receive Goods', icon: '📱', color: '#6366f1' },
+      { id: 1, title: 'Fetch Data (APEX)', desc: 'GET /PUTAWAYDETAILS', icon: '📥', color: '#f59e0b' },
+      { id: 2, title: 'Display Items', desc: 'Show pending PO items', icon: '📋', color: '#10b981' },
+      { id: 3, title: 'User Action', desc: 'Scan locator & confirm', icon: '📷', color: '#8b5cf6' },
+      { id: 4, title: 'Process (FUSION)', desc: 'POST receipt to Oracle', icon: '☁️', color: '#ef4444' },
+      { id: 5, title: 'Update (APEX)', desc: 'POST status update', icon: '✅', color: '#f59e0b' },
+      { id: 6, title: 'Complete', desc: 'Receipt confirmed!', icon: '🎉', color: '#10b981' },
+    ];
+
+    // Pulse animation for current step
+    useEffect(() => {
+      if (isAnimating) {
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(pulseAnim, {
+              toValue: 1.2,
+              duration: 500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(pulseAnim, {
+              toValue: 1,
+              duration: 500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      } else {
+        pulseAnim.setValue(1);
+      }
+    }, [isAnimating, flowStep]);
+
+    // Start animation sequence
+    const startAnimation = () => {
+      setIsAnimating(true);
+      setFlowStep(0);
+      arrowAnim1.setValue(0);
+      arrowAnim2.setValue(0);
+      arrowAnim3.setValue(0);
+      arrowAnim4.setValue(0);
+      arrowAnim5.setValue(0);
+
+      const stepDuration = 1500;
+
+      // Animate through each step
+      const animateStep = (step, arrowAnim) => {
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            setFlowStep(step);
+            if (arrowAnim) {
+              Animated.timing(arrowAnim, {
+                toValue: 1,
+                duration: 400,
+                easing: Easing.out(Easing.ease),
+                useNativeDriver: false,
+              }).start();
+            }
+            Vibration.vibrate(50);
+            resolve();
+          }, stepDuration);
+        });
+      };
+
+      // Run animation sequence
+      (async () => {
+        await animateStep(1, arrowAnim1);
+        await animateStep(2, arrowAnim2);
+        await animateStep(3, arrowAnim3);
+        await animateStep(4, arrowAnim4);
+        await animateStep(5, arrowAnim5);
+        await animateStep(6, null);
+        setIsAnimating(false);
+      })();
+    };
+
+    // Reset animation
+    const resetAnimation = () => {
+      setIsAnimating(false);
+      setFlowStep(0);
+      arrowAnim1.setValue(0);
+      arrowAnim2.setValue(0);
+      arrowAnim3.setValue(0);
+      arrowAnim4.setValue(0);
+      arrowAnim5.setValue(0);
+    };
+
+    // Arrow component
+    const AnimatedArrow = ({ anim, direction = 'down' }) => {
+      const width = anim.interpolate({
+        inputRange: [0, 1],
+        outputRange: ['0%', '100%'],
+      });
+
+      return (
+        <View style={{ alignItems: 'center', marginVertical: 4 }}>
+          <Animated.View style={{
+            height: direction === 'down' ? 24 : 2,
+            width: direction === 'down' ? 3 : width,
+            backgroundColor: '#3b82f6',
+            borderRadius: 2,
+          }} />
+          <Text style={{ color: '#3b82f6', fontSize: 12, marginTop: -4 }}>
+            {direction === 'down' ? '▼' : '→'}
+          </Text>
+        </View>
+      );
+    };
+
+    // Flow node component
+    const FlowNode = ({ step, isActive, isPast }) => {
+      const scale = isActive ? pulseAnim : 1;
+      const bgColor = isPast ? step.color : (isActive ? step.color : '#e2e8f0');
+      const textColor = isPast || isActive ? '#fff' : '#64748b';
+      const borderColor = isActive ? '#1e3a5f' : 'transparent';
+
+      return (
+        <Animated.View style={{
+          transform: [{ scale }],
+          backgroundColor: bgColor,
+          borderRadius: 12,
+          padding: 12,
+          marginVertical: 4,
+          borderWidth: isActive ? 3 : 0,
+          borderColor: borderColor,
+          shadowColor: isActive ? step.color : 'transparent',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: isActive ? 0.4 : 0,
+          shadowRadius: 8,
+          elevation: isActive ? 8 : 2,
+          minWidth: 200,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ fontSize: 24, marginRight: 10 }}>{step.icon}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 13, fontWeight: 'bold', color: textColor }}>
+                {step.title}
+              </Text>
+              <Text style={{ fontSize: 10, color: textColor, opacity: 0.9 }}>
+                {step.desc}
+              </Text>
+            </View>
+            {isPast && <Text style={{ fontSize: 16 }}>✓</Text>}
+          </View>
+        </Animated.View>
+      );
+    };
+
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#1e3a5f" />
+
+        {/* Header */}
+        <View style={[styles.screenHeader, { backgroundColor: '#1e3a5f' }]}>
+          <TouchableOpacity onPress={() => setCurrentScreen('APIList')} style={{ padding: 8 }}>
+            <Text style={{ color: '#fff', fontSize: 24 }}>←</Text>
+          </TouchableOpacity>
+          <Text style={[styles.screenTitle, { flex: 1, textAlign: 'center' }]}>📊 PO Receipt Flow</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        {/* Legend */}
+        <View style={{ backgroundColor: '#f8fafc', padding: 12, flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: '#f59e0b', marginRight: 4 }} />
+            <Text style={{ fontSize: 10, color: '#64748b' }}>APEX</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: '#ef4444', marginRight: 4 }} />
+            <Text style={{ fontSize: 10, color: '#64748b' }}>FUSION</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: '#8b5cf6', marginRight: 4 }} />
+            <Text style={{ fontSize: 10, color: '#64748b' }}>User Action</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: '#10b981', marginRight: 4 }} />
+            <Text style={{ fontSize: 10, color: '#64748b' }}>App</Text>
+          </View>
+        </View>
+
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, alignItems: 'center' }}>
+          {/* Title */}
+          <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1e3a5f', marginBottom: 16, textAlign: 'center' }}>
+            PO Receipt Data Flow
+          </Text>
+
+          {/* Flow Diagram */}
+          <View style={{ alignItems: 'center' }}>
+            {flowSteps.map((step, idx) => (
+              <View key={step.id} style={{ alignItems: 'center' }}>
+                <FlowNode
+                  step={step}
+                  isActive={flowStep === step.id && isAnimating}
+                  isPast={flowStep > step.id || (flowStep === 6 && step.id === 6)}
+                />
+                {idx < flowSteps.length - 1 && (
+                  <AnimatedArrow
+                    anim={[arrowAnim1, arrowAnim2, arrowAnim3, arrowAnim4, arrowAnim5][idx] || new Animated.Value(flowStep > idx ? 1 : 0)}
+                  />
+                )}
+              </View>
+            ))}
+          </View>
+
+          {/* API Details Box */}
+          <View style={{
+            backgroundColor: '#fff',
+            borderRadius: 12,
+            padding: 16,
+            marginTop: 24,
+            width: '100%',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+            elevation: 3,
+          }}>
+            <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#1e3a5f', marginBottom: 12 }}>
+              📡 API Calls in This Flow
+            </Text>
+
+            {/* API 1 */}
+            <View style={{ marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                <View style={{ backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginRight: 8 }}>
+                  <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#d97706' }}>APEX</Text>
+                </View>
+                <View style={{ backgroundColor: '#d1fae5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                  <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#059669' }}>GET</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#334155' }}>1. Get Putaway Details</Text>
+              <Text style={{ fontSize: 9, color: '#64748b', fontFamily: 'monospace' }}>/ords/test/INVENTORY/PUTAWAYDETAILS</Text>
+            </View>
+
+            {/* API 2 */}
+            <View style={{ marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                <View style={{ backgroundColor: '#fee2e2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginRight: 8 }}>
+                  <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#dc2626' }}>FUSION</Text>
+                </View>
+                <View style={{ backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                  <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#d97706' }}>POST</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#334155' }}>2. Process Receipt</Text>
+              <Text style={{ fontSize: 9, color: '#64748b', fontFamily: 'monospace' }}>/ords/test/FUSIONCLIENTERP/inventory/poreceiveoneline</Text>
+              <Text style={{ fontSize: 9, color: '#64748b', marginTop: 2 }}>Body: JSON with receipt details (Qty, Locator, etc.)</Text>
+            </View>
+
+            {/* API 3 */}
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                <View style={{ backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginRight: 8 }}>
+                  <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#d97706' }}>APEX</Text>
+                </View>
+                <View style={{ backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                  <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#d97706' }}>POST</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#334155' }}>3. Update Status</Text>
+              <Text style={{ fontSize: 9, color: '#64748b', fontFamily: 'monospace' }}>/ords/test/FUSIONCLIENTERP/inventory/poreceiveoneline</Text>
+              <Text style={{ fontSize: 9, color: '#64748b', marginTop: 2 }}>Params: p_status=UPDATE, p_line_id=xxx</Text>
+            </View>
+          </View>
+
+          {/* System Architecture */}
+          <View style={{
+            backgroundColor: '#1e3a5f',
+            borderRadius: 12,
+            padding: 16,
+            marginTop: 16,
+            width: '100%',
+          }}>
+            <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#fff', marginBottom: 12, textAlign: 'center' }}>
+              🏗️ System Architecture
+            </Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' }}>
+              <View style={{ alignItems: 'center' }}>
+                <View style={{ backgroundColor: '#6366f1', padding: 12, borderRadius: 8 }}>
+                  <Text style={{ fontSize: 24 }}>📱</Text>
+                </View>
+                <Text style={{ color: '#fff', fontSize: 10, marginTop: 4 }}>Mobile App</Text>
+              </View>
+              <Text style={{ color: '#60a5fa', fontSize: 20 }}>⟷</Text>
+              <View style={{ alignItems: 'center' }}>
+                <View style={{ backgroundColor: '#f59e0b', padding: 12, borderRadius: 8 }}>
+                  <Text style={{ fontSize: 24 }}>🗄️</Text>
+                </View>
+                <Text style={{ color: '#fff', fontSize: 10, marginTop: 4 }}>APEX DB</Text>
+              </View>
+              <Text style={{ color: '#60a5fa', fontSize: 20 }}>⟷</Text>
+              <View style={{ alignItems: 'center' }}>
+                <View style={{ backgroundColor: '#ef4444', padding: 12, borderRadius: 8 }}>
+                  <Text style={{ fontSize: 24 }}>☁️</Text>
+                </View>
+                <Text style={{ color: '#fff', fontSize: 10, marginTop: 4 }}>Oracle Fusion</Text>
+              </View>
+            </View>
+          </View>
+
+        </ScrollView>
+
+        {/* Bottom Controls */}
+        <View style={{ padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e2e8f0' }}>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                backgroundColor: isAnimating ? '#94a3b8' : '#10b981',
+                padding: 14,
+                borderRadius: 8,
+                alignItems: 'center',
+              }}
+              onPress={startAnimation}
+              disabled={isAnimating}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>
+                {isAnimating ? '⏳ Animating...' : '▶️ Start Animation'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#64748b',
+                padding: 14,
+                borderRadius: 8,
+                alignItems: 'center',
+                paddingHorizontal: 20,
+              }}
+              onPress={resetAnimation}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>🔄</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
     );
   }
