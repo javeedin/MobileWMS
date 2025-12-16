@@ -131,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.4.5';
+const APP_VERSION = 'v1.4.6';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -166,6 +166,12 @@ export default function App() {
 
   // Go back to previous screen
   const goBack = () => {
+    // Case 1: Clear temp selected locators when leaving ItemDetail screen
+    if (currentScreen === 'ItemDetail') {
+      setSelectedLocatorsTemp(new Set());
+      console.log('Cleared temp selected locators (left ItemDetail screen)');
+    }
+
     setNavigationHistory(prev => {
       if (prev.length > 0) {
         const prevScreen = prev[prev.length - 1];
@@ -340,7 +346,8 @@ export default function App() {
   const [showLocatorPicker, setShowLocatorPicker] = useState(false);
   const [availableLocators, setAvailableLocators] = useState([]); // Free locators for picker
   const [locatorPickerLoading, setLocatorPickerLoading] = useState(false);
-  const [usedLocatorsInSession, setUsedLocatorsInSession] = useState(new Set()); // Track locators used in this session
+  const [selectedLocatorsTemp, setSelectedLocatorsTemp] = useState(new Set()); // Case 1: Temp selected (cleared on screen exit)
+  const [confirmedLocators, setConfirmedLocators] = useState(new Set()); // Case 2: Confirmed locators (cleared on manual refresh)
   const [pickingForSplitLine, setPickingForSplitLine] = useState(null); // Track which split line we're picking for
 
   // Processing modal state
@@ -1021,27 +1028,39 @@ _Sent from MobileWMS_`;
             }));
           }
 
-          // Mark locators as used in this session
-          setUsedLocatorsInSession(prevUsed => {
-            const newUsed = new Set(prevUsed);
-            if (splitLines.length > 0) {
-              // Add all split line locators
-              splitLines.forEach(line => {
-                if (line.locator) {
-                  newUsed.add(line.locator.toUpperCase());
-                  console.log('Marked locator as used:', line.locator);
-                }
-              });
-            } else {
-              // Add normal locator
-              const locator = scannedLocator || locatorInput || '';
-              if (locator) {
-                newUsed.add(locator.toUpperCase());
-                console.log('Marked locator as used:', locator);
+          // Case 2: Move locators from temp to confirmed (permanent until refresh)
+          const locatorsToConfirm = [];
+          if (splitLines.length > 0) {
+            // Add all split line locators
+            splitLines.forEach(line => {
+              if (line.locator) {
+                locatorsToConfirm.push(line.locator.toUpperCase());
               }
+            });
+          } else {
+            // Add normal locator
+            const locator = scannedLocator || locatorInput || '';
+            if (locator) {
+              locatorsToConfirm.push(locator.toUpperCase());
             }
-            console.log('Total used locators in session:', newUsed.size);
-            return newUsed;
+          }
+
+          // Add to confirmed locators
+          setConfirmedLocators(prev => {
+            const newConfirmed = new Set(prev);
+            locatorsToConfirm.forEach(loc => {
+              newConfirmed.add(loc);
+              console.log('Confirmed locator (permanent):', loc);
+            });
+            console.log('Total confirmed locators:', newConfirmed.size);
+            return newConfirmed;
+          });
+
+          // Remove from temp selected (since now confirmed)
+          setSelectedLocatorsTemp(prev => {
+            const newTemp = new Set(prev);
+            locatorsToConfirm.forEach(loc => newTemp.delete(loc));
+            return newTemp;
           });
         }
         return prev;
@@ -1713,13 +1732,18 @@ _Sent from MobileWMS_`;
         if (locatorName) usedLocatorSet.add(locatorName.toUpperCase());
       });
 
-      // Filter to only Free locators (not in on-hand data AND not used in this session)
+      // Filter to only Free locators:
+      // - Not in on-hand data (from API)
+      // - Not in selectedLocatorsTemp (Case 1: selected but not confirmed)
+      // - Not in confirmedLocators (Case 2: confirmed receipts)
       const freeLocators = fusionItems
         .filter(loc => {
           const locatorName = loc.LocatorName || '';
-          const isInOnhand = usedLocatorSet.has(locatorName.toUpperCase());
-          const isUsedInSession = usedLocatorsInSession.has(locatorName.toUpperCase());
-          return !isInOnhand && !isUsedInSession;
+          const upperName = locatorName.toUpperCase();
+          const isInOnhand = usedLocatorSet.has(upperName);
+          const isSelectedTemp = selectedLocatorsTemp.has(upperName);
+          const isConfirmed = confirmedLocators.has(upperName);
+          return !isInOnhand && !isSelectedTemp && !isConfirmed;
         })
         .map(loc => ({
           id: loc.InventoryLocationId || loc.LocatorName,
@@ -1729,7 +1753,7 @@ _Sent from MobileWMS_`;
         }))
         .sort((a, b) => a.locatorName.localeCompare(b.locatorName));
 
-      console.log('Available (Free) locators:', freeLocators.length, '| Used in session:', usedLocatorsInSession.size);
+      console.log('Available locators:', freeLocators.length, '| Temp selected:', selectedLocatorsTemp.size, '| Confirmed:', confirmedLocators.size);
       setAvailableLocators(freeLocators);
       setLocatorPickerLoading(false);
 
@@ -3934,6 +3958,13 @@ _Sent from MobileWMS_`;
                         borderColor: COLORS.success,
                       }}
                       onPress={() => {
+                        // Case 1: Add to temp selected (will be hidden until screen exit)
+                        setSelectedLocatorsTemp(prev => {
+                          const newSet = new Set(prev);
+                          newSet.add(item.locatorName.toUpperCase());
+                          return newSet;
+                        });
+
                         if (pickingForSplitLine) {
                           // Update split line locator
                           updateSplitLineLocator(pickingForSplitLine, item.locatorName);
@@ -3979,7 +4010,34 @@ _Sent from MobileWMS_`;
               <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
                 <Text style={{ fontSize: 11, color: COLORS.textSecondary, textAlign: 'center' }}>
                   Showing {availableLocators.filter(loc => !locatorInput || loc.locatorName.toLowerCase().includes(locatorInput.toLowerCase())).length} free locators
+                  {confirmedLocators.size > 0 ? ` • ${confirmedLocators.size} used` : ''}
                 </Text>
+
+                {/* Refresh Button - Reset confirmed locators */}
+                {confirmedLocators.size > 0 && (
+                  <TouchableOpacity
+                    style={{
+                      marginTop: 12,
+                      backgroundColor: COLORS.infoLight,
+                      paddingVertical: 10,
+                      paddingHorizontal: 16,
+                      borderRadius: 8,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderWidth: 1,
+                      borderColor: COLORS.info,
+                    }}
+                    onPress={() => {
+                      setConfirmedLocators(new Set());
+                      setSelectedLocatorsTemp(new Set());
+                      fetchAvailableLocators();
+                      console.log('Refreshed: Cleared all confirmed locators');
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, color: COLORS.info, fontWeight: '600' }}>🔄 Refresh All Locators</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           </View>
