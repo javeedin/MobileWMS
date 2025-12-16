@@ -131,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.5.0';
+const APP_VERSION = 'v1.5.1';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -4564,7 +4564,7 @@ _Sent from MobileWMS_`;
         page: 'Login',
         apis: [
           {
-            name: 'User Authentication',
+            name: 'User Authentication (APEX)',
             method: 'GET',
             url: 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/Login',
             params: 'username, password',
@@ -4576,21 +4576,21 @@ _Sent from MobileWMS_`;
         page: 'Receive Goods',
         apis: [
           {
-            name: 'Get Putaway Details',
+            name: 'Get Putaway Details (APEX)',
             method: 'GET',
             url: `${API_BASE}/PUTAWAYDETAILS`,
             params: 'PICKER_NAME',
             description: 'Fetches pending putaway items for receiving'
           },
           {
-            name: 'Process Receipt (Oracle Fusion)',
+            name: 'Process Receipt (FUSION)',
             method: 'POST',
             url: 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/poreceiveoneline',
             params: 'JSON body with receipt details',
             description: 'Sends receipt to Oracle Fusion ERP'
           },
           {
-            name: 'Update APEX Status',
+            name: 'Update Status (APEX)',
             method: 'POST',
             url: 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/poreceiveoneline',
             params: 'p_status, p_line_id (URL params)',
@@ -4602,14 +4602,14 @@ _Sent from MobileWMS_`;
         page: 'Item Inquiry (Onhand)',
         apis: [
           {
-            name: 'Get Organizations List',
+            name: 'Get Organizations List (APEX)',
             method: 'GET',
             url: `${API_BASE}/getorgnizationslist`,
             params: 'None',
             description: 'Fetches list of organizations'
           },
           {
-            name: 'Get Onhand Inventory',
+            name: 'Get Onhand Inventory (APEX)',
             method: 'GET',
             url: `${API_BASE}/getonhand`,
             params: 'orgainzation_code, subinventory (optional)',
@@ -4621,14 +4621,14 @@ _Sent from MobileWMS_`;
         page: 'Stock Locators',
         apis: [
           {
-            name: 'Get Fusion Locators',
+            name: 'Get Locators (FUSION)',
             method: 'GET',
             url: `${ORACLE_FUSION_BASE}/subinventories/.../child/locators`,
             params: 'offset, limit',
             description: 'Fetches all locators from Oracle Fusion (master list)'
           },
           {
-            name: 'Get Onhand by Locator',
+            name: 'Get Onhand by Locator (APEX)',
             method: 'GET',
             url: `${API_BASE}/getonhandsbylocator`,
             params: 'organizationcode',
@@ -4640,14 +4640,14 @@ _Sent from MobileWMS_`;
         page: 'Lots Inquiry',
         apis: [
           {
-            name: 'Get Onhand by Lots',
+            name: 'Get Onhand by Lots (APEX)',
             method: 'GET',
             url: `${API_BASE}/getonhandbylots`,
             params: 'organizationcode, subinventory (optional)',
             description: 'Fetches inventory grouped by lot numbers'
           },
           {
-            name: 'Get Onhand by Locator',
+            name: 'Get Onhand by Locator (APEX)',
             method: 'GET',
             url: `${API_BASE}/getonhandsbylocator`,
             params: 'organizationcode',
@@ -4659,7 +4659,7 @@ _Sent from MobileWMS_`;
         page: 'Picking',
         apis: [
           {
-            name: 'Get Pending Picking Details',
+            name: 'Get Pending Picking Details (APEX)',
             method: 'GET',
             url: `${API_BASE}/pendingpickingdetails`,
             params: 'None',
@@ -4671,14 +4671,14 @@ _Sent from MobileWMS_`;
         page: 'Item Details (Locator Validation)',
         apis: [
           {
-            name: 'Check Locator Status',
+            name: 'Check Locator Status (APEX)',
             method: 'GET',
             url: `${API_BASE}/getonhandsbylocator`,
             params: 'organizationcode',
             description: 'Checks if locator is Used or Free'
           },
           {
-            name: 'Get Available Locators',
+            name: 'Get Available Locators (FUSION)',
             method: 'GET',
             url: `${ORACLE_FUSION_BASE}/subinventories/.../child/locators`,
             params: 'offset, limit',
