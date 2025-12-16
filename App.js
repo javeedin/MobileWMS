@@ -131,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.4.4';
+const APP_VERSION = 'v1.4.5';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -340,6 +340,8 @@ export default function App() {
   const [showLocatorPicker, setShowLocatorPicker] = useState(false);
   const [availableLocators, setAvailableLocators] = useState([]); // Free locators for picker
   const [locatorPickerLoading, setLocatorPickerLoading] = useState(false);
+  const [usedLocatorsInSession, setUsedLocatorsInSession] = useState(new Set()); // Track locators used in this session
+  const [pickingForSplitLine, setPickingForSplitLine] = useState(null); // Track which split line we're picking for
 
   // Processing modal state
   const [showProcessingModal, setShowProcessingModal] = useState(false);
@@ -1018,6 +1020,29 @@ _Sent from MobileWMS_`;
               })
             }));
           }
+
+          // Mark locators as used in this session
+          setUsedLocatorsInSession(prevUsed => {
+            const newUsed = new Set(prevUsed);
+            if (splitLines.length > 0) {
+              // Add all split line locators
+              splitLines.forEach(line => {
+                if (line.locator) {
+                  newUsed.add(line.locator.toUpperCase());
+                  console.log('Marked locator as used:', line.locator);
+                }
+              });
+            } else {
+              // Add normal locator
+              const locator = scannedLocator || locatorInput || '';
+              if (locator) {
+                newUsed.add(locator.toUpperCase());
+                console.log('Marked locator as used:', locator);
+              }
+            }
+            console.log('Total used locators in session:', newUsed.size);
+            return newUsed;
+          });
         }
         return prev;
       });
@@ -1688,11 +1713,13 @@ _Sent from MobileWMS_`;
         if (locatorName) usedLocatorSet.add(locatorName.toUpperCase());
       });
 
-      // Filter to only Free locators
+      // Filter to only Free locators (not in on-hand data AND not used in this session)
       const freeLocators = fusionItems
         .filter(loc => {
           const locatorName = loc.LocatorName || '';
-          return !usedLocatorSet.has(locatorName.toUpperCase());
+          const isInOnhand = usedLocatorSet.has(locatorName.toUpperCase());
+          const isUsedInSession = usedLocatorsInSession.has(locatorName.toUpperCase());
+          return !isInOnhand && !isUsedInSession;
         })
         .map(loc => ({
           id: loc.InventoryLocationId || loc.LocatorName,
@@ -1702,7 +1729,7 @@ _Sent from MobileWMS_`;
         }))
         .sort((a, b) => a.locatorName.localeCompare(b.locatorName));
 
-      console.log('Available (Free) locators:', freeLocators.length);
+      console.log('Available (Free) locators:', freeLocators.length, '| Used in session:', usedLocatorsInSession.size);
       setAvailableLocators(freeLocators);
       setLocatorPickerLoading(false);
 
@@ -3110,15 +3137,29 @@ _Sent from MobileWMS_`;
                         editable={!isReceived}
                       />
                     </View>
-                    <View style={{ width: 50, flexDirection: 'row', justifyContent: 'center', gap: 4 }}>
-                      {/* Hide scan icon when item is received */}
+                    <View style={{ width: 75, flexDirection: 'row', justifyContent: 'flex-end', gap: 3 }}>
+                      {/* Hide buttons when item is received */}
                       {!isReceived && (
-                        <TouchableOpacity
-                          onPress={() => handleScanForSplitLine(line.id)}
-                          style={{ backgroundColor: COLORS.secondary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}
-                        >
-                          <Text style={{ fontSize: 11, color: '#fff' }}>📍</Text>
-                        </TouchableOpacity>
+                        <>
+                          {/* Picker button - opens available locators */}
+                          <TouchableOpacity
+                            onPress={() => {
+                              setPickingForSplitLine(line.id);
+                              fetchAvailableLocators();
+                              setShowLocatorPicker(true);
+                            }}
+                            style={{ backgroundColor: '#059669', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6 }}
+                          >
+                            <Text style={{ fontSize: 11, color: '#fff' }}>📋</Text>
+                          </TouchableOpacity>
+                          {/* Scan button - opens camera */}
+                          <TouchableOpacity
+                            onPress={() => handleScanForSplitLine(line.id)}
+                            style={{ backgroundColor: COLORS.secondary, paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6 }}
+                          >
+                            <Text style={{ fontSize: 11, color: '#fff' }}>📷</Text>
+                          </TouchableOpacity>
+                        </>
                       )}
                       {line.id !== 'original' && !isReceived && (
                         <TouchableOpacity
@@ -3893,16 +3934,22 @@ _Sent from MobileWMS_`;
                         borderColor: COLORS.success,
                       }}
                       onPress={() => {
-                        // Set both locator fields
-                        setLocatorInput(item.locatorName);
-                        setScannedLocator(item.locatorName);
-                        // Update selectedItem
-                        setSelectedItem(prev => ({
-                          ...prev,
-                          actualLocator: item.locatorName,
-                        }));
-                        // Check status (should be free)
-                        setLocatorStatus('free');
+                        if (pickingForSplitLine) {
+                          // Update split line locator
+                          updateSplitLineLocator(pickingForSplitLine, item.locatorName);
+                          setPickingForSplitLine(null);
+                        } else {
+                          // Set both locator fields (normal mode)
+                          setLocatorInput(item.locatorName);
+                          setScannedLocator(item.locatorName);
+                          // Update selectedItem
+                          setSelectedItem(prev => ({
+                            ...prev,
+                            actualLocator: item.locatorName,
+                          }));
+                          // Check status (should be free)
+                          setLocatorStatus('free');
+                        }
                         // Close modal
                         setShowLocatorPicker(false);
                       }}
