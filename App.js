@@ -131,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.4.7';
+const APP_VERSION = 'v1.4.8';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -932,7 +932,7 @@ _Sent from MobileWMS_`;
 
       // Update status to processing
       setProcessingItems(prev => prev.map((item, idx) =>
-        idx === i ? { ...item, status: 'processing', message: 'Sending to Oracle...' } : item
+        idx === i ? { ...item, status: 'processing', message: '🔄 Step 1: Sending to Oracle Fusion...' } : item
       ));
 
       try {
@@ -964,19 +964,22 @@ _Sent from MobileWMS_`;
         console.log('ProcessingStatusCode:', processingStatus);
 
         if (processingStatus !== 'SUCCESS') {
-          throw new Error(`Oracle processing failed: ${processingStatus || 'Unknown error'}`);
+          throw new Error(`Oracle Fusion failed: ${processingStatus || 'Unknown error'}`);
         }
 
-        // Update status - Oracle success
+        // Update status - Oracle success, now APEX
         setProcessingItems(prev => prev.map((item, idx) =>
-          idx === i ? { ...item, message: 'Oracle ✓ Updating APEX...' } : item
+          idx === i ? { ...item, message: '✅ Step 1: Oracle Fusion SUCCESS\n🔄 Step 2: Updating APEX DB...' } : item
         ));
 
         // Step 3: POST to APEX to update status
         const apexUrl = `${APEX_UPDATE_URL}?p_status=UPDATE&p_line_id=${lineId}`;
-        console.log('========== APEX UPDATE ==========');
+        console.log('==========================================');
+        console.log('APEX UPDATE CALL');
+        console.log('==========================================');
         console.log('LineId:', lineId);
         console.log('Full APEX URL:', apexUrl);
+        console.log('==========================================');
 
         const apexResponse = await fetch(apexUrl, {
           method: 'POST',
@@ -985,20 +988,38 @@ _Sent from MobileWMS_`;
           },
         });
 
-        console.log('APEX Response Status:', apexResponse.status);
+        const apexStatus = apexResponse.status;
         const apexText = await apexResponse.text();
+        console.log('APEX Response Status:', apexStatus);
         console.log('APEX Response Body:', apexText);
-        console.log('==================================');
+        console.log('==========================================');
 
-        // Mark as success
+        // Check APEX response
+        if (apexStatus !== 200) {
+          // APEX failed but Oracle succeeded
+          setProcessingItems(prev => prev.map((item, idx) =>
+            idx === i ? {
+              ...item,
+              status: 'error',
+              message: `✅ Oracle Fusion SUCCESS\n❌ APEX DB FAILED (${apexStatus})\nURL: ${apexUrl}\nResponse: ${apexText.substring(0, 100)}`
+            } : item
+          ));
+          continue; // Move to next item
+        }
+
+        // Both succeeded
         setProcessingItems(prev => prev.map((item, idx) =>
-          idx === i ? { ...item, status: 'success', message: 'Completed ✓' } : item
+          idx === i ? {
+            ...item,
+            status: 'success',
+            message: `✅ Oracle Fusion SUCCESS\n✅ APEX DB SUCCESS (${apexStatus})`
+          } : item
         ));
 
       } catch (error) {
         console.log('Processing Error:', error.message);
         setProcessingItems(prev => prev.map((item, idx) =>
-          idx === i ? { ...item, status: 'error', message: error.message } : item
+          idx === i ? { ...item, status: 'error', message: `❌ ${error.message}` } : item
         ));
       }
 
