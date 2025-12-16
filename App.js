@@ -133,7 +133,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.5.2';
+const APP_VERSION = 'v1.5.3';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -297,6 +297,39 @@ export default function App() {
   const [shipOrdersData, setShipOrdersData] = useState([]);
   const [shipOrdersLoading, setShipOrdersLoading] = useState(false);
   const [groupedShipOrders, setGroupedShipOrders] = useState([]);
+
+  // Data Flow Diagram state
+  const [flowStep, setFlowStep] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const flowAnim = useRef(new Animated.Value(0)).current;
+  const arrowAnim1 = useRef(new Animated.Value(0)).current;
+  const arrowAnim2 = useRef(new Animated.Value(0)).current;
+  const arrowAnim3 = useRef(new Animated.Value(0)).current;
+  const arrowAnim4 = useRef(new Animated.Value(0)).current;
+  const arrowAnim5 = useRef(new Animated.Value(0)).current;
+
+  // Data Flow Diagram pulse animation effect
+  useEffect(() => {
+    if (isAnimating && currentScreen === 'DataFlowDiagram') {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.2,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [isAnimating, flowStep, currentScreen]);
   const [selectedShipOrder, setSelectedShipOrder] = useState(null);
   const [shipSearchQuery, setShipSearchQuery] = useState('');
   const [shippingLine, setShippingLine] = useState(null);
@@ -4804,17 +4837,6 @@ _Sent from MobileWMS_`;
 
   // ============= DATA FLOW DIAGRAM SCREEN =============
   if (currentScreen === 'DataFlowDiagram') {
-    // Animation values
-    const [flowStep, setFlowStep] = useState(0);
-    const [isAnimating, setIsAnimating] = useState(false);
-    const pulseAnim = useRef(new Animated.Value(1)).current;
-    const flowAnim = useRef(new Animated.Value(0)).current;
-    const arrowAnim1 = useRef(new Animated.Value(0)).current;
-    const arrowAnim2 = useRef(new Animated.Value(0)).current;
-    const arrowAnim3 = useRef(new Animated.Value(0)).current;
-    const arrowAnim4 = useRef(new Animated.Value(0)).current;
-    const arrowAnim5 = useRef(new Animated.Value(0)).current;
-
     const flowSteps = [
       { id: 0, title: 'Start', desc: 'User opens Receive Goods', icon: '📱', color: '#6366f1' },
       { id: 1, title: 'Fetch Data (APEX)', desc: 'GET /PUTAWAYDETAILS', icon: '📥', color: '#f59e0b' },
@@ -4824,28 +4846,6 @@ _Sent from MobileWMS_`;
       { id: 5, title: 'Update (APEX)', desc: 'POST status update', icon: '✅', color: '#f59e0b' },
       { id: 6, title: 'Complete', desc: 'Receipt confirmed!', icon: '🎉', color: '#10b981' },
     ];
-
-    // Pulse animation for current step
-    useEffect(() => {
-      if (isAnimating) {
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(pulseAnim, {
-              toValue: 1.2,
-              duration: 500,
-              useNativeDriver: true,
-            }),
-            Animated.timing(pulseAnim, {
-              toValue: 1,
-              duration: 500,
-              useNativeDriver: true,
-            }),
-          ])
-        ).start();
-      } else {
-        pulseAnim.setValue(1);
-      }
-    }, [isAnimating, flowStep]);
 
     // Start animation sequence
     const startAnimation = () => {
