@@ -131,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.4.9';
+const APP_VERSION = 'v1.5.0';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -2824,6 +2824,17 @@ _Sent from MobileWMS_`;
               <Text style={styles.compactMenuTitle}>Reports</Text>
             </TouchableOpacity>
 
+            {/* APIs Reference */}
+            <TouchableOpacity
+              style={styles.compactMenuCard}
+              onPress={() => navigateTo('APIList')}
+            >
+              <View style={[styles.compactMenuIconBg, { backgroundColor: '#fef3c7' }]}>
+                <Text style={styles.compactMenuIcon}>🔌</Text>
+              </View>
+              <Text style={styles.compactMenuTitle}>APIs</Text>
+            </TouchableOpacity>
+
             {/* Stock Locators */}
             <TouchableOpacity
               style={styles.compactMenuCard}
@@ -4542,6 +4553,241 @@ _Sent from MobileWMS_`;
             )}
           </View>
         </View>
+      </View>
+    );
+  }
+
+  // ============= API LIST SCREEN =============
+  if (currentScreen === 'APIList') {
+    const apiList = [
+      {
+        page: 'Login',
+        apis: [
+          {
+            name: 'User Authentication',
+            method: 'GET',
+            url: 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/Login',
+            params: 'username, password',
+            description: 'Validates user credentials'
+          }
+        ]
+      },
+      {
+        page: 'Receive Goods',
+        apis: [
+          {
+            name: 'Get Putaway Details',
+            method: 'GET',
+            url: `${API_BASE}/PUTAWAYDETAILS`,
+            params: 'PICKER_NAME',
+            description: 'Fetches pending putaway items for receiving'
+          },
+          {
+            name: 'Process Receipt (Oracle Fusion)',
+            method: 'POST',
+            url: 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/poreceiveoneline',
+            params: 'JSON body with receipt details',
+            description: 'Sends receipt to Oracle Fusion ERP'
+          },
+          {
+            name: 'Update APEX Status',
+            method: 'POST',
+            url: 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/poreceiveoneline',
+            params: 'p_status, p_line_id (URL params)',
+            description: 'Updates receipt status in APEX DB'
+          }
+        ]
+      },
+      {
+        page: 'Item Inquiry (Onhand)',
+        apis: [
+          {
+            name: 'Get Organizations List',
+            method: 'GET',
+            url: `${API_BASE}/getorgnizationslist`,
+            params: 'None',
+            description: 'Fetches list of organizations'
+          },
+          {
+            name: 'Get Onhand Inventory',
+            method: 'GET',
+            url: `${API_BASE}/getonhand`,
+            params: 'orgainzation_code, subinventory (optional)',
+            description: 'Fetches onhand inventory by org and subinventory'
+          }
+        ]
+      },
+      {
+        page: 'Stock Locators',
+        apis: [
+          {
+            name: 'Get Fusion Locators',
+            method: 'GET',
+            url: `${ORACLE_FUSION_BASE}/subinventories/.../child/locators`,
+            params: 'offset, limit',
+            description: 'Fetches all locators from Oracle Fusion (master list)'
+          },
+          {
+            name: 'Get Onhand by Locator',
+            method: 'GET',
+            url: `${API_BASE}/getonhandsbylocator`,
+            params: 'organizationcode',
+            description: 'Fetches onhand items grouped by locator (Used/Free status)'
+          }
+        ]
+      },
+      {
+        page: 'Lots Inquiry',
+        apis: [
+          {
+            name: 'Get Onhand by Lots',
+            method: 'GET',
+            url: `${API_BASE}/getonhandbylots`,
+            params: 'organizationcode, subinventory (optional)',
+            description: 'Fetches inventory grouped by lot numbers'
+          },
+          {
+            name: 'Get Onhand by Locator',
+            method: 'GET',
+            url: `${API_BASE}/getonhandsbylocator`,
+            params: 'organizationcode',
+            description: 'Fetches inventory grouped by locator'
+          }
+        ]
+      },
+      {
+        page: 'Picking',
+        apis: [
+          {
+            name: 'Get Pending Picking Details',
+            method: 'GET',
+            url: `${API_BASE}/pendingpickingdetails`,
+            params: 'None',
+            description: 'Fetches pending picking tasks'
+          }
+        ]
+      },
+      {
+        page: 'Item Details (Locator Validation)',
+        apis: [
+          {
+            name: 'Check Locator Status',
+            method: 'GET',
+            url: `${API_BASE}/getonhandsbylocator`,
+            params: 'organizationcode',
+            description: 'Checks if locator is Used or Free'
+          },
+          {
+            name: 'Get Available Locators',
+            method: 'GET',
+            url: `${ORACLE_FUSION_BASE}/subinventories/.../child/locators`,
+            params: 'offset, limit',
+            description: 'Fetches free locators for picker modal'
+          }
+        ]
+      }
+    ];
+
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#C74634" />
+
+        {/* Header */}
+        <View style={[styles.screenHeader, { backgroundColor: '#f59e0b' }]}>
+          <TouchableOpacity onPress={() => setCurrentScreen('InventoryModule')} style={{ padding: 8 }}>
+            <Text style={{ color: '#fff', fontSize: 24 }}>←</Text>
+          </TouchableOpacity>
+          <Text style={[styles.screenTitle, { flex: 1, textAlign: 'center' }]}>🔌 API Reference</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        {/* Version Info */}
+        <View style={{ backgroundColor: '#fef3c7', padding: 12, flexDirection: 'row', alignItems: 'center' }}>
+          <Text style={{ fontSize: 12, color: '#92400e', flex: 1 }}>
+            App Version: {APP_VERSION} | Total APIs: {apiList.reduce((sum, page) => sum + page.apis.length, 0)}
+          </Text>
+        </View>
+
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12 }}>
+          {apiList.map((section, sectionIdx) => (
+            <View key={sectionIdx} style={{ marginBottom: 16 }}>
+              {/* Page Header */}
+              <View style={{
+                backgroundColor: '#1e3a5f',
+                padding: 10,
+                borderRadius: 8,
+                marginBottom: 8
+              }}>
+                <Text style={{ color: '#fff', fontSize: 14, fontWeight: 'bold' }}>
+                  📄 {section.page}
+                </Text>
+              </View>
+
+              {/* APIs for this page */}
+              {section.apis.map((api, apiIdx) => (
+                <View key={apiIdx} style={{
+                  backgroundColor: '#fff',
+                  borderRadius: 8,
+                  padding: 12,
+                  marginBottom: 8,
+                  borderLeftWidth: 4,
+                  borderLeftColor: api.method === 'GET' ? '#10b981' : '#f59e0b',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 2,
+                  elevation: 2
+                }}>
+                  {/* API Name & Method */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                    <View style={{
+                      backgroundColor: api.method === 'GET' ? '#d1fae5' : '#fef3c7',
+                      paddingHorizontal: 8,
+                      paddingVertical: 2,
+                      borderRadius: 4,
+                      marginRight: 8
+                    }}>
+                      <Text style={{
+                        fontSize: 10,
+                        fontWeight: 'bold',
+                        color: api.method === 'GET' ? '#059669' : '#d97706'
+                      }}>
+                        {api.method}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#1e3a5f', flex: 1 }}>
+                      {api.name}
+                    </Text>
+                  </View>
+
+                  {/* URL */}
+                  <View style={{ backgroundColor: '#f1f5f9', padding: 8, borderRadius: 4, marginBottom: 6 }}>
+                    <Text style={{ fontSize: 9, color: '#64748b', fontFamily: 'monospace' }} numberOfLines={2}>
+                      {api.url}
+                    </Text>
+                  </View>
+
+                  {/* Params */}
+                  <Text style={{ fontSize: 10, color: '#64748b', marginBottom: 4 }}>
+                    <Text style={{ fontWeight: '600' }}>Params:</Text> {api.params}
+                  </Text>
+
+                  {/* Description */}
+                  <Text style={{ fontSize: 11, color: '#475569' }}>
+                    {api.description}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ))}
+
+          {/* Footer */}
+          <View style={{ padding: 16, alignItems: 'center' }}>
+            <Text style={{ fontSize: 10, color: '#94a3b8' }}>
+              🔌 MobileWMS API Reference | {APP_VERSION}
+            </Text>
+          </View>
+        </ScrollView>
       </View>
     );
   }
