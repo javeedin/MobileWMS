@@ -133,7 +133,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.5.3';
+const APP_VERSION = 'v1.5.4';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -616,7 +616,7 @@ _Sent from MobileWMS_`;
   };
 
   // Handle split quantity - supports two split inputs
-  const handleSplitQty = () => {
+  const handleSplitQty = async () => {
     const splitQty1 = parseInt(splitQtyInput1) || 0;
     const splitQty2 = parseInt(splitQtyInput2) || 0;
     const totalQty = selectedItem?.transactionquantity || 0;
@@ -637,33 +637,67 @@ _Sent from MobileWMS_`;
       return;
     }
 
+    // Fetch available locators first for auto-assignment
+    const freeLocators = await fetchAvailableLocators();
+
     const newLines = [];
+    let locatorIndex = 0;
+
     if (splitQty1 > 0) {
+      const autoLocator = freeLocators[locatorIndex]?.locatorName || '';
+      if (autoLocator) {
+        setSelectedLocatorsTemp(prev => {
+          const newSet = new Set(prev);
+          newSet.add(autoLocator.toUpperCase());
+          return newSet;
+        });
+        locatorIndex++;
+      }
       newLines.push({
         id: Date.now().toString(),
         qty: splitQty1,
-        locator: '',
-        scanned: false,
+        locator: autoLocator,
+        scanned: !!autoLocator,
       });
     }
     if (splitQty2 > 0) {
+      const autoLocator = freeLocators[locatorIndex]?.locatorName || '';
+      if (autoLocator) {
+        setSelectedLocatorsTemp(prev => {
+          const newSet = new Set(prev);
+          newSet.add(autoLocator.toUpperCase());
+          return newSet;
+        });
+        locatorIndex++;
+      }
       newLines.push({
         id: (Date.now() + 1).toString(),
         qty: splitQty2,
-        locator: '',
-        scanned: false,
+        locator: autoLocator,
+        scanned: !!autoLocator,
       });
     }
 
-    // If this is first split, also create line for remaining qty
+    // If this is first split, also create line for remaining qty with auto-assigned locator
     if (splitLines.length === 0) {
+      // Use already assigned locator from Item Details or get next available
+      const existingLocator = scannedLocator || locatorInput;
+      const remainingLocator = existingLocator || freeLocators[locatorIndex]?.locatorName || '';
+      if (remainingLocator && !existingLocator) {
+        setSelectedLocatorsTemp(prev => {
+          const newSet = new Set(prev);
+          newSet.add(remainingLocator.toUpperCase());
+          return newSet;
+        });
+      }
       const remainingLine = {
         id: 'original',
         qty: totalQty - totalSplit,
-        locator: selectedItem?.actualLocator || '',
-        scanned: !!selectedItem?.actualLocator,
+        locator: remainingLocator,
+        scanned: !!remainingLocator,
       };
       setSplitLines([remainingLine, ...newLines]);
+      console.log('Split created with auto-assigned locators:', [remainingLine, ...newLines].map(l => l.locator));
     } else {
       // Update the first line's qty (remaining) and add new splits
       setSplitLines(prev => {
@@ -671,6 +705,7 @@ _Sent from MobileWMS_`;
         updated[0] = { ...updated[0], qty: updated[0].qty - totalSplit };
         return [...updated, ...newLines];
       });
+      console.log('New splits added with auto-assigned locators:', newLines.map(l => l.locator));
     }
 
     setSplitQtyInput1('');
@@ -1767,7 +1802,8 @@ _Sent from MobileWMS_`;
   };
 
   // Fetch available (Free) locators for the picker modal
-  const fetchAvailableLocators = async () => {
+  // Returns the list of free locators and optionally auto-assigns them
+  const fetchAvailableLocators = async (autoAssignCount = 0) => {
     setLocatorPickerLoading(true);
     setAvailableLocators([]);
     const orgCode = selectedOrg || 'MLCECLAIM';
@@ -1834,10 +1870,57 @@ _Sent from MobileWMS_`;
       setAvailableLocators(freeLocators);
       setLocatorPickerLoading(false);
 
+      // Return the free locators for auto-assignment
+      return freeLocators;
+
     } catch (error) {
       console.log('Error fetching available locators:', error.message);
       setLocatorPickerLoading(false);
+      return [];
     }
+  };
+
+  // Auto-assign first available locator when opening Item Details
+  const autoAssignLocatorForItem = async () => {
+    const freeLocators = await fetchAvailableLocators();
+    if (freeLocators.length > 0) {
+      const firstLocator = freeLocators[0].locatorName;
+      setLocatorInput(firstLocator);
+      setScannedLocator(firstLocator);
+      // Add to temp selected locators
+      setSelectedLocatorsTemp(prev => {
+        const newSet = new Set(prev);
+        newSet.add(firstLocator.toUpperCase());
+        return newSet;
+      });
+      // Check locator status
+      checkLocatorStatus(firstLocator);
+      console.log('Auto-assigned locator:', firstLocator);
+    }
+  };
+
+  // Auto-assign locators for split lines
+  const autoAssignLocatorsForSplits = async (newSplitLines, startIndex = 0) => {
+    const freeLocators = await fetchAvailableLocators();
+    if (freeLocators.length === 0) return newSplitLines;
+
+    const updatedLines = newSplitLines.map((line, idx) => {
+      // Only assign to lines without locators
+      if (!line.locator && freeLocators[startIndex + idx]) {
+        const locatorName = freeLocators[startIndex + idx].locatorName;
+        // Add to temp selected
+        setSelectedLocatorsTemp(prev => {
+          const newSet = new Set(prev);
+          newSet.add(locatorName.toUpperCase());
+          return newSet;
+        });
+        console.log(`Auto-assigned locator to split ${idx + 1}:`, locatorName);
+        return { ...line, locator: locatorName, scanned: true };
+      }
+      return line;
+    });
+
+    return updatedLines;
   };
 
   // Build hierarchical tree from locator data
@@ -3086,10 +3169,12 @@ _Sent from MobileWMS_`;
                 setSplitLines([]); // Reset split lines for new item
                 setSplitQtyInput1('');
                 setSplitQtyInput2('');
-                setLocatorInput(item.locator || ''); // Initialize locator field
-                setScannedLocator(item.actualLocator || ''); // Initialize scanned field
+                setLocatorInput(''); // Will be auto-assigned
+                setScannedLocator(''); // Will be auto-assigned
                 setExpirationDate(null); // Reset expiration date
                 navigateTo('ItemDetail');
+                // Auto-assign first available locator
+                autoAssignLocatorForItem();
               }}
             >
               {/* Item Title - Code + Description */}
