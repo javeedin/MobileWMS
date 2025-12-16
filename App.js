@@ -131,7 +131,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.4.6';
+const APP_VERSION = 'v1.4.7';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -651,13 +651,27 @@ _Sent from MobileWMS_`;
 
   // Update split line locator (for both scan and manual input)
   const updateSplitLineLocator = (lineId, locatorValue) => {
-    setSplitLines(prev => prev.map(line => {
-      if (line.id === lineId) {
-        const hasValue = locatorValue && locatorValue.trim() && locatorValue.trim() !== '----';
-        return { ...line, locator: locatorValue, scanned: hasValue };
+    setSplitLines(prev => {
+      const oldLine = prev.find(l => l.id === lineId);
+
+      // Release old locator if it exists and is different from new one
+      if (oldLine?.locator && oldLine.locator.toUpperCase() !== (locatorValue || '').toUpperCase()) {
+        setSelectedLocatorsTemp(prevTemp => {
+          const newTemp = new Set(prevTemp);
+          newTemp.delete(oldLine.locator.toUpperCase());
+          console.log('Released old locator:', oldLine.locator);
+          return newTemp;
+        });
       }
-      return line;
-    }));
+
+      return prev.map(line => {
+        if (line.id === lineId) {
+          const hasValue = locatorValue && locatorValue.trim() && locatorValue.trim() !== '----';
+          return { ...line, locator: locatorValue, scanned: hasValue };
+        }
+        return line;
+      });
+    });
     // Clear scanning state if this was from a camera scan
     if (scanningForSplitLine === lineId) {
       setScanningForSplitLine(null);
@@ -671,6 +685,16 @@ _Sent from MobileWMS_`;
     setSplitLines(prev => {
       const lineToRemove = prev.find(l => l.id === lineId);
       if (!lineToRemove) return prev;
+
+      // Release locator back to available list
+      if (lineToRemove.locator) {
+        setSelectedLocatorsTemp(prevTemp => {
+          const newTemp = new Set(prevTemp);
+          newTemp.delete(lineToRemove.locator.toUpperCase());
+          console.log('Released locator:', lineToRemove.locator);
+          return newTemp;
+        });
+      }
 
       const filtered = prev.filter(l => l.id !== lineId);
       if (filtered.length > 0) {
