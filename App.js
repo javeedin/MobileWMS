@@ -133,7 +133,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.5.4';
+const APP_VERSION = 'v1.5.5';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -1771,34 +1771,111 @@ _Sent from MobileWMS_`;
   };
 
   // Check if a locator is Used or Free (for Item Details receiving)
-  const checkLocatorStatus = async (locatorName) => {
+  // Returns: 'free', 'used', 'invalid', 'checking', or null
+  // Also checks against temp selected and confirmed locators
+  const checkLocatorStatus = async (locatorName, currentLineId = null) => {
     if (!locatorName || locatorName.trim() === '' || locatorName.trim() === '----') {
       setLocatorStatus(null);
-      return;
+      return null;
     }
 
     setLocatorStatus('checking');
     const orgCode = selectedOrg || 'MLCECLAIM';
+    const upperLocator = locatorName.toUpperCase().trim();
 
     try {
+      // Check if already selected by another split line (exclude current line)
+      const isSelectedByOther = Array.from(selectedLocatorsTemp).some(loc => {
+        if (loc === upperLocator) {
+          // If we're checking for a specific line, allow if it's the same locator for that line
+          if (currentLineId) {
+            const currentLine = splitLines.find(l => l.id === currentLineId);
+            return currentLine?.locator?.toUpperCase() !== upperLocator;
+          }
+          // For non-split, check if it's different from current scanned/input
+          const currentLocator = (scannedLocator || locatorInput || '').toUpperCase();
+          return currentLocator !== upperLocator;
+        }
+        return false;
+      });
+
+      if (isSelectedByOther) {
+        setLocatorStatus('selected');
+        console.log(`Locator ${locatorName} is already selected by another line`);
+        return 'selected';
+      }
+
+      // Check if confirmed (already used in a previous receipt)
+      if (confirmedLocators.has(upperLocator)) {
+        setLocatorStatus('confirmed');
+        console.log(`Locator ${locatorName} was already used in a confirmed receipt`);
+        return 'confirmed';
+      }
+
       // Fetch on-hand data to check if locator has items
       const response = await fetch(`${API_BASE}/getonhandsbylocator?organizationcode=${orgCode}`);
       const data = await response.json();
       const onhandItems = data.items || [];
 
-      // Check if this locator exists in on-hand data
+      // Check if this locator exists in on-hand data (has inventory)
       const locatorHasItems = onhandItems.some(item => {
         const itemLocator = item.locator_id || item.locator || '';
-        return itemLocator.toLowerCase() === locatorName.toLowerCase();
+        return itemLocator.toUpperCase() === upperLocator;
       });
 
-      setLocatorStatus(locatorHasItems ? 'used' : 'free');
-      console.log(`Locator ${locatorName} status:`, locatorHasItems ? 'Used' : 'Free');
+      const status = locatorHasItems ? 'used' : 'free';
+      setLocatorStatus(status);
+      console.log(`Locator ${locatorName} status:`, status);
+      return status;
 
     } catch (error) {
       console.log('Error checking locator status:', error.message);
       setLocatorStatus('invalid');
+      return 'invalid';
     }
+  };
+
+  // Validate locator and show error if not free
+  const validateLocatorIsFree = async (locatorName, currentLineId = null) => {
+    const status = await checkLocatorStatus(locatorName, currentLineId);
+
+    if (status === 'used') {
+      Alert.alert(
+        'Locator Not Free',
+        `The locator "${locatorName}" already has inventory. Please select a free locator.`,
+        [{ text: 'OK' }]
+      );
+      return false;
+    }
+
+    if (status === 'selected') {
+      Alert.alert(
+        'Locator Already Selected',
+        `The locator "${locatorName}" is already assigned to another line. Please select a different locator.`,
+        [{ text: 'OK' }]
+      );
+      return false;
+    }
+
+    if (status === 'confirmed') {
+      Alert.alert(
+        'Locator Already Used',
+        `The locator "${locatorName}" was used in a previous receipt. Please select a different locator.`,
+        [{ text: 'OK' }]
+      );
+      return false;
+    }
+
+    if (status === 'invalid') {
+      Alert.alert(
+        'Invalid Locator',
+        `Could not validate the locator "${locatorName}". Please try again.`,
+        [{ text: 'OK' }]
+      );
+      return false;
+    }
+
+    return status === 'free';
   };
 
   // Fetch available (Free) locators for the picker modal
@@ -3329,6 +3406,12 @@ _Sent from MobileWMS_`;
                         }}
                         value={line.locator || ''}
                         onChangeText={(text) => updateSplitLineLocator(line.id, text)}
+                        onBlur={() => {
+                          // Validate split line locator when user finishes typing
+                          if (line.locator && line.locator.trim().length > 2) {
+                            validateLocatorIsFree(line.locator, line.id);
+                          }
+                        }}
                         placeholder="Scan or enter locator"
                         placeholderTextColor={COLORS.neutral400}
                         editable={!isReceived}
@@ -3467,7 +3550,11 @@ _Sent from MobileWMS_`;
                   <View style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    backgroundColor: locatorStatus === 'free' ? '#d1fae5' : locatorStatus === 'used' ? '#fef3c7' : locatorStatus === 'checking' ? '#e0e7ff' : '#fee2e2',
+                    backgroundColor: locatorStatus === 'free' ? '#d1fae5' :
+                                     locatorStatus === 'used' ? '#fee2e2' :
+                                     locatorStatus === 'selected' ? '#fef3c7' :
+                                     locatorStatus === 'confirmed' ? '#fee2e2' :
+                                     locatorStatus === 'checking' ? '#e0e7ff' : '#fee2e2',
                     paddingHorizontal: 8,
                     paddingVertical: 4,
                     borderRadius: 12,
@@ -3476,9 +3563,17 @@ _Sent from MobileWMS_`;
                     <Text style={{
                       fontSize: 11,
                       fontWeight: '600',
-                      color: locatorStatus === 'free' ? '#059669' : locatorStatus === 'used' ? '#d97706' : locatorStatus === 'checking' ? '#6366f1' : '#dc2626',
+                      color: locatorStatus === 'free' ? '#059669' :
+                             locatorStatus === 'used' ? '#dc2626' :
+                             locatorStatus === 'selected' ? '#d97706' :
+                             locatorStatus === 'confirmed' ? '#dc2626' :
+                             locatorStatus === 'checking' ? '#6366f1' : '#dc2626',
                     }}>
-                      {locatorStatus === 'free' ? '✓ Free' : locatorStatus === 'used' ? '⚠ Used' : locatorStatus === 'checking' ? 'Checking...' : '✗ Invalid'}
+                      {locatorStatus === 'free' ? '✓ Free' :
+                       locatorStatus === 'used' ? '✗ Has Inventory' :
+                       locatorStatus === 'selected' ? '⚠ Already Selected' :
+                       locatorStatus === 'confirmed' ? '✗ Already Used' :
+                       locatorStatus === 'checking' ? 'Checking...' : '✗ Invalid'}
                     </Text>
                   </View>
                 )}
@@ -3502,7 +3597,12 @@ _Sent from MobileWMS_`;
                   value={locatorInput}
                   onChangeText={(text) => {
                     setLocatorInput(text);
-                    // Check status when manually typing (debounced effect would be better)
+                  }}
+                  onBlur={() => {
+                    // Validate locator when user finishes typing
+                    if (locatorInput && locatorInput.trim().length > 2) {
+                      validateLocatorIsFree(locatorInput);
+                    }
                   }}
                   placeholder="Enter or scan locator"
                   placeholderTextColor={COLORS.neutral400}
@@ -3537,6 +3637,12 @@ _Sent from MobileWMS_`;
                         checkLocatorStatus(text);
                       } else {
                         setLocatorStatus(null);
+                      }
+                    }}
+                    onBlur={() => {
+                      // Validate locator when user finishes typing/pasting
+                      if (scannedLocator && scannedLocator.trim().length > 2) {
+                        validateLocatorIsFree(scannedLocator);
                       }
                     }}
                     placeholder="Scan to fill"
@@ -3601,14 +3707,16 @@ _Sent from MobileWMS_`;
               </TouchableOpacity>
             )}
 
-            {/* Confirm Receipt - disabled if already received, loading, splits not scanned, or locator empty */}
+            {/* Confirm Receipt - disabled if already received, loading, splits not scanned, locator empty, or locator not free */}
             {(() => {
               const isAlreadyReceived = (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS';
               const currentLocator = scannedLocator || locatorInput || '';
               const isLocatorEmpty = !currentLocator || currentLocator.trim() === '' || currentLocator.trim() === '----';
+              const isLocatorNotFree = locatorStatus === 'used' || locatorStatus === 'selected' || locatorStatus === 'confirmed';
               const hasSplitLocatorIssue = splitLines.length > 0 && !allSplitLinesScanned();
               const hasNormalLocatorIssue = splitLines.length === 0 && isLocatorEmpty;
-              const isDisabled = receivingLoading || isAlreadyReceived || hasSplitLocatorIssue || hasNormalLocatorIssue;
+              const hasLocatorStatusIssue = splitLines.length === 0 && isLocatorNotFree;
+              const isDisabled = receivingLoading || isAlreadyReceived || hasSplitLocatorIssue || hasNormalLocatorIssue || hasLocatorStatusIssue;
               // Green for already received, grey for other disabled states, green for enabled
               const buttonBg = isAlreadyReceived ? COLORS.success : (isDisabled ? COLORS.neutral400 : COLORS.success);
 
@@ -3620,22 +3728,21 @@ _Sent from MobileWMS_`;
                 buttonText = 'Assign all locators first';
               } else if (hasNormalLocatorIssue) {
                 buttonText = 'Scan locator first';
+              } else if (hasLocatorStatusIssue) {
+                buttonText = 'Locator not free';
               }
 
-              return (
-                <TouchableOpacity
-                  style={{
-                    backgroundColor: buttonBg,
-                    padding: 16,
-                    borderRadius: 12,
-                    flexDirection: 'row',
-                    justifyContent: 'center',
-                    alignItems: 'center'
-                  }}
-                  disabled={isDisabled}
-                  onPress={() => {
+              // Validate all locators before confirming
+              const validateAndConfirm = async () => {
                 if (splitLines.length > 0) {
-                  // Split mode - show summary of all lines
+                  // Split mode - validate all split locators
+                  for (const line of splitLines) {
+                    const isValid = await validateLocatorIsFree(line.locator, line.id);
+                    if (!isValid) {
+                      return; // Stop if any locator is not free
+                    }
+                  }
+                  // All locators valid - show confirmation
                   const splitSummary = splitLines.map(l => `• Qty ${l.qty} → ${l.locator}`).join('\n');
                   Alert.alert(
                     'Confirm Receipt',
@@ -3649,7 +3756,12 @@ _Sent from MobileWMS_`;
                     ]
                   );
                 } else {
-                  // Normal mode
+                  // Normal mode - validate single locator
+                  const isValid = await validateLocatorIsFree(currentLocator);
+                  if (!isValid) {
+                    return; // Stop if locator is not free
+                  }
+                  // Locator valid - show confirmation
                   Alert.alert(
                     'Confirm Receipt',
                     `Confirm receipt of ${selectedItem.itemnumber}?\n\nQuantity: ${selectedItem.transactionquantity}\nLocator: ${locatorInput || 'N/A'}\nScanned: ${scannedLocator || 'N/A'}`,
@@ -3662,7 +3774,20 @@ _Sent from MobileWMS_`;
                     ]
                   );
                 }
-              }}
+              };
+
+              return (
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: buttonBg,
+                    padding: 16,
+                    borderRadius: 12,
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    alignItems: 'center'
+                  }}
+                  disabled={isDisabled}
+                  onPress={validateAndConfirm}
                 >
                   {receivingLoading ? (
                     <ActivityIndicator color={COLORS.white} size="small" />
