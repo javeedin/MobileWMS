@@ -6682,7 +6682,7 @@ _Sent from MobileWMS_`;
                     />
                   </View>
 
-                  {/* Serial Number */}
+                  {/* Serial Number - Temporarily Hidden
                   <View style={styles.pickFieldRow}>
                     <Text style={styles.pickFieldLabel}>Serial Number</Text>
                     <View style={styles.pickSerialRow}>
@@ -6700,6 +6700,7 @@ _Sent from MobileWMS_`;
                       </TouchableOpacity>
                     </View>
                   </View>
+                  */}
 
                   {/* Buttons */}
                   <View style={styles.pickModalButtons}>
