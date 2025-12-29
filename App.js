@@ -133,7 +133,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.5.6';
+const APP_VERSION = 'v1.5.7';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -6591,12 +6591,14 @@ _Sent from MobileWMS_`;
               {/* Serial Number Range */}
               {(line.first_serial || line.last_serial) && (
                 <View style={styles.shipLineSerialRange}>
-                  <Text style={styles.shipLineDetailLabel}>📋 Serial Range</Text>
-                  <Text style={styles.shipLineSerialValue}>
-                    {line.first_serial === line.last_serial
-                      ? line.first_serial
-                      : `${line.first_serial || 'N/A'} → ${line.last_serial || 'N/A'}`}
-                  </Text>
+                  <View style={styles.shipLineSerialItem}>
+                    <Text style={styles.shipLineSerialLabel}>From Serial</Text>
+                    <Text style={styles.shipLineSerialValue}>{line.first_serial || 'N/A'}</Text>
+                  </View>
+                  <View style={styles.shipLineSerialItem}>
+                    <Text style={styles.shipLineSerialLabel}>To Serial</Text>
+                    <Text style={styles.shipLineSerialValue}>{line.last_serial || 'N/A'}</Text>
+                  </View>
                 </View>
               )}
 
@@ -6644,14 +6646,18 @@ _Sent from MobileWMS_`;
 
                   {/* Serial Number Range */}
                   {(pickingLine.first_serial || pickingLine.last_serial) && (
-                    <View style={styles.pickFieldRow}>
-                      <Text style={styles.pickFieldLabel}>Serial Range</Text>
-                      <View style={styles.pickFieldValueBox}>
-                        <Text style={styles.pickFieldValue}>
-                          {pickingLine.first_serial === pickingLine.last_serial
-                            ? pickingLine.first_serial
-                            : `${pickingLine.first_serial || 'N/A'} → ${pickingLine.last_serial || 'N/A'}`}
-                        </Text>
+                    <View style={styles.pickSerialRangeContainer}>
+                      <View style={styles.pickSerialItem}>
+                        <Text style={styles.pickSerialLabel}>From Serial</Text>
+                        <View style={styles.pickSerialValueBox}>
+                          <Text style={styles.pickSerialValueText}>{pickingLine.first_serial || 'N/A'}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.pickSerialItem}>
+                        <Text style={styles.pickSerialLabel}>To Serial</Text>
+                        <View style={styles.pickSerialValueBox}>
+                          <Text style={styles.pickSerialValueText}>{pickingLine.last_serial || 'N/A'}</Text>
+                        </View>
                       </View>
                     </View>
                   )}
@@ -11627,8 +11633,6 @@ const styles = StyleSheet.create({
   },
   shipLineSerialRange: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: '#FFF8E1',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
@@ -11636,11 +11640,49 @@ const styles = StyleSheet.create({
     marginTop: SPACING.sm,
     borderWidth: 1,
     borderColor: '#FFE082',
+    gap: SPACING.md,
+  },
+  shipLineSerialItem: {
+    flex: 1,
+  },
+  shipLineSerialLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: '#F57C00',
+    marginBottom: 2,
+    fontWeight: '500',
   },
   shipLineSerialValue: {
     fontSize: FONT_SIZES.sm,
     fontWeight: '600',
+    color: '#E65100',
+    fontFamily: 'monospace',
+  },
+  pickSerialRangeContainer: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  pickSerialItem: {
+    flex: 1,
+  },
+  pickSerialLabel: {
+    fontSize: FONT_SIZES.xs,
     color: '#F57C00',
+    marginBottom: 4,
+    fontWeight: '500',
+  },
+  pickSerialValueBox: {
+    backgroundColor: '#FFF8E1',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FFE082',
+  },
+  pickSerialValueText: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: '#E65100',
     fontFamily: 'monospace',
   },
   shipLineButton: {
