@@ -141,7 +141,7 @@ const API_URL = `${API_BASE}/PUTAWAYDETAILS?PICKER_NAME=PICKER1`;
 
 // Oracle Fusion API Configuration
 const ORACLE_FUSION_BASE = 'https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05';
-const ORACLE_FUSION_AUTH = btoa('javeed:Fusion@1234'); // Base64 encode for Basic Auth
+const ORACLE_FUSION_AUTH = btoa('emparun:Fusion@1234'); // Base64 encode for Basic Auth
 
 export default function App() {
   // Authentication state
@@ -2153,7 +2153,7 @@ _Sent from MobileWMS_`;
 
     setSerialLoading(true);
     try {
-      const credentials = btoa('javeed:Fusion@1234');
+      const credentials = btoa('emparun:Fusion@1234');
       const response = await fetch(srnoLink, {
         method: 'GET',
         headers: {
