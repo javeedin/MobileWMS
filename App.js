@@ -1671,7 +1671,7 @@ _Sent from MobileWMS_`;
       // Fetch both APIs in parallel
       const [fusionResponse, onhandResponse] = await Promise.all([
         // Oracle Fusion API - Get all locators
-        fetch(`${ORACLE_FUSION_BASE}/subinventories/00020000000EACED00057708000110D9319D664C00000004414D4B45/child/locators?offset=0&limit=500`, {
+        fetch(`${ORACLE_FUSION_BASE}/subinventories/00020000000EACED00057708000110D931FEAC3100000003423242/child/locators?offset=0&limit=500`, {
           method: 'GET',
           headers: {
             'Authorization': `Basic ${ORACLE_FUSION_AUTH}`,
@@ -1888,7 +1888,7 @@ _Sent from MobileWMS_`;
     try {
       // Fetch both APIs in parallel
       const [fusionResponse, onhandResponse] = await Promise.all([
-        fetch(`${ORACLE_FUSION_BASE}/subinventories/00020000000EACED00057708000110D9319D664C00000004414D4B45/child/locators?offset=0&limit=500`, {
+        fetch(`${ORACLE_FUSION_BASE}/subinventories/00020000000EACED00057708000110D931FEAC3100000003423242/child/locators?offset=0&limit=500`, {
           method: 'GET',
           headers: {
             'Authorization': `Basic ${ORACLE_FUSION_AUTH}`,
