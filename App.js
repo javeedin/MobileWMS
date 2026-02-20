@@ -2844,7 +2844,7 @@ _Sent from MobileWMS_`;
         </ScrollView>
 
         {/* Bottom Navigation */}
-        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#fff', flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#eee', paddingVertical: 8, paddingBottom: 12 }}>
+        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#fff', flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#eee', paddingVertical: 8, paddingBottom: 34 }}>
           <TouchableOpacity style={{ flex: 1, alignItems: 'center' }} onPress={() => setCurrentScreen('Home')}>
             <Text style={{ fontSize: 20 }}>🏠</Text>
             <Text style={{ fontSize: 10, color: COLORS.primary, fontWeight: '600' }}>Home</Text>
@@ -9679,7 +9679,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: COLORS.neutral100,
     paddingVertical: SPACING.sm,
-    paddingBottom: SPACING.md,
+    paddingBottom: 34,
   },
   navItem: {
     flex: 1,
