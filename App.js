@@ -6701,8 +6701,8 @@ _Sent from MobileWMS_`;
           animationType="slide"
           onRequestClose={() => setShowPickModal(false)}
         >
-          <View style={styles.pickModalOverlay}>
-            <View style={[styles.pickModalContainer, { maxHeight: '90%' }]}>
+          <View style={{ flex: 1, backgroundColor: COLORS.surface }}>
+            <View style={{ flex: 1 }}>
               {/* Header */}
               <View style={styles.pickModalHeader}>
                 <Text style={styles.pickModalTitle}>Pick Item</Text>
