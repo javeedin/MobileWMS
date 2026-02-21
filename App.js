@@ -345,6 +345,7 @@ export default function App() {
   const [pickLocator, setPickLocator] = useState(''); // Editable locator for pick
   const [pickAllocating, setPickAllocating] = useState(false); // Loading state for auto-allocate
   const [pickSerialsLoading, setPickSerialsLoading] = useState(false); // Loading state for serial fetch
+  const [scanningForPickLocator, setScanningForPickLocator] = useState(false); // Scanning locator for pick
 
   // Call Center state
   const [mobileContacts, setMobileContacts] = useState([]);
@@ -2552,6 +2553,32 @@ _Sent from MobileWMS_`;
               updateSplitLineLocator(scanningForSplitLine, data);
               setScanned(false);
               setCurrentScreen('ItemDetail');
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    // Handle pick locator scanning
+    if (scanningForPickLocator) {
+      Alert.alert(
+        'Scan Successful!',
+        `Locator: ${data}`,
+        [
+          {
+            text: 'Scan Again',
+            onPress: () => setScanned(false),
+          },
+          {
+            text: 'Confirm',
+            style: 'default',
+            onPress: () => {
+              setPickLocator(data);
+              setScanningForPickLocator(false);
+              setScanned(false);
+              setShowPickModal(true);
+              setCurrentScreen('ShipOrderLines');
             },
           },
         ]
@@ -6759,15 +6786,28 @@ _Sent from MobileWMS_`;
                         </View>
                       </View>
 
-                      {/* Locator - Editable */}
+                      {/* Locator - Editable with Scanner */}
                       <View style={styles.pickFieldRow}>
                         <Text style={styles.pickFieldLabel}>Locator</Text>
-                        <TextInput
-                          style={styles.pickQtyInput}
-                          value={pickLocator}
-                          onChangeText={setPickLocator}
-                          placeholder="Enter locator"
-                        />
+                        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+                          <TextInput
+                            style={[styles.pickQtyInput, { flex: 1, marginRight: 8 }]}
+                            value={pickLocator}
+                            onChangeText={setPickLocator}
+                            placeholder="Enter locator"
+                          />
+                          <TouchableOpacity
+                            style={{ backgroundColor: COLORS.primary, borderRadius: 8, padding: 10, alignItems: 'center', justifyContent: 'center' }}
+                            onPress={() => {
+                              setShowPickModal(false);
+                              setScanningForPickLocator(true);
+                              setScanned(false);
+                              setCurrentScreen('Scanner');
+                            }}
+                          >
+                            <Text style={{ fontSize: 20 }}>📷</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
 
                       {/* Serial Range from Summary API */}
