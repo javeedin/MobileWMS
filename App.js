@@ -339,6 +339,12 @@ export default function App() {
   const [pickingLine, setPickingLine] = useState(null);
   const [pickedQty, setPickedQty] = useState('');
   const [serialNumber, setSerialNumber] = useState('');
+  const [pickModalTab, setPickModalTab] = useState('details'); // 'details' or 'serials'
+  const [allocatedLots, setAllocatedLots] = useState([]); // Individual serial allocations
+  const [allocatedLotsSummary, setAllocatedLotsSummary] = useState([]); // Summary with serial range
+  const [pickLocator, setPickLocator] = useState(''); // Editable locator for pick
+  const [pickAllocating, setPickAllocating] = useState(false); // Loading state for auto-allocate
+  const [pickSerialsLoading, setPickSerialsLoading] = useState(false); // Loading state for serial fetch
 
   // Call Center state
   const [mobileContacts, setMobileContacts] = useState([]);
@@ -2220,25 +2226,101 @@ _Sent from MobileWMS_`;
     }
   };
 
-  // Handle pick line - open modal
-  const handlePickLine = (line) => {
+  // Fetch allocated lots (individual serials) for an order
+  const fetchAllocatedLots = async (orderNo) => {
+    try {
+      setPickSerialsLoading(true);
+      const response = await fetch(
+        `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/getallocatedlots?P_ORDER_NO=${encodeURIComponent(orderNo)}`
+      );
+      const data = await response.json();
+      setAllocatedLots(data.items || []);
+    } catch (error) {
+      console.log('Failed to fetch allocated lots:', error);
+      setAllocatedLots([]);
+    } finally {
+      setPickSerialsLoading(false);
+    }
+  };
+
+  // Fetch allocated lots summary (serial range) for an order
+  const fetchAllocatedLotsSummary = async (orderNo) => {
+    try {
+      const response = await fetch(
+        `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/allocatedlotssummary?P_ORDER_NO=${encodeURIComponent(orderNo)}`
+      );
+      const data = await response.json();
+      setAllocatedLotsSummary(data.items || []);
+      return data.items || [];
+    } catch (error) {
+      console.log('Failed to fetch allocated lots summary:', error);
+      setAllocatedLotsSummary([]);
+      return [];
+    }
+  };
+
+  // Auto-allocate lots for an order
+  const handleAutoAllocateLots = async () => {
+    if (!selectedShipOrder) return;
+    const orderNo = selectedShipOrder.source_order_number;
+    try {
+      setPickAllocating(true);
+      const response = await fetch(
+        `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/allocatelots?P_ORDER_NUMBER=${encodeURIComponent(orderNo)}`
+      );
+      const data = await response.json();
+      Alert.alert('Success', 'Lots allocated successfully');
+      // Refresh both serial data and summary after allocation
+      await Promise.all([
+        fetchAllocatedLots(orderNo),
+        fetchAllocatedLotsSummary(orderNo),
+      ]);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to auto-allocate lots: ' + error.message);
+    } finally {
+      setPickAllocating(false);
+    }
+  };
+
+  // Handle pick line - open modal with tabs
+  const handlePickLine = async (line) => {
     setPickingLine(line);
     setPickedQty(String(line.qty || ''));
     setSerialNumber('');
+    setPickModalTab('details');
+    setPickLocator(line.locator || '');
+    setAllocatedLots([]);
+    setAllocatedLotsSummary([]);
     setShowPickModal(true);
+
+    // Fetch allocated lots summary for serial range display
+    if (selectedShipOrder) {
+      const orderNo = selectedShipOrder.source_order_number;
+      fetchAllocatedLotsSummary(orderNo);
+    }
   };
 
   // Handle confirm pick
   const handleConfirmPick = () => {
-    if (!pickedQty || parseInt(pickedQty) <= 0) {
-      Alert.alert('Error', 'Please enter a valid picked quantity');
+    // Check if serial range is allocated
+    if (allocatedLotsSummary.length === 0) {
+      Alert.alert('Cannot Pick', 'Serial range is not allocated. Please auto-allocate lots first.');
       return;
     }
 
     Alert.alert(
-      'Success',
-      `Pick confirmed!\n\nItem: ${pickingLine.item_number}\nLot: ${pickingLine.lot_number || 'N/A'}\nPicked Qty: ${pickedQty}\nSerial: ${serialNumber || 'N/A'}`,
-      [{ text: 'OK', onPress: () => setShowPickModal(false) }]
+      'Pick Confirm',
+      `Confirm pick for:\n\nItem: ${pickingLine.item_number}\nLot: ${pickingLine.lot_number || 'N/A'}\nLocator: ${pickLocator || 'N/A'}\nQty: ${pickingLine.qty}\nSerial Range: ${allocatedLotsSummary[0]?.first_serial || 'N/A'} - ${allocatedLotsSummary[0]?.last_serial || 'N/A'}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          onPress: () => {
+            Alert.alert('Success', 'Pick confirmed successfully!');
+            setShowPickModal(false);
+          },
+        },
+      ]
     );
   };
 
@@ -6612,7 +6694,7 @@ _Sent from MobileWMS_`;
           )}
         />
 
-        {/* Pick Modal */}
+        {/* Pick Modal - Tabbed */}
         <Modal
           visible={showPickModal}
           transparent={true}
@@ -6620,7 +6702,8 @@ _Sent from MobileWMS_`;
           onRequestClose={() => setShowPickModal(false)}
         >
           <View style={styles.pickModalOverlay}>
-            <View style={styles.pickModalContainer}>
+            <View style={[styles.pickModalContainer, { maxHeight: '90%' }]}>
+              {/* Header */}
               <View style={styles.pickModalHeader}>
                 <Text style={styles.pickModalTitle}>Pick Item</Text>
                 <TouchableOpacity onPress={() => setShowPickModal(false)}>
@@ -6628,96 +6711,175 @@ _Sent from MobileWMS_`;
                 </TouchableOpacity>
               </View>
 
+              {/* Tab Bar */}
+              <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }}>
+                <TouchableOpacity
+                  style={{ flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: pickModalTab === 'details' ? COLORS.primary : 'transparent' }}
+                  onPress={() => setPickModalTab('details')}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: pickModalTab === 'details' ? '700' : '500', color: pickModalTab === 'details' ? COLORS.primary : '#666' }}>Details</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: pickModalTab === 'serials' ? COLORS.primary : 'transparent' }}
+                  onPress={() => {
+                    setPickModalTab('serials');
+                    if (selectedShipOrder && allocatedLots.length === 0) {
+                      fetchAllocatedLots(selectedShipOrder.source_order_number);
+                    }
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: pickModalTab === 'serials' ? '700' : '500', color: pickModalTab === 'serials' ? COLORS.primary : '#666' }}>Serials ({allocatedLots.length})</Text>
+                </TouchableOpacity>
+              </View>
+
               {pickingLine && (
-                <View style={styles.pickModalContent}>
-                  {/* Item Info */}
-                  <View style={styles.pickItemInfo}>
-                    <Text style={styles.pickItemNumber}>{pickingLine.item_number}</Text>
-                    <Text style={styles.pickItemDesc} numberOfLines={2}>{pickingLine.description}</Text>
-                  </View>
+                <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
+                  {/* === DETAILS TAB === */}
+                  {pickModalTab === 'details' && (
+                    <View>
+                      {/* Item Info */}
+                      <View style={styles.pickItemInfo}>
+                        <Text style={styles.pickItemNumber}>{pickingLine.item_number}</Text>
+                        <Text style={styles.pickItemDesc} numberOfLines={2}>{pickingLine.description}</Text>
+                      </View>
 
-                  {/* Lot Number */}
-                  <View style={styles.pickFieldRow}>
-                    <Text style={styles.pickFieldLabel}>Lot Number</Text>
-                    <View style={styles.pickFieldValueBox}>
-                      <Text style={styles.pickFieldValue}>{pickingLine.lot_number || 'N/A'}</Text>
-                    </View>
-                  </View>
-
-                  {/* Serial Number Range */}
-                  {(pickingLine.first_serial || pickingLine.last_serial) && (
-                    <View style={styles.pickSerialRangeContainer}>
-                      <View style={styles.pickSerialItem}>
-                        <Text style={styles.pickSerialLabel}>From Serial</Text>
-                        <View style={styles.pickSerialValueBox}>
-                          <Text style={styles.pickSerialValueText}>{pickingLine.first_serial || 'N/A'}</Text>
+                      {/* Qty */}
+                      <View style={styles.pickFieldRow}>
+                        <Text style={styles.pickFieldLabel}>Quantity</Text>
+                        <View style={styles.pickFieldValueBox}>
+                          <Text style={styles.pickFieldValue}>{pickingLine.qty} {pickingLine.ordered_uom}</Text>
                         </View>
                       </View>
-                      <View style={styles.pickSerialItem}>
-                        <Text style={styles.pickSerialLabel}>To Serial</Text>
-                        <View style={styles.pickSerialValueBox}>
-                          <Text style={styles.pickSerialValueText}>{pickingLine.last_serial || 'N/A'}</Text>
+
+                      {/* Lot Number */}
+                      <View style={styles.pickFieldRow}>
+                        <Text style={styles.pickFieldLabel}>Lot</Text>
+                        <View style={styles.pickFieldValueBox}>
+                          <Text style={styles.pickFieldValue}>{pickingLine.lot_number || 'N/A'}</Text>
                         </View>
                       </View>
+
+                      {/* Locator - Editable */}
+                      <View style={styles.pickFieldRow}>
+                        <Text style={styles.pickFieldLabel}>Locator</Text>
+                        <TextInput
+                          style={styles.pickQtyInput}
+                          value={pickLocator}
+                          onChangeText={setPickLocator}
+                          placeholder="Enter locator"
+                        />
+                      </View>
+
+                      {/* Serial Range from Summary API */}
+                      <View style={{ backgroundColor: '#f0fdf4', borderRadius: 8, padding: 12, marginTop: 8 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#166534', marginBottom: 8 }}>Allocated Serial Range</Text>
+                        {allocatedLotsSummary.length > 0 ? (
+                          allocatedLotsSummary.map((lot, idx) => (
+                            <View key={idx} style={{ marginBottom: idx < allocatedLotsSummary.length - 1 ? 8 : 0 }}>
+                              <Text style={{ fontSize: 12, color: '#166534', fontWeight: '600' }}>{lot.lot_number}</Text>
+                              <Text style={{ fontSize: 12, color: '#15803d' }}>Qty: {lot.allocated_quantity}</Text>
+                              <View style={{ flexDirection: 'row', marginTop: 4 }}>
+                                <View style={{ flex: 1, backgroundColor: '#dcfce7', borderRadius: 4, padding: 6, marginRight: 4 }}>
+                                  <Text style={{ fontSize: 10, color: '#166534' }}>From</Text>
+                                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#166534' }}>{lot.first_serial}</Text>
+                                </View>
+                                <View style={{ flex: 1, backgroundColor: '#dcfce7', borderRadius: 4, padding: 6, marginLeft: 4 }}>
+                                  <Text style={{ fontSize: 10, color: '#166534' }}>To</Text>
+                                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#166534' }}>{lot.last_serial}</Text>
+                                </View>
+                              </View>
+                            </View>
+                          ))
+                        ) : (
+                          <Text style={{ fontSize: 12, color: '#9ca3af', fontStyle: 'italic' }}>No serial range allocated yet. Use "Auto Allocate" to assign serials.</Text>
+                        )}
+                      </View>
+
+                      {/* Auto Allocate Button */}
+                      <TouchableOpacity
+                        style={{ backgroundColor: '#2563eb', borderRadius: 8, padding: 14, alignItems: 'center', marginTop: 12, opacity: pickAllocating ? 0.6 : 1 }}
+                        onPress={handleAutoAllocateLots}
+                        disabled={pickAllocating}
+                      >
+                        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>
+                          {pickAllocating ? 'Allocating...' : 'Auto Allocate Lots'}
+                        </Text>
+                      </TouchableOpacity>
+
+                      {/* Pick Confirm Button */}
+                      <TouchableOpacity
+                        style={{ backgroundColor: allocatedLotsSummary.length > 0 ? '#059669' : '#9ca3af', borderRadius: 8, padding: 14, alignItems: 'center', marginTop: 10 }}
+                        onPress={handleConfirmPick}
+                      >
+                        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Pick Confirm</Text>
+                      </TouchableOpacity>
+
+                      {allocatedLotsSummary.length === 0 && (
+                        <Text style={{ fontSize: 11, color: '#ef4444', textAlign: 'center', marginTop: 6 }}>Cannot pick confirm - serial range is not allocated</Text>
+                      )}
+
+                      {/* Cancel */}
+                      <TouchableOpacity
+                        style={{ padding: 12, alignItems: 'center', marginTop: 4 }}
+                        onPress={() => setShowPickModal(false)}
+                      >
+                        <Text style={{ color: '#666', fontSize: 14 }}>Cancel</Text>
+                      </TouchableOpacity>
                     </View>
                   )}
 
-                  {/* Requested Qty */}
-                  <View style={styles.pickFieldRow}>
-                    <Text style={styles.pickFieldLabel}>Requested Qty</Text>
-                    <View style={styles.pickFieldValueBox}>
-                      <Text style={styles.pickFieldValue}>{pickingLine.qty} {pickingLine.ordered_uom}</Text>
-                    </View>
-                  </View>
+                  {/* === SERIALS TAB === */}
+                  {pickModalTab === 'serials' && (
+                    <View>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#334155', marginBottom: 12 }}>
+                        Allocated Serial Numbers for {selectedShipOrder?.source_order_number}
+                      </Text>
 
-                  {/* Picked Qty */}
-                  <View style={styles.pickFieldRow}>
-                    <Text style={styles.pickFieldLabel}>Picked Qty</Text>
-                    <TextInput
-                      style={styles.pickQtyInput}
-                      value={pickedQty}
-                      onChangeText={setPickedQty}
-                      keyboardType="numeric"
-                      placeholder="Enter qty"
-                    />
-                  </View>
+                      {pickSerialsLoading ? (
+                        <View style={{ padding: 40, alignItems: 'center' }}>
+                          <ActivityIndicator size="large" color={COLORS.primary} />
+                          <Text style={{ marginTop: 12, color: '#666' }}>Loading serials...</Text>
+                        </View>
+                      ) : allocatedLots.length > 0 ? (
+                        <View>
+                          {/* Summary */}
+                          <View style={{ backgroundColor: '#eff6ff', borderRadius: 8, padding: 10, marginBottom: 12 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#1e40af' }}>Total: {allocatedLots.length} serial(s) allocated</Text>
+                          </View>
 
-                  {/* Serial Number - Temporarily Hidden
-                  <View style={styles.pickFieldRow}>
-                    <Text style={styles.pickFieldLabel}>Serial Number</Text>
-                    <View style={styles.pickSerialRow}>
-                      <TextInput
-                        style={styles.pickSerialInput}
-                        value={serialNumber}
-                        onChangeText={setSerialNumber}
-                        placeholder="Enter or scan serial"
-                      />
+                          {/* Serial List */}
+                          {allocatedLots.map((item, idx) => (
+                            <View key={idx} style={{ flexDirection: 'row', backgroundColor: idx % 2 === 0 ? '#f8fafc' : '#fff', paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' }}>
+                              <Text style={{ width: 36, fontSize: 12, color: '#94a3b8', fontWeight: '500' }}>{idx + 1}.</Text>
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#1e293b' }}>{item.serial_number}</Text>
+                                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Lot: {item.lot_number}</Text>
+                              </View>
+                            </View>
+                          ))}
+                        </View>
+                      ) : (
+                        <View style={{ padding: 40, alignItems: 'center' }}>
+                          <Text style={{ fontSize: 32, marginBottom: 12 }}>📦</Text>
+                          <Text style={{ fontSize: 14, color: '#64748b', textAlign: 'center' }}>No serials allocated yet</Text>
+                          <Text style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center', marginTop: 4 }}>Use "Auto Allocate Lots" from the Details tab to allocate serials</Text>
+                        </View>
+                      )}
+
+                      {/* Refresh Button */}
                       <TouchableOpacity
-                        style={styles.pickScanButton}
-                        onPress={handleScanSerialForPick}
+                        style={{ backgroundColor: '#f1f5f9', borderRadius: 8, padding: 12, alignItems: 'center', marginTop: 16 }}
+                        onPress={() => {
+                          if (selectedShipOrder) {
+                            fetchAllocatedLots(selectedShipOrder.source_order_number);
+                          }
+                        }}
                       >
-                        <Text style={styles.pickScanButtonText}>📷</Text>
+                        <Text style={{ color: '#475569', fontWeight: '600', fontSize: 13 }}>Refresh Serials</Text>
                       </TouchableOpacity>
                     </View>
-                  </View>
-                  */}
-
-                  {/* Buttons */}
-                  <View style={styles.pickModalButtons}>
-                    <TouchableOpacity
-                      style={styles.pickCancelButton}
-                      onPress={() => setShowPickModal(false)}
-                    >
-                      <Text style={styles.pickCancelButtonText}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.pickConfirmButton}
-                      onPress={handleConfirmPick}
-                    >
-                      <Text style={styles.pickConfirmButtonText}>Confirm</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                  )}
+                </ScrollView>
               )}
             </View>
           </View>
