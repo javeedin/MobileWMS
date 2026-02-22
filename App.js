@@ -2326,7 +2326,7 @@ _Sent from MobileWMS_`;
 
     Alert.alert(
       'Pick Confirm',
-      `Confirm pick for:\n\nOrder: ${selectedShipOrder?.source_order_number || 'N/A'}\nPick Slip: ${pickingLine.pick_slip_number || pickingLine.pick_slip_no || 'N/A'}\nItem: ${pickingLine.item_number}\nQty: ${pickingLine.qty}`,
+      `Confirm pick for:\n\nOrder: ${selectedShipOrder?.source_order_number || 'N/A'}\nPick Slip: ${pickingLine.pick_slip_no || 'N/A'}\nItem: ${pickingLine.item_number}\nQty: ${pickingLine.qty}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -2334,7 +2334,7 @@ _Sent from MobileWMS_`;
           onPress: async () => {
             try {
               const orderNo = selectedShipOrder?.source_order_number;
-              const pickSlipNo = pickingLine.pick_slip_number || pickingLine.pick_slip_no || '';
+              const pickSlipNo = pickingLine.pick_slip_no || '';
               const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/sopickconfirm`;
               const payload = {
                 P_ORDER_NUMBER: orderNo,
