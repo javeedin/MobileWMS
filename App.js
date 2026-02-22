@@ -6738,6 +6738,10 @@ _Sent from MobileWMS_`;
 
               <View style={styles.shipLineDetails}>
                 <View style={styles.shipLineDetailItem}>
+                  <Text style={styles.shipLineDetailLabel}>Pick Slip</Text>
+                  <Text style={styles.shipLineDetailValue}>{line.pick_slip_no || 'N/A'}</Text>
+                </View>
+                <View style={styles.shipLineDetailItem}>
                   <Text style={styles.shipLineDetailLabel}>Lot</Text>
                   <Text style={styles.shipLineDetailValue}>{line.lot_number || 'N/A'}</Text>
                 </View>
