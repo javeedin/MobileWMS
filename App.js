@@ -2266,10 +2266,25 @@ _Sent from MobileWMS_`;
     const orderNo = selectedShipOrder.source_order_number;
     try {
       setPickAllocating(true);
-      const response = await fetch(
-        `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/allocatelots?P_ORDER_NUMBER=${encodeURIComponent(orderNo)}`
-      );
-      const data = await response.json();
+      const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/allocatelots`;
+      console.log('Auto Allocate Lots - POST:', url, { P_ORDER_NUMBER: orderNo });
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          P_ORDER_NUMBER: orderNo,
+        }),
+      });
+      const rawText = await response.text();
+      console.log('Auto Allocate Lots - Response:', rawText);
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch (parseError) {
+        console.log('Auto Allocate Lots - Parse error:', rawText);
+      }
       Alert.alert('Success', 'Lots allocated successfully');
       // Refresh both serial data and summary after allocation
       await Promise.all([
@@ -2316,9 +2331,48 @@ _Sent from MobileWMS_`;
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Confirm',
-          onPress: () => {
-            Alert.alert('Success', 'Pick confirmed successfully!');
-            setShowPickModal(false);
+          onPress: async () => {
+            try {
+              const orderNo = selectedShipOrder?.source_order_number;
+              const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/pickconfirm`;
+              const payload = {
+                P_ORDER_NUMBER: orderNo,
+                P_ITEM_NUMBER: pickingLine.item_number,
+                P_LOT_NUMBER: pickingLine.lot_number || '',
+                P_LOCATOR: pickLocator || '',
+                P_QTY: pickingLine.qty,
+                P_FIRST_SERIAL: allocatedLotsSummary[0]?.first_serial || '',
+                P_LAST_SERIAL: allocatedLotsSummary[0]?.last_serial || '',
+              };
+              console.log('Pick Confirm - POST:', url, payload);
+              const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+              });
+              const rawText = await response.text();
+              console.log('Pick Confirm - Response:', rawText);
+              let data;
+              try {
+                data = JSON.parse(rawText);
+              } catch (parseError) {
+                console.log('Pick Confirm - Parse error:', rawText);
+              }
+              if (response.ok) {
+                Alert.alert('Success', 'Pick confirmed successfully!');
+                setShowPickModal(false);
+                // Refresh the order lines
+                if (selectedShipOrder) {
+                  fetchShipOrderLines(selectedShipOrder);
+                }
+              } else {
+                Alert.alert('Error', data?.message || 'Failed to confirm pick. Please try again.');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Failed to confirm pick: ' + error.message);
+            }
           },
         },
       ]
