@@ -2326,7 +2326,7 @@ _Sent from MobileWMS_`;
 
     Alert.alert(
       'Pick Confirm',
-      `Confirm pick for:\n\nItem: ${pickingLine.item_number}\nLot: ${pickingLine.lot_number || 'N/A'}\nLocator: ${pickLocator || 'N/A'}\nQty: ${pickingLine.qty}\nSerial Range: ${allocatedLotsSummary[0]?.first_serial || 'N/A'} - ${allocatedLotsSummary[0]?.last_serial || 'N/A'}`,
+      `Confirm pick for:\n\nOrder: ${selectedShipOrder?.source_order_number || 'N/A'}\nPick Slip: ${pickingLine.pick_slip_number || pickingLine.pick_slip_no || 'N/A'}\nItem: ${pickingLine.item_number}\nQty: ${pickingLine.qty}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -2334,15 +2334,11 @@ _Sent from MobileWMS_`;
           onPress: async () => {
             try {
               const orderNo = selectedShipOrder?.source_order_number;
-              const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/pickconfirm`;
+              const pickSlipNo = pickingLine.pick_slip_number || pickingLine.pick_slip_no || '';
+              const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/sopickconfirm`;
               const payload = {
                 P_ORDER_NUMBER: orderNo,
-                P_ITEM_NUMBER: pickingLine.item_number,
-                P_LOT_NUMBER: pickingLine.lot_number || '',
-                P_LOCATOR: pickLocator || '',
-                P_QTY: pickingLine.qty,
-                P_FIRST_SERIAL: allocatedLotsSummary[0]?.first_serial || '',
-                P_LAST_SERIAL: allocatedLotsSummary[0]?.last_serial || '',
+                P_PICK_SLIP_NO: pickSlipNo,
               };
               console.log('Pick Confirm - POST:', url, payload);
               const response = await fetch(url, {
