@@ -2377,10 +2377,10 @@ _Sent from MobileWMS_`;
     try {
       const url2 = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/updatepickconfirmstatus/${transactionId}`;
       console.log('=======================================================');
-      console.log('[STEP 2] METHOD       : GET');
+      console.log('[STEP 2] METHOD       : PUT');
       console.log('[STEP 2] FULL URL     :', url2);
       console.log('[STEP 2] TRANSACTION  :', transactionId);
-      const res2 = await fetch(url2);
+      const res2 = await fetch(url2, { method: 'PUT', headers: { 'Content-Type': 'application/json' } });
       const raw2 = await res2.text();
       console.log('[STEP 2] HTTP STATUS  :', res2.status);
       console.log('[STEP 2] RAW BODY     :', raw2.length > 500 ? raw2.substring(0, 500) + `... (${raw2.length} chars total)` : raw2);
