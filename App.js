@@ -2340,7 +2340,14 @@ _Sent from MobileWMS_`;
                 P_ORDER_NUMBER: orderNo,
                 P_PICK_SLIP_NO: pickSlipNo,
               };
-              console.log('Pick Confirm - POST:', url, payload);
+
+              console.log('=======================================================');
+              console.log('[PICK CONFIRM] >>> REQUEST');
+              console.log('[PICK CONFIRM] URL    :', url);
+              console.log('[PICK CONFIRM] METHOD : POST');
+              console.log('[PICK CONFIRM] PAYLOAD:', JSON.stringify(payload, null, 2));
+              console.log('=======================================================');
+
               const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -2348,14 +2355,25 @@ _Sent from MobileWMS_`;
                 },
                 body: JSON.stringify(payload),
               });
+
               const rawText = await response.text();
-              console.log('Pick Confirm - Response:', rawText);
+
+              console.log('=======================================================');
+              console.log('[PICK CONFIRM] <<< RESPONSE');
+              console.log('[PICK CONFIRM] HTTP STATUS :', response.status, response.statusText);
+              console.log('[PICK CONFIRM] RAW BODY    :', rawText);
+
               let data;
               try {
                 data = JSON.parse(rawText);
+                console.log('[PICK CONFIRM] PARSED JSON :', JSON.stringify(data, null, 2));
               } catch (parseError) {
-                console.log('Pick Confirm - Parse error:', rawText);
+                console.log('[PICK CONFIRM] ⚠ JSON PARSE FAILED - response is not valid JSON');
+                console.log('[PICK CONFIRM] PARSE ERROR :', parseError.message);
+                console.log('[PICK CONFIRM] RAW TEXT    :', rawText);
               }
+              console.log('=======================================================');
+
               if (response.ok) {
                 Alert.alert('Success', 'Pick confirmed successfully!');
                 setShowPickModal(false);
@@ -2364,9 +2382,13 @@ _Sent from MobileWMS_`;
                   fetchShipOrderLines(selectedShipOrder);
                 }
               } else {
+                console.log('[PICK CONFIRM] ✗ Request failed - status', response.status);
                 Alert.alert('Error', data?.message || 'Failed to confirm pick. Please try again.');
               }
             } catch (error) {
+              console.log('=======================================================');
+              console.log('[PICK CONFIRM] ✗ NETWORK/FETCH ERROR:', error.message);
+              console.log('=======================================================');
               Alert.alert('Error', 'Failed to confirm pick: ' + error.message);
             }
           },
