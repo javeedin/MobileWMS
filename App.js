@@ -349,6 +349,9 @@ export default function App() {
   const [processedPickSlips, setProcessedPickSlips] = useState(new Set()); // Track confirmed pick slips
   const [pickConfirmResult, setPickConfirmResult] = useState(null); // Last API JSON response
   const [pickJsonExpanded, setPickJsonExpanded] = useState(false); // Collapsible JSON output
+  const [showPickProgress, setShowPickProgress] = useState(false); // Progress popup visibility
+  const [pickStep1Status, setPickStep1Status] = useState('idle'); // idle | loading | done | error
+  const [pickStep2Status, setPickStep2Status] = useState('idle'); // idle | loading | done | error
 
   // Call Center state
   const [mobileContacts, setMobileContacts] = useState([]);
@@ -2312,6 +2315,9 @@ _Sent from MobileWMS_`;
     setAllocatedLotsSummary([]);
     setPickConfirmResult(null);
     setPickJsonExpanded(false);
+    setShowPickProgress(false);
+    setPickStep1Status('idle');
+    setPickStep2Status('idle');
     setShowPickModal(true);
 
     // Fetch allocated lots summary for serial range display
@@ -2321,91 +2327,73 @@ _Sent from MobileWMS_`;
     }
   };
 
-  // Handle confirm pick
-  const handleConfirmPick = () => {
-    // Check if serial range is allocated
+  // Handle confirm pick — shows a 2-step progress popup
+  const handleConfirmPick = async () => {
     if (allocatedLotsSummary.length === 0) {
       Alert.alert('Cannot Pick', 'Serial range is not allocated. Please auto-allocate lots first.');
       return;
     }
 
-    Alert.alert(
-      'Pick Confirm',
-      `Confirm pick for:\n\nOrder: ${selectedShipOrder?.source_order_number || 'N/A'}\nPick Slip: ${pickingLine.pick_slip_no || 'N/A'}\nItem: ${pickingLine.item_number}\nQty: ${pickingLine.qty}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm',
-          onPress: async () => {
-            try {
-              const orderNo = selectedShipOrder?.source_order_number;
-              const pickSlipNo = pickingLine.pick_slip_no || '';
-              const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/sopickconfirm`;
-              const payload = {
-                P_ORDER_NUMBER: orderNo,
-                P_PICK_SLIP_NO: pickSlipNo,
-              };
+    // Reset and open progress popup
+    setPickStep1Status('idle');
+    setPickStep2Status('idle');
+    setPickConfirmResult(null);
+    setPickJsonExpanded(false);
+    setShowPickProgress(true);
 
-              console.log('=======================================================');
-              console.log('[PICK CONFIRM] >>> REQUEST');
-              console.log('[PICK CONFIRM] URL    :', url);
-              console.log('[PICK CONFIRM] METHOD : POST');
-              console.log('[PICK CONFIRM] PAYLOAD:', JSON.stringify(payload, null, 2));
-              console.log('=======================================================');
+    const orderNo = selectedShipOrder?.source_order_number;
+    const pickSlipNo = pickingLine.pick_slip_no || '';
+    const transactionId = pickingLine.id;
 
-              const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload),
-              });
+    // ── STEP 1: sopickconfirm ──────────────────────────────────────────
+    setPickStep1Status('loading');
+    let step1Data = null;
+    try {
+      const url1 = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/sopickconfirm`;
+      const payload = { P_ORDER_NUMBER: orderNo, P_PICK_SLIP_NO: pickSlipNo };
+      console.log('=======================================================');
+      console.log('[STEP 1] POST', url1);
+      console.log('[STEP 1] PAYLOAD:', JSON.stringify(payload, null, 2));
+      const res1 = await fetch(url1, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const raw1 = await res1.text();
+      console.log('[STEP 1] HTTP STATUS:', res1.status);
+      console.log('[STEP 1] RAW BODY   :', raw1);
+      try { step1Data = JSON.parse(raw1); } catch (_) { step1Data = { raw: raw1 }; }
+      console.log('[STEP 1] PARSED     :', JSON.stringify(step1Data, null, 2));
+      console.log('=======================================================');
+    } catch (e) {
+      console.log('[STEP 1] NETWORK ERROR:', e.message);
+      step1Data = { error: e.message };
+    }
+    setPickStep1Status('done'); // always mark done
 
-              const rawText = await response.text();
+    // ── STEP 2: updatepickconfirmstatus ───────────────────────────────
+    setPickStep2Status('loading');
+    let step2Data = null;
+    try {
+      const url2 = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/updatepickconfirmstatus/${transactionId}`;
+      console.log('=======================================================');
+      console.log('[STEP 2] GET', url2);
+      const res2 = await fetch(url2);
+      const raw2 = await res2.text();
+      console.log('[STEP 2] HTTP STATUS:', res2.status);
+      console.log('[STEP 2] RAW BODY   :', raw2);
+      try { step2Data = JSON.parse(raw2); } catch (_) { step2Data = { raw: raw2 }; }
+      console.log('[STEP 2] PARSED     :', JSON.stringify(step2Data, null, 2));
+      console.log('=======================================================');
+    } catch (e) {
+      console.log('[STEP 2] NETWORK ERROR:', e.message);
+      step2Data = { error: e.message };
+    }
+    setPickStep2Status('done'); // always mark done
 
-              console.log('=======================================================');
-              console.log('[PICK CONFIRM] <<< RESPONSE');
-              console.log('[PICK CONFIRM] HTTP STATUS :', response.status, response.statusText);
-              console.log('[PICK CONFIRM] RAW BODY    :', rawText);
-
-              let data;
-              try {
-                data = JSON.parse(rawText);
-                console.log('[PICK CONFIRM] PARSED JSON :', JSON.stringify(data, null, 2));
-              } catch (parseError) {
-                console.log('[PICK CONFIRM] ⚠ JSON PARSE FAILED - response is not valid JSON');
-                console.log('[PICK CONFIRM] PARSE ERROR :', parseError.message);
-                console.log('[PICK CONFIRM] RAW TEXT    :', rawText);
-              }
-              console.log('=======================================================');
-
-              // Always treat any response as success
-              const isSuccess = true;
-
-              console.log('[PICK CONFIRM] treating as success (any response = success)');
-
-              if (isSuccess) {
-                // Store result and mark this pick slip as processed
-                setPickConfirmResult(data || { raw: rawText });
-                setPickJsonExpanded(false);
-                setProcessedPickSlips(prev => new Set([...prev, pickingLine.pick_slip_no]));
-                Alert.alert('Success', 'Pick confirmed successfully!');
-              } else {
-                console.log('[PICK CONFIRM] ✗ Request failed - status', response.status);
-                setPickConfirmResult(data || { raw: rawText });
-                setPickJsonExpanded(true); // auto-open on error so user can see
-                Alert.alert('Error', data?.message || 'Failed to confirm pick. Please try again.');
-              }
-            } catch (error) {
-              console.log('=======================================================');
-              console.log('[PICK CONFIRM] ✗ NETWORK/FETCH ERROR:', error.message);
-              console.log('=======================================================');
-              Alert.alert('Error', 'Failed to confirm pick: ' + error.message);
-            }
-          },
-        },
-      ]
-    );
+    // Store combined result and mark pick slip as processed
+    setPickConfirmResult({ step1: step1Data, step2: step2Data });
+    setProcessedPickSlips(prev => new Set([...prev, pickingLine.pick_slip_no]));
   };
 
   // Handle scan serial for pick
@@ -6807,6 +6795,62 @@ _Sent from MobileWMS_`;
             </View>
           )}
         />
+
+        {/* Pick Confirm Progress Popup */}
+        <Modal
+          visible={showPickProgress}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => {}}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 360 }}>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: '#1e293b', marginBottom: 20, textAlign: 'center' }}>Pick Confirm</Text>
+
+              {/* Step 1 */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: pickStep1Status === 'done' ? '#dcfce7' : '#f1f5f9', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                  {pickStep1Status === 'loading' && <ActivityIndicator size="small" color={COLORS.primary} />}
+                  {pickStep1Status === 'done' && <Text style={{ fontSize: 18, color: '#16a34a' }}>✓</Text>}
+                  {pickStep1Status === 'idle' && <Text style={{ fontSize: 14, color: '#94a3b8', fontWeight: '700' }}>1</Text>}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#334155' }}>SO Pick Confirm</Text>
+                  <Text style={{ fontSize: 11, color: '#64748b' }}>inventory/sopickconfirm</Text>
+                </View>
+              </View>
+
+              {/* Connector line */}
+              <View style={{ width: 2, height: 12, backgroundColor: '#e2e8f0', marginLeft: 15, marginBottom: 4, marginTop: -8 }} />
+
+              {/* Step 2 */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}>
+                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: pickStep2Status === 'done' ? '#dcfce7' : '#f1f5f9', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                  {pickStep2Status === 'loading' && <ActivityIndicator size="small" color={COLORS.primary} />}
+                  {pickStep2Status === 'done' && <Text style={{ fontSize: 18, color: '#16a34a' }}>✓</Text>}
+                  {pickStep2Status === 'idle' && <Text style={{ fontSize: 14, color: '#94a3b8', fontWeight: '700' }}>2</Text>}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#334155' }}>Update Pick Status</Text>
+                  <Text style={{ fontSize: 11, color: '#64748b' }}>inventory/updatepickconfirmstatus</Text>
+                </View>
+              </View>
+
+              {/* Done button — only shown when both steps are complete */}
+              {pickStep1Status === 'done' && pickStep2Status === 'done' && (
+                <TouchableOpacity
+                  style={{ backgroundColor: '#059669', borderRadius: 10, padding: 14, alignItems: 'center' }}
+                  onPress={() => {
+                    setShowPickProgress(false);
+                    setPickJsonExpanded(false);
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Done</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </Modal>
 
         {/* Pick Modal - Tabbed */}
         <Modal
