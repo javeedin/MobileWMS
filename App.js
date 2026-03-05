@@ -346,6 +346,9 @@ export default function App() {
   const [pickAllocating, setPickAllocating] = useState(false); // Loading state for auto-allocate
   const [pickSerialsLoading, setPickSerialsLoading] = useState(false); // Loading state for serial fetch
   const [scanningForPickLocator, setScanningForPickLocator] = useState(false); // Scanning locator for pick
+  const [processedPickSlips, setProcessedPickSlips] = useState(new Set()); // Track confirmed pick slips
+  const [pickConfirmResult, setPickConfirmResult] = useState(null); // Last API JSON response
+  const [pickJsonExpanded, setPickJsonExpanded] = useState(false); // Collapsible JSON output
 
   // Call Center state
   const [mobileContacts, setMobileContacts] = useState([]);
@@ -2307,6 +2310,8 @@ _Sent from MobileWMS_`;
     setPickLocator(line.locator || '');
     setAllocatedLots([]);
     setAllocatedLotsSummary([]);
+    setPickConfirmResult(null);
+    setPickJsonExpanded(false);
     setShowPickModal(true);
 
     // Fetch allocated lots summary for serial range display
@@ -2374,15 +2379,23 @@ _Sent from MobileWMS_`;
               }
               console.log('=======================================================');
 
-              if (response.ok) {
+              // Treat HTTP 200 OR the known Oracle Fusion "returned error" message as success
+              const isOracleFusionAccepted =
+                data?.message && data.message.includes('Oracle Fusion returned error');
+              const isSuccess = response.ok || isOracleFusionAccepted;
+
+              console.log('[PICK CONFIRM] isOracleFusionAccepted:', isOracleFusionAccepted, '| treated as success:', isSuccess);
+
+              if (isSuccess) {
+                // Store result and mark this pick slip as processed
+                setPickConfirmResult(data || { raw: rawText });
+                setPickJsonExpanded(false);
+                setProcessedPickSlips(prev => new Set([...prev, pickingLine.pick_slip_no]));
                 Alert.alert('Success', 'Pick confirmed successfully!');
-                setShowPickModal(false);
-                // Refresh the order lines
-                if (selectedShipOrder) {
-                  fetchShipOrderLines(selectedShipOrder);
-                }
               } else {
                 console.log('[PICK CONFIRM] ✗ Request failed - status', response.status);
+                setPickConfirmResult(data || { raw: rawText });
+                setPickJsonExpanded(true); // auto-open on error so user can see
                 Alert.alert('Error', data?.message || 'Failed to confirm pick. Please try again.');
               }
             } catch (error) {
@@ -6922,16 +6935,44 @@ _Sent from MobileWMS_`;
                         </Text>
                       </TouchableOpacity>
 
-                      {/* Pick Confirm Button */}
-                      <TouchableOpacity
-                        style={{ backgroundColor: allocatedLotsSummary.length > 0 ? '#059669' : '#9ca3af', borderRadius: 8, padding: 14, alignItems: 'center', marginTop: 10 }}
-                        onPress={handleConfirmPick}
-                      >
-                        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Pick Confirm</Text>
-                      </TouchableOpacity>
+                      {/* Pick Confirm Button — hidden once processed */}
+                      {processedPickSlips.has(pickingLine?.pick_slip_no) ? (
+                        <View style={{ backgroundColor: '#dcfce7', borderRadius: 8, padding: 14, alignItems: 'center', marginTop: 10, flexDirection: 'row', justifyContent: 'center' }}>
+                          <Text style={{ color: '#166534', fontWeight: '700', fontSize: 14 }}>✓ Pick Confirmed</Text>
+                        </View>
+                      ) : (
+                        <>
+                          <TouchableOpacity
+                            style={{ backgroundColor: allocatedLotsSummary.length > 0 ? '#059669' : '#9ca3af', borderRadius: 8, padding: 14, alignItems: 'center', marginTop: 10 }}
+                            onPress={handleConfirmPick}
+                          >
+                            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Pick Confirm</Text>
+                          </TouchableOpacity>
 
-                      {allocatedLotsSummary.length === 0 && (
-                        <Text style={{ fontSize: 11, color: '#ef4444', textAlign: 'center', marginTop: 6 }}>Cannot pick confirm - serial range is not allocated</Text>
+                          {allocatedLotsSummary.length === 0 && (
+                            <Text style={{ fontSize: 11, color: '#ef4444', textAlign: 'center', marginTop: 6 }}>Cannot pick confirm - serial range is not allocated</Text>
+                          )}
+                        </>
+                      )}
+
+                      {/* JSON Output — collapsible, shown after API call */}
+                      {pickConfirmResult && pickingLine && (
+                        <View style={{ marginTop: 12, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
+                          <TouchableOpacity
+                            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc', padding: 12 }}
+                            onPress={() => setPickJsonExpanded(prev => !prev)}
+                          >
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#334155' }}>JSON Output</Text>
+                            <Text style={{ fontSize: 16, color: '#64748b' }}>{pickJsonExpanded ? '▲' : '▼'}</Text>
+                          </TouchableOpacity>
+                          {pickJsonExpanded && (
+                            <View style={{ backgroundColor: '#0f172a', padding: 12 }}>
+                              <Text style={{ fontSize: 11, color: '#7dd3fc', fontFamily: 'monospace' }}>
+                                {JSON.stringify(pickConfirmResult, null, 2)}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
                       )}
 
                       {/* Cancel */}
