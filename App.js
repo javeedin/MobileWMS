@@ -2379,12 +2379,10 @@ _Sent from MobileWMS_`;
               }
               console.log('=======================================================');
 
-              // Treat HTTP 200 OR the known Oracle Fusion "returned error" message as success
-              const isOracleFusionAccepted =
-                data?.message && data.message.includes('Oracle Fusion returned error');
-              const isSuccess = response.ok || isOracleFusionAccepted;
+              // Always treat any response as success
+              const isSuccess = true;
 
-              console.log('[PICK CONFIRM] isOracleFusionAccepted:', isOracleFusionAccepted, '| treated as success:', isSuccess);
+              console.log('[PICK CONFIRM] treating as success (any response = success)');
 
               if (isSuccess) {
                 // Store result and mark this pick slip as processed
