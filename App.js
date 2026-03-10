@@ -1896,12 +1896,35 @@ _Sent from MobileWMS_`;
   const fetchAvailableLocators = async (autoAssignCount = 0) => {
     setLocatorPickerLoading(true);
     setAvailableLocators([]);
-    const orgCode = selectedOrg || 'MLCECLAIM';
+    const orgCode = selectedItem?.organizationcode || selectedOrg || 'MLCECLAIM';
+    const subInventory = selectedItem?.subinventory || selectedItem?.SUBINVENTORY || '';
 
     try {
-      // Fetch both APIs in parallel
+      // Step 1: Get dynamic locator_id for the subinventory from APEX API
+      let subinventoryLocatorId = '';
+      if (subInventory) {
+        try {
+          const locatorIdUrl = `${API_BASE}/getsubinventorylocatorid?P_ORGANIZATION_CODE=${orgCode}&P_SUB_INVENTORY=${subInventory}`;
+          console.log('Fetching subinventory locator ID:', locatorIdUrl);
+          const locatorIdResponse = await fetch(locatorIdUrl);
+          const locatorIdText = await locatorIdResponse.text();
+          const locatorIdData = JSON.parse(locatorIdText);
+          subinventoryLocatorId = locatorIdData?.items?.[0]?.locator_id || '';
+          console.log('Dynamic locator_id:', subinventoryLocatorId);
+        } catch (e) {
+          console.log('Error fetching subinventory locator ID:', e.message);
+        }
+      }
+
+      if (!subinventoryLocatorId) {
+        console.log('No locator_id found for subinventory:', subInventory, '- cannot fetch locators');
+        setLocatorPickerLoading(false);
+        return [];
+      }
+
+      // Step 2: Fetch Oracle Fusion locators + onhand data in parallel
       const [fusionResponse, onhandResponse] = await Promise.all([
-        fetch(`${ORACLE_FUSION_BASE}/subinventories/00020000000EACED00057708000110D931FEAC3100000003423242/child/locators?offset=0&limit=500`, {
+        fetch(`${ORACLE_FUSION_BASE}/subinventories/${subinventoryLocatorId}/child/locators?offset=0&limit=500`, {
           method: 'GET',
           headers: {
             'Authorization': `Basic ${ORACLE_FUSION_AUTH}`,
