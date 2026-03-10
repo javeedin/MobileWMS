@@ -1897,7 +1897,7 @@ _Sent from MobileWMS_`;
     setLocatorPickerLoading(true);
     setAvailableLocators([]);
     const orgCode = selectedItem?.organizationcode || selectedOrg || 'MLCECLAIM';
-    const subInventory = selectedItem?.subinventory || selectedItem?.SUBINVENTORY || '';
+    const subInventory = selectedItem?.subinventory || selectedItem?.SUBINVENTORY || selectedItem?.subinventorycode || selectedItem?.SUBINVENTORYCODE || selectedItem?.sub_inventory_code || '';
 
     try {
       // Step 1: Get dynamic locator_id for the subinventory from APEX API
