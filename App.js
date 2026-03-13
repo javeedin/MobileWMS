@@ -871,7 +871,7 @@ _Sent from MobileWMS_`;
             FromOrganizationCode: null,
             UnitOfMeasure: item.unitofmeasure || item.UNITOFMEASURE || item.uom || "PCS",
             lotSerialItemLots: [{
-              LotNumber: item.lotnumber || item.LOTNUMBER || "",
+              LotNumber: `${item.lotnumber || item.LOTNUMBER || ""}-${sequenceNum}`,
               TransactionQuantity: splitQty,
               lotSerialItemSerials: lotSerialItemSerials
             }]
@@ -3959,9 +3959,9 @@ _Sent from MobileWMS_`;
                   const padLen = totalQtyForPad.toString().length;
                   const padSerial = (n) => String(n).padStart(padLen, '0');
                   let serialCursor = itemFromSerial ? itemFromSerial.num : null;
-                  const splitSummary = splitLines.map(l => {
+                  const splitSummary = splitLines.map((l, idx) => {
                     let line = `• Qty ${l.qty} → ${l.locator}`;
-                    if (itemLot) line += `\n  Lot: ${itemLot}`;
+                    if (itemLot) line += `\n  Lot: ${itemLot}-${idx + 1}`;
                     if (serialCursor !== null && itemFromSerial) {
                       const serialEnd = serialCursor + l.qty - 1;
                       line += `\n  Serials: ${itemFromSerial.prefix}${padSerial(serialCursor)} – ${itemFromSerial.prefix}${padSerial(serialEnd)}`;
