@@ -383,6 +383,8 @@ export default function App() {
   const [splitQtyInputs, setSplitQtyInputs] = useState([]); // dynamic array of qty strings
   const [scanningForSplitLine, setScanningForSplitLine] = useState(null); // ID of split line being scanned
   const [splitProcessing, setSplitProcessing] = useState(false);
+  const [showConfirmReceiptModal, setShowConfirmReceiptModal] = useState(false);
+  const [confirmReceiptData, setConfirmReceiptData] = useState(null);
 
   // Expiration Date state
   const [expirationDate, setExpirationDate] = useState(null);
@@ -3966,17 +3968,18 @@ _Sent from MobileWMS_`;
                     }
                     return line;
                   }).join('\n');
-                  Alert.alert(
-                    'Confirm Receipt',
-                    `Confirm receipt of ${selectedItem.itemnumber}?\n\nSplit Quantities:\n${splitSummary}\n\nTotal: ${splitLines.reduce((s, l) => s + l.qty, 0)}`,
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Confirm All',
-                        onPress: () => processReceiving(),
-                      },
-                    ]
-                  );
+                  setConfirmReceiptData({
+                    isSplit: true,
+                    itemNumber: selectedItem.itemnumber,
+                    itemDescription: selectedItem.itemdescription,
+                    splitLines: splitLines,
+                    totalQty: splitLines.reduce((s, l) => s + l.qty, 0),
+                    itemLot,
+                    itemFromSerial,
+                    padSerial,
+                    serialCursor: itemFromSerial ? itemFromSerial.num : null,
+                  });
+                  setShowConfirmReceiptModal(true);
                 } else {
                   // Normal mode - validate single locator
                   const isValid = await validateLocatorIsFree(currentLocator);
@@ -3984,17 +3987,15 @@ _Sent from MobileWMS_`;
                     return; // Stop if locator is not free
                   }
                   // Locator valid - show confirmation
-                  Alert.alert(
-                    'Confirm Receipt',
-                    `Confirm receipt of ${selectedItem.itemnumber}?\n\nQuantity: ${selectedItem.transactionquantity}\nLocator: ${locatorInput || 'N/A'}\nScanned: ${scannedLocator || 'N/A'}`,
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Confirm',
-                        onPress: () => processReceiving(),
-                      },
-                    ]
-                  );
+                  setConfirmReceiptData({
+                    isSplit: false,
+                    itemNumber: selectedItem.itemnumber,
+                    itemDescription: selectedItem.itemdescription,
+                    qty: selectedItem.transactionquantity,
+                    locator: locatorInput || scannedLocator || 'N/A',
+                    uom: selectedItem.transactionuom || selectedItem.uom || '',
+                  });
+                  setShowConfirmReceiptModal(true);
                 }
               };
 
@@ -4192,6 +4193,114 @@ _Sent from MobileWMS_`;
                   </View>
                 </>
               )}
+            </View>
+          </View>
+        </Modal>
+
+        {/* Confirm Receipt Modal */}
+        <Modal
+          visible={showConfirmReceiptModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowConfirmReceiptModal(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 36 }}>
+
+              {/* Header */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
+                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.successLight, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                  <Text style={{ fontSize: 20 }}>📦</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.text }}>Confirm Receipt</Text>
+                  <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 1 }}>Review details before confirming</Text>
+                </View>
+              </View>
+
+              {/* Item Info */}
+              {confirmReceiptData && (
+                <View style={{ backgroundColor: COLORS.neutral50, borderRadius: 12, padding: 14, marginBottom: 16 }}>
+                  <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 2 }}>Item</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.text }}>{confirmReceiptData.itemNumber}</Text>
+                  {confirmReceiptData.itemDescription ? (
+                    <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }} numberOfLines={2}>{confirmReceiptData.itemDescription}</Text>
+                  ) : null}
+                </View>
+              )}
+
+              {/* Split Lines or Single */}
+              {confirmReceiptData?.isSplit ? (
+                <>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 8 }}>
+                    SPLIT LINES ({confirmReceiptData.splitLines.length})
+                  </Text>
+                  <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
+                    {(() => {
+                      let cursor = confirmReceiptData.itemFromSerial ? confirmReceiptData.itemFromSerial.num : null;
+                      return confirmReceiptData.splitLines.map((line, idx) => {
+                        const lotLabel = confirmReceiptData.itemLot ? `${confirmReceiptData.itemLot}-${idx + 1}` : null;
+                        let serialLabel = null;
+                        if (cursor !== null && confirmReceiptData.itemFromSerial) {
+                          const end = cursor + line.qty - 1;
+                          serialLabel = `${confirmReceiptData.itemFromSerial.prefix}${confirmReceiptData.padSerial(cursor)} – ${confirmReceiptData.itemFromSerial.prefix}${confirmReceiptData.padSerial(end)}`;
+                          cursor = end + 1;
+                        }
+                        return (
+                          <View key={line.id} style={{ flexDirection: 'row', alignItems: 'flex-start', backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 12, marginBottom: 8 }}>
+                            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: COLORS.primaryLight, justifyContent: 'center', alignItems: 'center', marginRight: 10, marginTop: 2 }}>
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.primary }}>{idx + 1}</Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }}>Qty: {line.qty}</Text>
+                                <Text style={{ fontSize: 13, color: COLORS.textSecondary }}>📍 {line.locator || 'No locator'}</Text>
+                              </View>
+                              {lotLabel && <Text style={{ fontSize: 12, color: COLORS.info, marginTop: 3 }}>Lot: {lotLabel}</Text>}
+                              {serialLabel && <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>Serials: {serialLabel}</Text>}
+                            </View>
+                          </View>
+                        );
+                      });
+                    })()}
+                  </ScrollView>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', backgroundColor: COLORS.successLight, borderRadius: 10, padding: 12, marginTop: 4 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.success }}>Total Quantity</Text>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.success }}>{confirmReceiptData.totalQty}</Text>
+                  </View>
+                </>
+              ) : confirmReceiptData ? (
+                <View style={{ gap: 10 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', backgroundColor: COLORS.neutral50, borderRadius: 10, padding: 12 }}>
+                    <Text style={{ fontSize: 14, color: COLORS.textSecondary }}>Quantity</Text>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.text }}>{confirmReceiptData.qty} {confirmReceiptData.uom}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', backgroundColor: COLORS.neutral50, borderRadius: 10, padding: 12 }}>
+                    <Text style={{ fontSize: 14, color: COLORS.textSecondary }}>Locator</Text>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.text }}>📍 {confirmReceiptData.locator}</Text>
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Buttons */}
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: COLORS.neutral100, padding: 16, borderRadius: 12, alignItems: 'center' }}
+                  onPress={() => setShowConfirmReceiptModal(false)}
+                >
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.text }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 2, backgroundColor: COLORS.success, padding: 16, borderRadius: 12, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}
+                  onPress={() => {
+                    setShowConfirmReceiptModal(false);
+                    processReceiving();
+                  }}
+                >
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>✓ Confirm Receipt</Text>
+                </TouchableOpacity>
+              </View>
+
             </View>
           </View>
         </Modal>
