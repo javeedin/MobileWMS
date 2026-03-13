@@ -1042,9 +1042,9 @@ _Sent from MobileWMS_`;
           throw new Error(`Invalid Oracle response: ${oracleText.substring(0, 200)}`);
         }
 
-        // Step 2: Check ProcessingStatusCode
-        const processingStatus = oracleData.ProcessingStatusCode || oracleData.processingstatuscode;
-        console.log('ProcessingStatusCode:', processingStatus);
+        // Step 2: Check ReturnStatus
+        const processingStatus = oracleData.ReturnStatus || oracleData.returnstatus;
+        console.log('ReturnStatus:', processingStatus);
 
         if (processingStatus !== 'SUCCESS') {
           throw new Error(`Oracle Fusion failed: ${processingStatus || 'Unknown error'}`);
@@ -3948,7 +3948,19 @@ _Sent from MobileWMS_`;
                     }
                   }
                   // All locators valid - show confirmation
-                  const splitSummary = splitLines.map(l => `• Qty ${l.qty} → ${l.locator}`).join('\n');
+                  const itemFromSerial = parseSerialNumber(selectedItem.fromserialnumber || selectedItem.FROMSERIALNUMBER);
+                  const itemLot = selectedItem.lotnumber || selectedItem.LOTNUMBER || '';
+                  let serialCursor = itemFromSerial ? itemFromSerial.num : null;
+                  const splitSummary = splitLines.map(l => {
+                    let line = `• Qty ${l.qty} → ${l.locator}`;
+                    if (itemLot) line += `\n  Lot: ${itemLot}`;
+                    if (serialCursor !== null && itemFromSerial) {
+                      const serialEnd = serialCursor + l.qty - 1;
+                      line += `\n  Serials: ${itemFromSerial.prefix}${serialCursor} – ${itemFromSerial.prefix}${serialEnd}`;
+                      serialCursor = serialEnd + 1;
+                    }
+                    return line;
+                  }).join('\n');
                   Alert.alert(
                     'Confirm Receipt',
                     `Confirm receipt of ${selectedItem.itemnumber}?\n\nSplit Quantities:\n${splitSummary}\n\nTotal: ${splitLines.reduce((s, l) => s + l.qty, 0)}`,
