@@ -799,12 +799,13 @@ _Sent from MobileWMS_`;
   };
 
   // ============= GENERATE RECEIVING JSON =============
-  // Helper to parse serial number (e.g., "IGRN202512012_111" -> { prefix: "IGRN202512012_", num: 111 })
+  // Helper to parse serial number (e.g., "IGRN2026020054086-GCLG0055_6" -> { prefix: "IGRN2026020054086_", num: 6 })
+  // Strips any "-CUSTOMER" segment before the trailing "_NUMBER"
   const parseSerialNumber = (serial) => {
     if (!serial) return null;
-    const match = serial.match(/^(.+_)(\d+)$/);
+    const match = serial.match(/^(.+?)(?:-[^_-]+)?_(\d+)$/);
     if (match) {
-      return { prefix: match[1], num: parseInt(match[2], 10) };
+      return { prefix: match[1] + '_', num: parseInt(match[2], 10) };
     }
     return null;
   };
@@ -828,6 +829,8 @@ _Sent from MobileWMS_`;
       // ShipmentNumber format: baseShipmentNumber-documentLineNumber-splitSequence (e.g., IPONMay2500103-1-1)
       let allJsons = [];
       let serialStart = fromSerial ? fromSerial.num : 0;
+      const padLen = totalQty.toString().length;
+      const padSerial = (n) => String(n).padStart(padLen, '0');
 
       splitLines.forEach((split, index) => {
         const splitQty = split.qty;
@@ -838,8 +841,8 @@ _Sent from MobileWMS_`;
         let lotSerialItemSerials = [];
         if (fromSerial && toSerial) {
           lotSerialItemSerials = [{
-            FromSerialNumber: `${fromSerial.prefix}${serialStart}`,
-            ToSerialNumber: `${fromSerial.prefix}${serialEnd}`
+            FromSerialNumber: `${fromSerial.prefix}${padSerial(serialStart)}`,
+            ToSerialNumber: `${fromSerial.prefix}${padSerial(serialEnd)}`
           }];
         }
 
@@ -885,10 +888,12 @@ _Sent from MobileWMS_`;
       const locator = scannedLocator || locatorInput || item.locator || "";
 
       let lotSerialItemSerials = [];
-      if (item.fromserialnumber && item.toserialnumber) {
+      if (fromSerial && toSerial) {
+        const padLen = totalQty.toString().length;
+        const padSerial = (n) => String(n).padStart(padLen, '0');
         lotSerialItemSerials = [{
-          FromSerialNumber: item.fromserialnumber,
-          ToSerialNumber: item.toserialnumber
+          FromSerialNumber: `${fromSerial.prefix}${padSerial(fromSerial.num)}`,
+          ToSerialNumber: `${fromSerial.prefix}${padSerial(toSerial.num)}`
         }];
       }
 
@@ -1042,7 +1047,7 @@ _Sent from MobileWMS_`;
           throw new Error(`Invalid Oracle response: ${oracleText.substring(0, 200)}`);
         }
 
-        // Step 2: Check ReturnStatus
+        // Step 2: Check ProcessingStatusCode
         const processingStatus = oracleData.ReturnStatus || oracleData.returnstatus;
         console.log('ReturnStatus:', processingStatus);
 
@@ -3950,13 +3955,16 @@ _Sent from MobileWMS_`;
                   // All locators valid - show confirmation
                   const itemFromSerial = parseSerialNumber(selectedItem.fromserialnumber || selectedItem.FROMSERIALNUMBER);
                   const itemLot = selectedItem.lotnumber || selectedItem.LOTNUMBER || '';
+                  const totalQtyForPad = selectedItem.transactionquantity || 0;
+                  const padLen = totalQtyForPad.toString().length;
+                  const padSerial = (n) => String(n).padStart(padLen, '0');
                   let serialCursor = itemFromSerial ? itemFromSerial.num : null;
                   const splitSummary = splitLines.map(l => {
                     let line = `• Qty ${l.qty} → ${l.locator}`;
                     if (itemLot) line += `\n  Lot: ${itemLot}`;
                     if (serialCursor !== null && itemFromSerial) {
                       const serialEnd = serialCursor + l.qty - 1;
-                      line += `\n  Serials: ${itemFromSerial.prefix}${serialCursor} – ${itemFromSerial.prefix}${serialEnd}`;
+                      line += `\n  Serials: ${itemFromSerial.prefix}${padSerial(serialCursor)} – ${itemFromSerial.prefix}${padSerial(serialEnd)}`;
                       serialCursor = serialEnd + 1;
                     }
                     return line;
