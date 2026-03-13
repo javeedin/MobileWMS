@@ -94,7 +94,114 @@ export default function App() {
       setIsLoggedIn(true);
       setShowOrgModal(true); // Show organization selection after login
     } else {
-      Alert.alert('Error', 'Invalid credentials');
+      pulseAnim.setValue(1);
+    }
+  }, [isAnimating, flowStep, currentScreen]);
+  const [selectedShipOrder, setSelectedShipOrder] = useState(null);
+  const [shipSearchQuery, setShipSearchQuery] = useState('');
+  const [shippingLine, setShippingLine] = useState(null);
+
+  // Pick Modal state
+  const [showPickModal, setShowPickModal] = useState(false);
+  const [pickingLine, setPickingLine] = useState(null);
+  const [pickedQty, setPickedQty] = useState('');
+  const [serialNumber, setSerialNumber] = useState('');
+  const [pickModalTab, setPickModalTab] = useState('details'); // 'details' or 'serials'
+  const [allocatedLots, setAllocatedLots] = useState([]); // Individual serial allocations
+  const [allocatedLotsSummary, setAllocatedLotsSummary] = useState([]); // Summary with serial range
+  const [pickLocator, setPickLocator] = useState(''); // Editable locator for pick
+  const [pickAllocating, setPickAllocating] = useState(false); // Loading state for auto-allocate
+  const [pickSerialsLoading, setPickSerialsLoading] = useState(false); // Loading state for serial fetch
+  const [scanningForPickLocator, setScanningForPickLocator] = useState(false); // Scanning locator for pick
+  const [processedPickSlips, setProcessedPickSlips] = useState(new Set()); // Track confirmed pick slips
+  const [pickConfirmResult, setPickConfirmResult] = useState(null); // Last API JSON response
+  const [pickJsonExpanded, setPickJsonExpanded] = useState(false); // Collapsible JSON output
+  const [showPickProgress, setShowPickProgress] = useState(false); // Progress popup visibility
+  const [pickStep1Status, setPickStep1Status] = useState('idle'); // idle | loading | done | error
+  const [pickStep2Status, setPickStep2Status] = useState('idle'); // idle | loading | done | error
+
+  // Call Center state
+  const [mobileContacts, setMobileContacts] = useState([]);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [contactSearchQuery, setContactSearchQuery] = useState('');
+  const [selectedContact, setSelectedContact] = useState(null);
+  const [callInProgress, setCallInProgress] = useState(false);
+  const [callTimer, setCallTimer] = useState(0);
+  const [showCallLogModal, setShowCallLogModal] = useState(false);
+  const [callLogNotes, setCallLogNotes] = useState('');
+  const [callLogs, setCallLogs] = useState([]);
+  const [showContactInfoModal, setShowContactInfoModal] = useState(false);
+  const callTimerRef = useRef(null);
+
+  // Inbound Call state
+  const [inboundPhoneNumber, setInboundPhoneNumber] = useState('');
+  const [inboundCustomerData, setInboundCustomerData] = useState(null);
+  const [inboundCallActive, setInboundCallActive] = useState(false);
+  const [inboundCallTimer, setInboundCallTimer] = useState(0);
+  const inboundTimerRef = useRef(null);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [receivingLoading, setReceivingLoading] = useState(false);
+
+  // Split Quantity state
+  const [splitLines, setSplitLines] = useState([]); // Array of {id, qty, locator, scanned, lotNumber, serialFrom, serialTo}
+  const [showSplitModal, setShowSplitModal] = useState(false);
+  const [splitQtyInput1, setSplitQtyInput1] = useState('');
+  const [splitQtyInput2, setSplitQtyInput2] = useState('');
+  const [scanningForSplitLine, setScanningForSplitLine] = useState(null); // ID of split line being scanned
+
+  // Expiration Date state
+  const [expirationDate, setExpirationDate] = useState(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Locator fields state (for non-split mode)
+  const [locatorInput, setLocatorInput] = useState('');
+
+  // Locator validation state (for Item Details receiving)
+  const [locatorStatus, setLocatorStatus] = useState(null); // null, 'checking', 'used', 'free', 'invalid'
+  const [showLocatorPicker, setShowLocatorPicker] = useState(false);
+  const [availableLocators, setAvailableLocators] = useState([]); // Free locators for picker
+  const [locatorPickerLoading, setLocatorPickerLoading] = useState(false);
+  const [selectedLocatorsTemp, setSelectedLocatorsTemp] = useState(new Set()); // Case 1: Temp selected (cleared on screen exit)
+  const [confirmedLocators, setConfirmedLocators] = useState(new Set()); // Case 2: Confirmed locators (cleared on manual refresh)
+  const [pickingForSplitLine, setPickingForSplitLine] = useState(null); // Track which split line we're picking for
+
+  // Processing modal state
+  const [showProcessingModal, setShowProcessingModal] = useState(false);
+  const [processingItems, setProcessingItems] = useState([]); // Array of { id, label, status: 'pending'|'processing'|'success'|'error', message }
+
+  // AI Stock Counting state
+  const [stockCountingMode, setStockCountingMode] = useState('camera'); // 'camera', 'analyzing', 'results'
+  const [capturedImage, setCapturedImage] = useState(null);
+  const [aiCountResults, setAiCountResults] = useState([]);
+  const [stockCountLocation, setStockCountLocation] = useState('');
+  const cameraRef = useRef(null);
+
+  // Handle Login with API
+  const handleLogin = async () => {
+    if (!username.trim() || !password.trim()) {
+      Alert.alert('Error', 'Please enter username and password');
+      return;
+    }
+
+    setLoginLoading(true);
+    try {
+      const response = await fetch(
+        `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/Login?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+      );
+      const data = await response.json();
+
+      if (response.ok && data && (data.status === 'success' || data.STATUS === 'SUCCESS' || data.items?.length > 0)) {
+        setUser({ name: username, username: username });
+        setIsLoggedIn(true);
+        setShowOrgModal(true);
+      } else {
+        Alert.alert('Login Failed', data.message || data.MESSAGE || 'Invalid username or password');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      Alert.alert('Error', 'Unable to connect to server. Please check your internet connection.');
+    } finally {
+      setLoginLoading(false);
     }
   };
 
@@ -102,7 +209,983 @@ export default function App() {
   const handleOrgSelection = (org) => {
     setSelectedOrg(org);
     setShowOrgModal(false);
-    setCurrentScreen('Dashboard');
+    setCurrentScreen('Home');
+  };
+
+  // Confirm Receiving API - POST request with JSON body
+  const confirmReceivingAPI = async (item) => {
+    const lineId = item.lineid || item.LINEID || item.line_id || item.LINE_ID || '';
+    if (!lineId) {
+      Alert.alert('Error', 'Line ID is missing. Cannot process receiving.');
+      return;
+    }
+
+    const shipmentNumber = item.asn_number || item.shipmentnumber || item.shipment_number || '';
+    if (!shipmentNumber) {
+      Alert.alert('Error', 'Shipment number is missing. Cannot process receiving.');
+      return;
+    }
+
+    setReceivingLoading(true);
+    const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/poreceiveoneline`;
+
+    try {
+      console.log('Calling API:', url);
+      console.log('Parameters:', { p_shipment_number: shipmentNumber, p_line_id: lineId });
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          p_shipment_number: shipmentNumber,
+          p_line_id: lineId
+        }),
+      });
+
+      // Get raw text first for debugging
+      const rawText = await response.text();
+      console.log('Raw response:', rawText);
+
+      // Try to parse as JSON
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch (parseError) {
+        console.log('API Parse Error - URL:', url);
+        console.log('API Parse Error - Body:', { p_shipment_number: shipmentNumber, p_line_id: lineId });
+        console.log('API Parse Error - Response:', rawText);
+        Alert.alert(
+          'API Response Error',
+          'Invalid response from server. Check VS Code console for details.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      // Check for success - linesSuccess:1 or other success indicators
+      const isSuccess = response.ok && (
+        data.linesSuccess === 1 ||
+        data.linesSuccess === '1' ||
+        data.LINESSUCCESS === 1 ||
+        data.status === 'success' ||
+        data.STATUS === 'SUCCESS' ||
+        data.message?.toLowerCase().includes('success')
+      );
+
+      if (isSuccess) {
+        // Update local state to mark item as received
+        const lineIdToUpdate = lineId;
+
+        // Update poData items
+        setPoData(prevData => {
+          if (!prevData || !prevData.items) return prevData;
+          return {
+            ...prevData,
+            items: prevData.items.map(i => {
+              const itemLineId = i.lineid || i.LINEID || i.line_id || i.LINE_ID || '';
+              if (itemLineId === lineIdToUpdate) {
+                return { ...i, processingstatuscode: 'SUCCESS', PROCESSINGSTATUSCODE: 'SUCCESS' };
+              }
+              return i;
+            })
+          };
+        });
+
+        // Update selectedItem as well
+        setSelectedItem(prev => ({
+          ...prev,
+          processingstatuscode: 'SUCCESS',
+          PROCESSINGSTATUSCODE: 'SUCCESS'
+        }));
+
+        Alert.alert(
+          '✓ Receipt Confirmed',
+          data.message || data.MESSAGE || `Successfully received ${item.itemnumber || item.ITEMNUMBER}`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Go back to items list (data already updated locally)
+                setCurrentScreen('POItems');
+              },
+            },
+          ]
+        );
+      } else {
+        console.log('Receiving Failed - URL:', url);
+        console.log('Receiving Failed - Body:', { p_shipment_number: shipmentNumber, p_line_id: lineId });
+        console.log('Receiving Failed - Response:', data);
+        Alert.alert(
+          'Receiving Failed',
+          data.message || data.MESSAGE || data.error || 'Failed to process receiving. Check VS Code console for details.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.log('Network Error - URL:', url);
+      console.log('Network Error - Body:', { p_shipment_number: shipmentNumber, p_line_id: lineId });
+      console.log('Network Error:', error.message);
+      Alert.alert('Network Error', error.message);
+    } finally {
+      setReceivingLoading(false);
+    }
+  };
+
+  // ============= SHARE FUNCTION =============
+  const handleSharePO = async () => {
+    if (!selectedPO) return;
+
+    const po = selectedPO;
+    const items = po.items || [];
+
+    // Format items list
+    const itemsList = items.map((item, index) => {
+      const status = (item.processingstatuscode || item.PROCESSINGSTATUSCODE) === 'SUCCESS' ? '✅' : '⏳';
+      const lotNumber = item.lotnumber || item.LOTNUMBER || item.lot_number || item.LOT_NUMBER || '-';
+      const locator = item.locator || '-';
+      const qty = item.transactionquantity || 0;
+
+      return `${index + 1}. *${item.itemnumber || 'N/A'}*
+   📝 ${item.itemdescription || 'No description'}
+   📊 Qty: ${qty} | 🎫 Lot: ${lotNumber}
+   📍 Locator: ${locator} | ${status}`;
+    }).join('\n\n');
+
+    // Count received vs pending
+    const receivedCount = items.filter(i => (i.processingstatuscode || i.PROCESSINGSTATUSCODE) === 'SUCCESS').length;
+    const totalCount = items.length;
+
+    // Format message nicely
+    const message = `📦 *PO RECEIVING DETAILS*
+━━━━━━━━━━━━━━━━━━━━━
+
+📋 *PO:* ${po.documentnumber || 'N/A'}
+🏢 *Supplier:* ${po.vendorname || 'Unknown'}
+📋 *ASN:* ${po.asn_number || 'N/A'}
+📊 *Progress:* ${receivedCount}/${totalCount} received
+
+━━━━━━━━━━━━━━━━━━━━━
+📦 *ITEMS (${totalCount})*
+━━━━━━━━━━━━━━━━━━━━━
+
+${itemsList}
+
+━━━━━━━━━━━━━━━━━━━━━
+_Sent from MobileWMS_`;
+
+    try {
+      await Share.share({
+        message: message,
+        title: `PO: ${po.documentnumber || 'Details'}`,
+      });
+    } catch (error) {
+      console.log('Share error:', error.message);
+      Alert.alert('Share Error', 'Could not share the PO details.');
+    }
+  };
+
+  // ============= SPLIT QUANTITY FUNCTIONS =============
+
+  // Initialize split lines when entering item detail (reset when item changes)
+  const initializeSplitLines = (item) => {
+    setSplitLines([]);
+    setSplitQtyInput('');
+    setShowSplitModal(false);
+    setScanningForSplitLine(null);
+  };
+
+  // Handle split quantity - supports two split inputs
+  const handleSplitQty = async () => {
+    const splitQty1 = parseInt(splitQtyInput1) || 0;
+    const splitQty2 = parseInt(splitQtyInput2) || 0;
+    const totalQty = selectedItem?.transactionquantity || 0;
+
+    if (splitQty1 <= 0 && splitQty2 <= 0) {
+      Alert.alert('Invalid', 'Please enter at least one valid quantity');
+      return;
+    }
+
+    const totalSplit = splitQty1 + splitQty2;
+
+    // Calculate current allocated qty
+    const currentAllocated = splitLines.reduce((sum, line) => sum + line.qty, 0);
+    const remainingQty = totalQty - currentAllocated;
+
+    if (totalSplit >= remainingQty) {
+      Alert.alert('Invalid', `Total split (${totalSplit}) must be less than remaining quantity (${remainingQty})`);
+      return;
+    }
+
+    // Fetch available locators first for auto-assignment
+    const freeLocators = await fetchAvailableLocators();
+
+    const newLines = [];
+    let locatorIndex = 0;
+
+    if (splitQty1 > 0) {
+      const autoLocator = freeLocators[locatorIndex]?.locatorName || '';
+      if (autoLocator) {
+        setSelectedLocatorsTemp(prev => {
+          const newSet = new Set(prev);
+          newSet.add(autoLocator.toUpperCase());
+          return newSet;
+        });
+        locatorIndex++;
+      }
+      newLines.push({
+        id: Date.now().toString(),
+        qty: splitQty1,
+        locator: autoLocator,
+        scanned: !!autoLocator,
+      });
+    }
+    if (splitQty2 > 0) {
+      const autoLocator = freeLocators[locatorIndex]?.locatorName || '';
+      if (autoLocator) {
+        setSelectedLocatorsTemp(prev => {
+          const newSet = new Set(prev);
+          newSet.add(autoLocator.toUpperCase());
+          return newSet;
+        });
+        locatorIndex++;
+      }
+      newLines.push({
+        id: (Date.now() + 1).toString(),
+        qty: splitQty2,
+        locator: autoLocator,
+        scanned: !!autoLocator,
+      });
+    }
+
+    // If this is first split, also create line for remaining qty with auto-assigned locator
+    if (splitLines.length === 0) {
+      // Use already assigned locator from Item Details or get next available
+      const existingLocator = scannedLocator || locatorInput;
+      const remainingLocator = existingLocator || freeLocators[locatorIndex]?.locatorName || '';
+      if (remainingLocator && !existingLocator) {
+        setSelectedLocatorsTemp(prev => {
+          const newSet = new Set(prev);
+          newSet.add(remainingLocator.toUpperCase());
+          return newSet;
+        });
+      }
+      const remainingLine = {
+        id: 'original',
+        qty: totalQty - totalSplit,
+        locator: remainingLocator,
+        scanned: !!remainingLocator,
+      };
+      setSplitLines([remainingLine, ...newLines]);
+      console.log('Split created with auto-assigned locators:', [remainingLine, ...newLines].map(l => l.locator));
+    } else {
+      // Update the first line's qty (remaining) and add new splits
+      setSplitLines(prev => {
+        const updated = [...prev];
+        updated[0] = { ...updated[0], qty: updated[0].qty - totalSplit };
+        return [...updated, ...newLines];
+      });
+      console.log('New splits added with auto-assigned locators:', newLines.map(l => l.locator));
+    }
+
+    setSplitQtyInput1('');
+    setSplitQtyInput2('');
+    setShowSplitModal(false);
+  };
+
+  // Handle scan for specific split line
+  const handleScanForSplitLine = (lineId) => {
+    setScanningForSplitLine(lineId);
+    setCurrentScreen('BarcodeScanner');
+  };
+
+  // Update split line locator (for both scan and manual input)
+  const updateSplitLineLocator = (lineId, locatorValue) => {
+    setSplitLines(prev => {
+      const oldLine = prev.find(l => l.id === lineId);
+
+      // Release old locator if it exists and is different from new one
+      if (oldLine?.locator && oldLine.locator.toUpperCase() !== (locatorValue || '').toUpperCase()) {
+        setSelectedLocatorsTemp(prevTemp => {
+          const newTemp = new Set(prevTemp);
+          newTemp.delete(oldLine.locator.toUpperCase());
+          console.log('Released old locator:', oldLine.locator);
+          return newTemp;
+        });
+      }
+
+      return prev.map(line => {
+        if (line.id === lineId) {
+          const hasValue = locatorValue && locatorValue.trim() && locatorValue.trim() !== '----';
+          return { ...line, locator: locatorValue, scanned: hasValue };
+        }
+        return line;
+      });
+    });
+    // Clear scanning state if this was from a camera scan
+    if (scanningForSplitLine === lineId) {
+      setScanningForSplitLine(null);
+    }
+  };
+
+  // Update any field on a split line (lotNumber, serialFrom, serialTo)
+  const updateSplitLineField = (lineId, field, value) => {
+    setSplitLines(prev => prev.map(line =>
+      line.id === lineId ? { ...line, [field]: value } : line
+    ));
+  };
+
+  // Remove a split line (merge back to first line)
+  const removeSplitLine = (lineId) => {
+    if (lineId === 'original') return; // Can't remove original line
+
+    setSplitLines(prev => {
+      const lineToRemove = prev.find(l => l.id === lineId);
+      if (!lineToRemove) return prev;
+
+      // Release locator back to available list
+      if (lineToRemove.locator) {
+        setSelectedLocatorsTemp(prevTemp => {
+          const newTemp = new Set(prevTemp);
+          newTemp.delete(lineToRemove.locator.toUpperCase());
+          console.log('Released locator:', lineToRemove.locator);
+          return newTemp;
+        });
+      }
+
+      const filtered = prev.filter(l => l.id !== lineId);
+      if (filtered.length > 0) {
+        filtered[0] = { ...filtered[0], qty: filtered[0].qty + lineToRemove.qty };
+      }
+
+      // If only one line left, clear split lines (back to normal mode)
+      if (filtered.length === 1) {
+        return [];
+      }
+      return filtered;
+    });
+  };
+
+  // Check if all split lines have locators assigned
+  const allSplitLinesScanned = () => {
+    if (splitLines.length === 0) return true;
+    return splitLines.every(line => line.scanned && line.locator);
+  };
+
+  // ============= GENERATE RECEIVING JSON =============
+  // Helper to parse serial number (e.g., "IGRN202512012_111" -> { prefix: "IGRN202512012_", num: 111 })
+  const parseSerialNumber = (serial) => {
+    if (!serial) return null;
+    const match = serial.match(/^(.+_)(\d+)$/);
+    if (match) {
+      return { prefix: match[1], num: parseInt(match[2], 10) };
+    }
+    return null;
+  };
+
+  // Generate receiving JSON for API
+  const generateReceivingJSON = () => {
+    if (!selectedItem || !selectedPO) return null;
+
+    const item = selectedItem;
+    const po = selectedPO;
+
+    // Parse from/to serial numbers
+    const fromSerial = parseSerialNumber(item.fromserialnumber);
+    const toSerial = parseSerialNumber(item.toserialnumber);
+    const totalQty = item.transactionquantity || 0;
+    const baseShipmentNumber = item.shipmentnumber || item.SHIPMENTNUMBER || item.asn_number || po.asn_number || po.shipmentnumber || "";
+    const documentLineNumber = item.documentlinenumber || item.DOCUMENTLINENUMBER || "";
+
+    if (splitLines.length > 0) {
+      // Split scenario - create SEPARATE FULL JSON for each split
+      // ShipmentNumber format: baseShipmentNumber-documentLineNumber-splitSequence (e.g., IPONMay2500103-1-1)
+      let allJsons = [];
+      let serialStart = fromSerial ? fromSerial.num : 0;
+
+      splitLines.forEach((split, index) => {
+        const splitQty = split.qty;
+        const serialEnd = serialStart + splitQty - 1;
+        const sequenceNum = index + 1;
+
+        // Build serial range for this split
+        let lotSerialItemSerials = [];
+        if (fromSerial && toSerial) {
+          lotSerialItemSerials = [{
+            FromSerialNumber: `${fromSerial.prefix}${serialStart}`,
+            ToSerialNumber: `${fromSerial.prefix}${serialEnd}`
+          }];
+        }
+
+        // Create full JSON for this split
+        const splitJson = {
+          FromOrganizationCode: null,
+          OrganizationCode: item.organizationcode || "",
+          ReceiptSourceCode: "VENDOR",
+          EmployeeId: "",
+          VendorName: item.vendorname || po.vendorname || "",
+          ShipmentNumber: `${baseShipmentNumber}-${documentLineNumber}-${sequenceNum}`,
+          lines: [{
+            POHeaderId: item.poheaderid || item.POHEADERID || null,
+            POLineLocationId: item.polinelocationid || item.POLINELOCATIONID || null,
+            SourceDocumentCode: "PO",
+            ReceiptSourceCode: "VENDOR",
+            TransactionType: "RECEIVE",
+            AutoTransactCode: "DELIVER",
+            DocumentNumber: po.documentnumber || "",
+            DocumentLineNumber: item.documentlinenumber || "",
+            ItemNumber: item.itemnumber || "",
+            OrganizationCode: item.organizationcode || "",
+            Subinventory: item.subinventory || item.SUBINVENTORY || "",
+            Locator: split.locator || "",
+            Quantity: splitQty,
+            FromOrganizationCode: null,
+            UnitOfMeasure: item.unitofmeasure || item.UNITOFMEASURE || item.uom || "PCS",
+            lotSerialItemLots: [{
+              LotNumber: item.lotnumber || item.LOTNUMBER || "",
+              TransactionQuantity: splitQty,
+              lotSerialItemSerials: lotSerialItemSerials
+            }]
+          }]
+        };
+
+        allJsons.push(splitJson);
+        serialStart = serialEnd + 1;
+      });
+
+      return allJsons; // Return array of JSONs for split
+    } else {
+      // Non-split scenario - single JSON
+      const locator = scannedLocator || locatorInput || item.locator || "";
+
+      let lotSerialItemSerials = [];
+      if (item.fromserialnumber && item.toserialnumber) {
+        lotSerialItemSerials = [{
+          FromSerialNumber: item.fromserialnumber,
+          ToSerialNumber: item.toserialnumber
+        }];
+      }
+
+      // ShipmentNumber format: baseShipmentNumber-documentLineNumber (e.g., IPONMay2500103-1)
+      const receivingJSON = {
+        FromOrganizationCode: null,
+        OrganizationCode: item.organizationcode || "",
+        ReceiptSourceCode: "VENDOR",
+        EmployeeId: "",
+        VendorName: item.vendorname || po.vendorname || "",
+        ShipmentNumber: `${baseShipmentNumber}-${documentLineNumber}`,
+        lines: [{
+          POHeaderId: item.poheaderid || item.POHEADERID || null,
+          POLineLocationId: item.polinelocationid || item.POLINELOCATIONID || null,
+          SourceDocumentCode: "PO",
+          ReceiptSourceCode: "VENDOR",
+          TransactionType: "RECEIVE",
+          AutoTransactCode: "DELIVER",
+          DocumentNumber: po.documentnumber || "",
+          DocumentLineNumber: item.documentlinenumber || "",
+          ItemNumber: item.itemnumber || "",
+          OrganizationCode: item.organizationcode || "",
+          Subinventory: item.subinventory || item.SUBINVENTORY || "",
+          Locator: locator,
+          Quantity: totalQty,
+          FromOrganizationCode: null,
+          UnitOfMeasure: item.unitofmeasure || item.UNITOFMEASURE || item.uom || "PCS",
+          lotSerialItemLots: [{
+            LotNumber: item.lotnumber || item.LOTNUMBER || "",
+            TransactionQuantity: totalQty,
+            lotSerialItemSerials: lotSerialItemSerials
+          }]
+        }]
+      };
+
+      return receivingJSON;
+    }
+  };
+
+  // Log receiving JSON to console
+  const logReceivingJSON = () => {
+    const json = generateReceivingJSON();
+    if (json) {
+      console.log('========== RECEIVING JSON ==========');
+
+      if (Array.isArray(json)) {
+        // Split scenario - multiple JSONs
+        console.log(`Split Mode: ${json.length} separate JSONs`);
+        json.forEach((splitJson, index) => {
+          console.log(`\n----- Split ${index + 1} of ${json.length} -----`);
+          console.log(JSON.stringify(splitJson, null, 2));
+        });
+        Alert.alert('JSON Logged', `${json.length} separate JSONs logged to VS Code console (Split Mode). Check the terminal.`);
+      } else {
+        // Non-split scenario - single JSON
+        console.log('Single Mode: 1 JSON');
+        console.log(JSON.stringify(json, null, 2));
+        Alert.alert('JSON Logged', 'Receiving JSON has been logged to VS Code console. Check the terminal.');
+      }
+
+      console.log('\n====================================');
+    } else {
+      Alert.alert('Error', 'Could not generate receiving JSON');
+    }
+  };
+
+  // ============= PROCESS RECEIVING =============
+  // Oracle Cloud API URL for receiving
+  const ORACLE_RECEIVING_URL = `${ORACLE_FUSION_BASE}/receivingReceiptRequests`;
+
+  // APEX API for updating status
+  const APEX_UPDATE_URL = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/poreceiveoneline';
+
+  // Process receiving - main function
+  const processReceiving = async () => {
+    if (!selectedItem || !selectedPO) {
+      Alert.alert('Error', 'No item selected');
+      return;
+    }
+
+    // Validation: Check locators
+    if (splitLines.length > 0) {
+      // Split mode - check all split locators
+      const missingLocator = splitLines.find(s => !s.locator || s.locator.trim() === '' || s.locator.trim() === '----');
+      if (missingLocator) {
+        Alert.alert('Validation Error', 'Please assign locators to all split lines before processing.');
+        return;
+      }
+    } else {
+      // Non-split mode - check locator
+      const locator = scannedLocator || locatorInput || '';
+      if (!locator || locator.trim() === '' || locator.trim() === '----') {
+        Alert.alert('Validation Error', 'Please scan or enter a locator before processing.');
+        return;
+      }
+    }
+
+    // Generate JSONs
+    const jsonData = generateReceivingJSON();
+    if (!jsonData) {
+      Alert.alert('Error', 'Could not generate receiving data');
+      return;
+    }
+
+    // Convert to array for unified processing
+    const jsonArray = Array.isArray(jsonData) ? jsonData : [jsonData];
+
+    // Initialize processing items for modal
+    const items = jsonArray.map((json, index) => ({
+      id: index,
+      label: `${json.ShipmentNumber} - Qty: ${json.lines[0].Quantity}`,
+      locator: json.lines[0].Locator,
+      status: 'pending',
+      message: ''
+    }));
+
+    setProcessingItems(items);
+    setShowProcessingModal(true);
+
+    // Process each JSON sequentially
+    for (let i = 0; i < jsonArray.length; i++) {
+      const json = jsonArray[i];
+      const lineId = selectedItem.lineid || selectedItem.LINEID || '';
+
+      // Update status to processing
+      setProcessingItems(prev => prev.map((item, idx) =>
+        idx === i ? { ...item, status: 'processing', message: '🔄 Step 1: Sending to Oracle Fusion...' } : item
+      ));
+
+      try {
+        // Step 1: POST to Oracle Cloud
+        console.log(`Processing ${i + 1}/${jsonArray.length}:`, json.ShipmentNumber);
+        console.log('Oracle POST payload:', JSON.stringify(json, null, 2));
+
+        const oracleResponse = await fetch(ORACLE_RECEIVING_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Basic ${ORACLE_FUSION_AUTH}`,
+          },
+          body: JSON.stringify(json),
+        });
+
+        const oracleText = await oracleResponse.text();
+        console.log('Oracle Response:', oracleText);
+
+        let oracleData;
+        try {
+          oracleData = JSON.parse(oracleText);
+        } catch (e) {
+          throw new Error(`Invalid Oracle response: ${oracleText.substring(0, 200)}`);
+        }
+
+        // Step 2: Check ReturnStatus
+        const processingStatus = oracleData.ReturnStatus || oracleData.returnstatus;
+        console.log('ReturnStatus:', processingStatus);
+
+        if (processingStatus !== 'SUCCESS') {
+          throw new Error(`Oracle Fusion failed: ${processingStatus || 'Unknown error'}`);
+        }
+
+        // Update status - Oracle success, now APEX
+        setProcessingItems(prev => prev.map((item, idx) =>
+          idx === i ? { ...item, message: '✅ Step 1: Oracle Fusion SUCCESS\n🔄 Step 2: Updating APEX DB...' } : item
+        ));
+
+        // Step 3: POST to APEX to update status
+        const apexUrl = `${APEX_UPDATE_URL}?p_status=UPDATE&p_line_id=${lineId}`;
+        console.log('==========================================');
+        console.log('APEX UPDATE CALL');
+        console.log('==========================================');
+        console.log('LineId:', lineId);
+        console.log('Full APEX URL:', apexUrl);
+        console.log('==========================================');
+
+        const apexResponse = await fetch(apexUrl, {
+          method: 'POST',
+        });
+
+        const apexStatus = apexResponse.status;
+        const apexText = await apexResponse.text();
+        console.log('APEX Response Status:', apexStatus);
+        console.log('APEX Response Body:', apexText);
+        console.log('==========================================');
+
+        // Check APEX response
+        if (apexStatus !== 200) {
+          // APEX failed but Oracle succeeded
+          setProcessingItems(prev => prev.map((item, idx) =>
+            idx === i ? {
+              ...item,
+              status: 'error',
+              message: `✅ Oracle Fusion SUCCESS\n❌ APEX DB FAILED (${apexStatus})\nURL: ${apexUrl}\nResponse: ${apexText.substring(0, 100)}`
+            } : item
+          ));
+          continue; // Move to next item
+        }
+
+        // Both succeeded
+        setProcessingItems(prev => prev.map((item, idx) =>
+          idx === i ? {
+            ...item,
+            status: 'success',
+            message: `✅ Oracle Fusion SUCCESS\n✅ APEX DB SUCCESS (${apexStatus})`
+          } : item
+        ));
+
+      } catch (error) {
+        console.log('Processing Error:', error.message);
+        setProcessingItems(prev => prev.map((item, idx) =>
+          idx === i ? { ...item, status: 'error', message: `❌ ${error.message}` } : item
+        ));
+      }
+
+      // Small delay between requests
+      if (i < jsonArray.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    // Check if all successful
+    setTimeout(() => {
+      setProcessingItems(prev => {
+        const allSuccess = prev.every(item => item.status === 'success');
+        if (allSuccess) {
+          // Update local state to mark item as received
+          const lineIdToUpdate = selectedItem.lineid || selectedItem.LINEID || '';
+
+          // Update poData items
+          setPoData(prevData => {
+            if (!prevData || !prevData.items) return prevData;
+            return {
+              ...prevData,
+              items: prevData.items.map(i => {
+                const itemLineId = i.lineid || i.LINEID || i.line_id || i.LINE_ID || '';
+                if (itemLineId === lineIdToUpdate) {
+                  return { ...i, processingstatuscode: 'SUCCESS', PROCESSINGSTATUSCODE: 'SUCCESS' };
+                }
+                return i;
+              })
+            };
+          });
+
+          // Update selectedItem
+          setSelectedItem(prevItem => ({
+            ...prevItem,
+            processingstatuscode: 'SUCCESS',
+            PROCESSINGSTATUSCODE: 'SUCCESS'
+          }));
+
+          // Update selectedPO items as well
+          if (selectedPO) {
+            setSelectedPO(prevPO => ({
+              ...prevPO,
+              items: prevPO.items?.map(i => {
+                const itemLineId = i.lineid || i.LINEID || '';
+                if (itemLineId === lineIdToUpdate) {
+                  return { ...i, processingstatuscode: 'SUCCESS', PROCESSINGSTATUSCODE: 'SUCCESS' };
+                }
+                return i;
+              })
+            }));
+          }
+
+          // Case 2: Move locators from temp to confirmed (permanent until refresh)
+          const locatorsToConfirm = [];
+          if (splitLines.length > 0) {
+            // Add all split line locators
+            splitLines.forEach(line => {
+              if (line.locator) {
+                locatorsToConfirm.push(line.locator.toUpperCase());
+              }
+            });
+          } else {
+            // Add normal locator
+            const locator = scannedLocator || locatorInput || '';
+            if (locator) {
+              locatorsToConfirm.push(locator.toUpperCase());
+            }
+          }
+
+          // Add to confirmed locators
+          setConfirmedLocators(prev => {
+            const newConfirmed = new Set(prev);
+            locatorsToConfirm.forEach(loc => {
+              newConfirmed.add(loc);
+              console.log('Confirmed locator (permanent):', loc);
+            });
+            console.log('Total confirmed locators:', newConfirmed.size);
+            return newConfirmed;
+          });
+
+          // Remove from temp selected (since now confirmed)
+          setSelectedLocatorsTemp(prev => {
+            const newTemp = new Set(prev);
+            locatorsToConfirm.forEach(loc => newTemp.delete(loc));
+            return newTemp;
+          });
+        }
+        return prev;
+      });
+    }, 500);
+  };
+
+  // ============= CALL CENTER FUNCTIONS =============
+
+  // Load contacts from device
+  const loadContacts = async () => {
+    setContactsLoading(true);
+    try {
+      const { status } = await Contacts.requestPermissionsAsync();
+      if (status === 'granted') {
+        const { data } = await Contacts.getContactsAsync({
+          fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Emails, Contacts.Fields.Image],
+        });
+        if (data.length > 0) {
+          // Filter contacts that have phone numbers
+          const contactsWithPhone = data.filter(c => c.phoneNumbers && c.phoneNumbers.length > 0);
+          setMobileContacts(contactsWithPhone);
+        }
+      } else {
+        Alert.alert('Permission Denied', 'Contact permission is required to use this feature');
+      }
+    } catch (error) {
+      console.error('Error loading contacts:', error);
+      Alert.alert('Error', 'Failed to load contacts');
+    }
+    setContactsLoading(false);
+  };
+
+  // Format call duration
+  const formatCallDuration = (seconds) => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    if (hrs > 0) {
+      return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Start call timer
+  const startCallTimer = () => {
+    setCallTimer(0);
+    setCallInProgress(true);
+    callTimerRef.current = setInterval(() => {
+      setCallTimer(prev => prev + 1);
+    }, 1000);
+  };
+
+  // Stop call timer and show call log modal
+  const stopCallTimer = () => {
+    if (callTimerRef.current) {
+      clearInterval(callTimerRef.current);
+      callTimerRef.current = null;
+    }
+    setCallInProgress(false);
+    setShowCallLogModal(true);
+  };
+
+  // Make phone call
+  const makePhoneCall = async (contact) => {
+    const phoneNumber = contact.phoneNumbers[0].number;
+    setSelectedContact(contact);
+    startCallTimer();
+    try {
+      await Linking.openURL(`tel:${phoneNumber}`);
+    } catch (error) {
+      console.error('Error making call:', error);
+      Alert.alert('Error', 'Unable to make phone call');
+      stopCallTimer();
+    }
+  };
+
+  // Save call log
+  const saveCallLog = () => {
+    const newLog = {
+      id: Date.now().toString(),
+      contact: selectedContact,
+      duration: callTimer,
+      notes: callLogNotes,
+      timestamp: new Date().toISOString(),
+    };
+    setCallLogs(prev => [newLog, ...prev]);
+    setShowCallLogModal(false);
+    setCallLogNotes('');
+    setCallTimer(0);
+    setSelectedContact(null);
+    Alert.alert('Success', 'Call log saved successfully');
+  };
+
+  // Get sample customer data for contact
+  const getCustomerData = (contact) => {
+    // Sample data - in real app this would come from CRM
+    return {
+      invoices: [
+        { id: 'INV-001', amount: 2500.00, status: 'Paid', date: '2024-01-15' },
+        { id: 'INV-002', amount: 1800.00, status: 'Pending', date: '2024-02-01' },
+        { id: 'INV-003', amount: 3200.00, status: 'Overdue', date: '2024-01-01' },
+      ],
+      payments: [
+        { id: 'PAY-001', amount: 2500.00, method: 'Credit Card', date: '2024-01-20' },
+        { id: 'PAY-002', amount: 1000.00, method: 'Bank Transfer', date: '2024-02-05' },
+      ],
+      orders: [
+        { id: 'ORD-001', items: 5, total: 4500.00, status: 'Delivered' },
+        { id: 'ORD-002', items: 3, total: 2100.00, status: 'Processing' },
+      ],
+      totalSpent: 8500.00,
+      memberSince: '2023-06-15',
+    };
+  };
+
+  // Filter contacts based on search query
+  const filteredContacts = mobileContacts.filter(contact => {
+    const query = contactSearchQuery.toLowerCase();
+    const name = (contact.name || '').toLowerCase();
+    const phone = contact.phoneNumbers?.[0]?.number || '';
+    return name.includes(query) || phone.includes(query);
+  });
+
+  // ============= INBOUND CALL FUNCTIONS =============
+
+  // Get customer details by phone number
+  const getInboundCustomerDetails = (phoneNumber) => {
+    // Sample customer database - in real app this would be an API call
+    const customerDatabase = {
+      '+1234567890': {
+        name: 'John Smith',
+        company: 'ABC Corporation',
+        email: 'john.smith@abc.com',
+        customerType: 'Premium',
+        creditLimit: 50000,
+        outstandingBalance: 12500,
+        invoices: [
+          { id: 'INV-2024-001', amount: 5500.00, status: 'Overdue', date: '2024-01-15', dueDate: '2024-02-15' },
+          { id: 'INV-2024-002', amount: 3200.00, status: 'Pending', date: '2024-02-01', dueDate: '2024-03-01' },
+          { id: 'INV-2024-003', amount: 8900.00, status: 'Paid', date: '2024-01-01', dueDate: '2024-02-01' },
+        ],
+        payments: [
+          { id: 'PAY-001', amount: 8900.00, method: 'Wire Transfer', date: '2024-01-28' },
+          { id: 'PAY-002', amount: 2500.00, method: 'Credit Card', date: '2024-02-10' },
+        ],
+        orders: [
+          { id: 'SO-2024-101', items: 12, total: 15600.00, status: 'Shipped', date: '2024-02-01' },
+          { id: 'SO-2024-089', items: 5, total: 4200.00, status: 'Delivered', date: '2024-01-20' },
+          { id: 'SO-2024-075', items: 8, total: 9800.00, status: 'Delivered', date: '2024-01-10' },
+        ],
+        notes: 'VIP customer - always prioritize. Prefers email communication.',
+        lastContact: '2024-02-15',
+      },
+      'default': {
+        name: 'Unknown Caller',
+        company: 'Not in system',
+        email: 'N/A',
+        customerType: 'New',
+        creditLimit: 0,
+        outstandingBalance: 0,
+        invoices: [],
+        payments: [],
+        orders: [],
+        notes: 'New caller - not found in customer database',
+        lastContact: 'Never',
+      }
+    };
+
+    // Clean phone number for matching
+    const cleanNumber = phoneNumber.replace(/[\s\-\(\)]/g, '');
+
+    // Return matching customer or default
+    return customerDatabase[cleanNumber] || customerDatabase['default'];
+  };
+
+  // Start inbound call timer
+  const startInboundTimer = () => {
+    setInboundCallTimer(0);
+    setInboundCallActive(true);
+    inboundTimerRef.current = setInterval(() => {
+      setInboundCallTimer(prev => prev + 1);
+    }, 1000);
+  };
+
+  // Stop inbound call timer
+  const stopInboundTimer = () => {
+    if (inboundTimerRef.current) {
+      clearInterval(inboundTimerRef.current);
+      inboundTimerRef.current = null;
+    }
+    setInboundCallActive(false);
+  };
+
+  // Handle get details button
+  const handleGetInboundDetails = () => {
+    if (!inboundPhoneNumber.trim()) {
+      Alert.alert('Error', 'Please enter a phone number');
+      return;
+    }
+    const customerData = getInboundCustomerDetails(inboundPhoneNumber);
+    setInboundCustomerData(customerData);
+    if (!inboundCallActive) {
+      startInboundTimer();
+    }
+  };
+
+  // End inbound call and log
+  const endInboundCall = () => {
+    stopInboundTimer();
+    const newLog = {
+      id: Date.now().toString(),
+      contact: {
+        name: inboundCustomerData?.name || 'Unknown',
+        phoneNumbers: [{ number: inboundPhoneNumber }],
+      },
+      duration: inboundCallTimer,
+      notes: `Inbound call from ${inboundCustomerData?.company || 'Unknown'}`,
+      timestamp: new Date().toISOString(),
+      type: 'inbound',
+    };
+    setCallLogs(prev => [newLog, ...prev]);
+    setInboundPhoneNumber('');
+    setInboundCustomerData(null);
+    setInboundCallTimer(0);
+    Alert.alert('Call Ended', 'Inbound call has been logged');
   };
 
   // Handle Logout
@@ -637,9 +1720,197 @@ export default function App() {
           <View style={styles.detailCard}>
             <Text style={styles.detailTitle}>{selectedItem.itemnumber || 'Unknown Item'}</Text>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>PO Number:</Text>
-              <Text style={styles.detailValue}>{selectedItem.documentnumber || 'N/A'}</Text>
+            {/* Split Button - Show when no splits and not received */}
+            {splitLines.length === 0 && (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS' && (
+              <TouchableOpacity
+                onPress={() => setShowSplitModal(true)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: COLORS.warningLight,
+                  paddingVertical: 10,
+                  paddingHorizontal: 16,
+                  borderRadius: 8,
+                  marginTop: 12,
+                  borderWidth: 1,
+                  borderColor: COLORS.warning,
+                }}
+              >
+                <Text style={{ fontSize: 18, marginRight: 8 }}>✂️</Text>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.warning }}>Split Quantity</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Split Lines Table - Show when splits exist */}
+          {splitLines.length > 0 && (
+            <View style={{ backgroundColor: '#FFFDE7', marginHorizontal: 12, marginBottom: 8, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#FFF59D', ...SHADOWS.sm }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary }}>SPLIT QUANTITIES</Text>
+                {/* Hide Add Split when item is already received */}
+                {(selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) !== 'SUCCESS' && (
+                  <TouchableOpacity onPress={() => setShowSplitModal(true)}>
+                    <Text style={{ fontSize: 11, color: COLORS.info, fontWeight: '600' }}>+ Add Split</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Table Header */}
+              <View style={{ flexDirection: 'row', paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#FFF59D', marginBottom: 6 }}>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: COLORS.textSecondary, width: 50 }}>Qty</Text>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: COLORS.textSecondary, flex: 1 }}>Locator</Text>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: COLORS.textSecondary, width: 50, textAlign: 'center' }}>Scan</Text>
+              </View>
+
+              {/* Split Lines */}
+              {(() => {
+                const itemFromSerial = parseSerialNumber(selectedItem.fromserialnumber || selectedItem.FROMSERIALNUMBER);
+                const itemToSerial = parseSerialNumber(selectedItem.toserialnumber || selectedItem.TOSERIALNUMBER);
+                const itemLot = selectedItem.lotnumber || selectedItem.LOTNUMBER || '';
+                let runningSerialStart = itemFromSerial ? itemFromSerial.num : null;
+                return splitLines.map((line, index) => {
+                const isReceived = (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS';
+                // Compute serial range for this split
+                let serialRangeText = '';
+                if (runningSerialStart !== null && itemFromSerial) {
+                  const serialEnd = runningSerialStart + line.qty - 1;
+                  serialRangeText = `${itemFromSerial.prefix}${runningSerialStart} – ${itemFromSerial.prefix}${serialEnd}`;
+                  runningSerialStart = serialEnd + 1;
+                }
+                return (
+                  <View key={line.id} style={{ paddingVertical: 6, borderBottomWidth: index < splitLines.length - 1 ? 1 : 0, borderBottomColor: '#FFF59D' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ width: 50 }}>
+                      <View style={{ backgroundColor: COLORS.infoLight, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, alignSelf: 'flex-start' }}>
+                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: COLORS.info }}>{line.qty}</Text>
+                      </View>
+                    </View>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <TextInput
+                        style={{
+                          borderWidth: 1,
+                          borderColor: line.scanned ? COLORS.success : COLORS.border,
+                          borderRadius: 6,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          fontSize: 12,
+                          backgroundColor: isReceived ? COLORS.neutral100 : '#fff',
+                          color: line.scanned ? COLORS.success : COLORS.text,
+                        }}
+                        value={line.locator || ''}
+                        onChangeText={(text) => updateSplitLineLocator(line.id, text)}
+                        onBlur={() => {
+                          // Validate split line locator when user finishes typing
+                          if (line.locator && line.locator.trim().length > 2) {
+                            validateLocatorIsFree(line.locator, line.id);
+                          }
+                        }}
+                        placeholder="Scan or enter locator"
+                        placeholderTextColor={COLORS.neutral400}
+                        editable={!isReceived}
+                      />
+                    </View>
+                    <View style={{ width: 75, flexDirection: 'row', justifyContent: 'flex-end', gap: 3 }}>
+                      {/* Hide buttons when item is received */}
+                      {!isReceived && (
+                        <>
+                          {/* Picker button - opens available locators */}
+                          <TouchableOpacity
+                            onPress={() => {
+                              setPickingForSplitLine(line.id);
+                              fetchAvailableLocators();
+                              setShowLocatorPicker(true);
+                            }}
+                            style={{ backgroundColor: '#059669', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6 }}
+                          >
+                            <Text style={{ fontSize: 11, color: '#fff' }}>📋</Text>
+                          </TouchableOpacity>
+                          {/* Scan button - opens camera */}
+                          <TouchableOpacity
+                            onPress={() => handleScanForSplitLine(line.id)}
+                            style={{ backgroundColor: COLORS.secondary, paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6 }}
+                          >
+                            <Text style={{ fontSize: 11, color: '#fff' }}>📷</Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                      {line.id !== 'original' && !isReceived && (
+                        <TouchableOpacity
+                          onPress={() => removeSplitLine(line.id)}
+                          style={{ backgroundColor: COLORS.dangerLight, paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6 }}
+                        >
+                          <Text style={{ fontSize: 11, color: COLORS.danger }}>✕</Text>
+                        </TouchableOpacity>
+                      )}
+                      {isReceived && (
+                        <Text style={{ fontSize: 11, color: COLORS.success }}>✓</Text>
+                      )}
+                    </View>
+                    </View>{/* end inner row */}
+                    {/* Lot & Serial Range info row */}
+                    {(itemLot || serialRangeText) && (
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4, gap: 8, paddingLeft: 4 }}>
+                        {itemLot ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                            <Text style={{ fontSize: 10, color: COLORS.textSecondary }}>Lot:</Text>
+                            <Text style={{ fontSize: 10, fontWeight: '600', color: COLORS.text }}>{itemLot}</Text>
+                          </View>
+                        ) : null}
+                        {serialRangeText ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                            <Text style={{ fontSize: 10, color: COLORS.textSecondary }}>Serials:</Text>
+                            <Text style={{ fontSize: 10, fontWeight: '600', color: COLORS.text }}>{serialRangeText}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    )}
+                  </View>{/* end outer row */}
+                );
+              });
+              })()}
+
+              {/* Total row */}
+              <View style={{ flexDirection: 'row', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: COLORS.border }}>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: COLORS.textSecondary, width: 50 }}>Total:</Text>
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: COLORS.text }}>{splitLines.reduce((sum, l) => sum + l.qty, 0)}</Text>
+              </View>
+            </View>
+          )}
+
+          {/* Shipment Info - Compact */}
+          <View style={{ backgroundColor: COLORS.surface, marginHorizontal: 12, marginBottom: 8, padding: 12, borderRadius: 12, ...SHADOWS.sm }}>
+            <View style={{ flexDirection: 'row', marginBottom: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.primary, width: 55 }}>Line ID:</Text>
+              <Text style={{ fontSize: 12, color: COLORS.text, fontWeight: '600', flex: 1 }}>{selectedItem.lineid || selectedItem.LINEID || 'N/A'}</Text>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, width: 55 }}>Line No:</Text>
+              <Text style={{ fontSize: 12, color: COLORS.text }}>{selectedItem.documentlinenumber || 'N/A'}</Text>
+            </View>
+            {/* Processing Status */}
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, width: 55 }}>Status:</Text>
+              <View style={{
+                backgroundColor: (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS' ? COLORS.successLight : COLORS.warningLight,
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 10,
+              }}>
+                <Text style={{
+                  fontSize: 11,
+                  fontWeight: '600',
+                  color: (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS' ? COLORS.success : COLORS.warning
+                }}>
+                  {(selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE) === 'SUCCESS' ? '✓ Received' : (selectedItem.processingstatuscode || selectedItem.PROCESSINGSTATUSCODE || 'Pending')}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Location Info */}
+          <View style={{ backgroundColor: COLORS.surface, marginHorizontal: 12, marginBottom: 8, padding: 14, borderRadius: 12, ...SHADOWS.sm }}>
+            <View style={{ flexDirection: 'row', marginBottom: 10 }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textSecondary, width: 80 }}>Org:</Text>
+              <Text style={{ fontSize: 14, color: COLORS.text, flex: 1 }}>{selectedItem.organizationcode || 'N/A'}</Text>
             </View>
 
             <View style={styles.detailRow}>
@@ -669,10 +1940,61 @@ export default function App() {
               <Text style={styles.detailValue}>{selectedItem.locator || 'N/A'}</Text>
             </View>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Scanned Locator:</Text>
-              <Text style={styles.detailValue}>{selectedItem.actualLocator || 'Not scanned'}</Text>
-            </View>
+              // Validate all locators before confirming
+              const validateAndConfirm = async () => {
+                if (splitLines.length > 0) {
+                  // Split mode - validate all split locators
+                  for (const line of splitLines) {
+                    const isValid = await validateLocatorIsFree(line.locator, line.id);
+                    if (!isValid) {
+                      return; // Stop if any locator is not free
+                    }
+                  }
+                  // All locators valid - show confirmation
+                  const itemFromSerial = parseSerialNumber(selectedItem.fromserialnumber || selectedItem.FROMSERIALNUMBER);
+                  const itemLot = selectedItem.lotnumber || selectedItem.LOTNUMBER || '';
+                  let serialCursor = itemFromSerial ? itemFromSerial.num : null;
+                  const splitSummary = splitLines.map(l => {
+                    let line = `• Qty ${l.qty} → ${l.locator}`;
+                    if (itemLot) line += `\n  Lot: ${itemLot}`;
+                    if (serialCursor !== null && itemFromSerial) {
+                      const serialEnd = serialCursor + l.qty - 1;
+                      line += `\n  Serials: ${itemFromSerial.prefix}${serialCursor} – ${itemFromSerial.prefix}${serialEnd}`;
+                      serialCursor = serialEnd + 1;
+                    }
+                    return line;
+                  }).join('\n');
+                  Alert.alert(
+                    'Confirm Receipt',
+                    `Confirm receipt of ${selectedItem.itemnumber}?\n\nSplit Quantities:\n${splitSummary}\n\nTotal: ${splitLines.reduce((s, l) => s + l.qty, 0)}`,
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Confirm All',
+                        onPress: () => processReceiving(),
+                      },
+                    ]
+                  );
+                } else {
+                  // Normal mode - validate single locator
+                  const isValid = await validateLocatorIsFree(currentLocator);
+                  if (!isValid) {
+                    return; // Stop if locator is not free
+                  }
+                  // Locator valid - show confirmation
+                  Alert.alert(
+                    'Confirm Receipt',
+                    `Confirm receipt of ${selectedItem.itemnumber}?\n\nQuantity: ${selectedItem.transactionquantity}\nLocator: ${locatorInput || 'N/A'}\nScanned: ${scannedLocator || 'N/A'}`,
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Confirm',
+                        onPress: () => processReceiving(),
+                      },
+                    ]
+                  );
+                }
+              };
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Organization:</Text>
