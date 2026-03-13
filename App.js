@@ -3440,8 +3440,7 @@ _Sent from MobileWMS_`;
               onPress={() => {
                 setSelectedItem({ ...item, vendorname: selectedPO.vendorname, asn_number: selectedPO.asn_number || item.asn_number });
                 setSplitLines([]); // Reset split lines for new item
-                setSplitQtyInput1('');
-                setSplitQtyInput2('');
+                setSplitQtyInputs([]);
                 setLocatorInput(''); // Will be auto-assigned
                 setScannedLocator(''); // Will be auto-assigned
                 setExpirationDate(null); // Reset expiration date
