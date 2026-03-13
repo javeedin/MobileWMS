@@ -647,8 +647,8 @@ _Sent from MobileWMS_`;
     const currentAllocated = splitLines.reduce((sum, line) => sum + line.qty, 0);
     const remainingQty = totalQty - currentAllocated;
 
-    if (totalSplit >= remainingQty) {
-      Alert.alert('Invalid', `Total split (${totalSplit}) must be less than remaining quantity (${remainingQty})`);
+    if (totalSplit !== remainingQty) {
+      Alert.alert('Invalid', `Total split qty (${totalSplit}) must equal remaining quantity (${remainingQty})`);
       return;
     }
 
@@ -4090,7 +4090,15 @@ _Sent from MobileWMS_`;
                           Alert.alert('Invalid', 'Please enter a number greater than 0');
                           return;
                         }
-                        setSplitQtyInputs(Array(count).fill(''));
+                        const totalQty = selectedItem?.transactionquantity || 0;
+                        const currentAllocated = splitLines.reduce((sum, l) => sum + l.qty, 0);
+                        const remainingQty = totalQty - currentAllocated;
+                        const base = Math.floor(remainingQty / count);
+                        const remainder = remainingQty % count;
+                        const prefilledQtys = Array(count).fill(0).map((_, i) =>
+                          String(i === count - 1 ? base + remainder : base)
+                        );
+                        setSplitQtyInputs(prefilledQtys);
                         setSplitModalStep(2);
                       }}
                     >
@@ -4101,9 +4109,21 @@ _Sent from MobileWMS_`;
               ) : (
                 /* Step 2: Enter qty for each split */
                 <>
-                  <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 12 }}>
+                  <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 4 }}>
                     Enter quantity for each of the {splitQtyInputs.length} splits:
                   </Text>
+                  {(() => {
+                    const enteredTotal = splitQtyInputs.reduce((s, v) => s + (parseInt(v) || 0), 0);
+                    const totalQty = selectedItem?.transactionquantity || 0;
+                    const currentAllocated = splitLines.reduce((sum, l) => sum + l.qty, 0);
+                    const remainingQty = totalQty - currentAllocated;
+                    const isMatch = enteredTotal === remainingQty;
+                    return (
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: isMatch ? COLORS.success : COLORS.danger, marginBottom: 12 }}>
+                        Total entered: {enteredTotal} / {remainingQty} {isMatch ? '✓' : '✗'}
+                      </Text>
+                    );
+                  })()}
                   <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
                     {splitQtyInputs.map((val, idx) => (
                       <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
