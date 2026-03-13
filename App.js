@@ -378,8 +378,9 @@ export default function App() {
   // Split Quantity state
   const [splitLines, setSplitLines] = useState([]); // Array of {id, qty, locator, scanned}
   const [showSplitModal, setShowSplitModal] = useState(false);
-  const [splitQtyInput1, setSplitQtyInput1] = useState('');
-  const [splitQtyInput2, setSplitQtyInput2] = useState('');
+  const [splitModalStep, setSplitModalStep] = useState(1); // 1=ask count, 2=enter qtys
+  const [numSplitsInput, setNumSplitsInput] = useState('');
+  const [splitQtyInputs, setSplitQtyInputs] = useState([]); // dynamic array of qty strings
   const [scanningForSplitLine, setScanningForSplitLine] = useState(null); // ID of split line being scanned
 
   // Expiration Date state
@@ -623,23 +624,24 @@ _Sent from MobileWMS_`;
   // Initialize split lines when entering item detail (reset when item changes)
   const initializeSplitLines = (item) => {
     setSplitLines([]);
-    setSplitQtyInput('');
+    setNumSplitsInput('');
+    setSplitQtyInputs([]);
+    setSplitModalStep(1);
     setShowSplitModal(false);
     setScanningForSplitLine(null);
   };
 
-  // Handle split quantity - supports two split inputs
+  // Handle split quantity - supports unlimited splits
   const handleSplitQty = async () => {
-    const splitQty1 = parseInt(splitQtyInput1) || 0;
-    const splitQty2 = parseInt(splitQtyInput2) || 0;
+    const qtys = splitQtyInputs.map(v => parseInt(v) || 0).filter(q => q > 0);
     const totalQty = selectedItem?.transactionquantity || 0;
 
-    if (splitQty1 <= 0 && splitQty2 <= 0) {
+    if (qtys.length === 0) {
       Alert.alert('Invalid', 'Please enter at least one valid quantity');
       return;
     }
 
-    const totalSplit = splitQty1 + splitQty2;
+    const totalSplit = qtys.reduce((sum, q) => sum + q, 0);
 
     // Calculate current allocated qty
     const currentAllocated = splitLines.reduce((sum, line) => sum + line.qty, 0);
@@ -656,7 +658,7 @@ _Sent from MobileWMS_`;
     const newLines = [];
     let locatorIndex = 0;
 
-    if (splitQty1 > 0) {
+    for (let i = 0; i < qtys.length; i++) {
       const autoLocator = freeLocators[locatorIndex]?.locatorName || '';
       if (autoLocator) {
         setSelectedLocatorsTemp(prev => {
@@ -667,25 +669,8 @@ _Sent from MobileWMS_`;
         locatorIndex++;
       }
       newLines.push({
-        id: Date.now().toString(),
-        qty: splitQty1,
-        locator: autoLocator,
-        scanned: !!autoLocator,
-      });
-    }
-    if (splitQty2 > 0) {
-      const autoLocator = freeLocators[locatorIndex]?.locatorName || '';
-      if (autoLocator) {
-        setSelectedLocatorsTemp(prev => {
-          const newSet = new Set(prev);
-          newSet.add(autoLocator.toUpperCase());
-          return newSet;
-        });
-        locatorIndex++;
-      }
-      newLines.push({
-        id: (Date.now() + 1).toString(),
-        qty: splitQty2,
+        id: (Date.now() + i).toString(),
+        qty: qtys[i],
         locator: autoLocator,
         scanned: !!autoLocator,
       });
@@ -721,8 +706,9 @@ _Sent from MobileWMS_`;
       console.log('New splits added with auto-assigned locators:', newLines.map(l => l.locator));
     }
 
-    setSplitQtyInput1('');
-    setSplitQtyInput2('');
+    setSplitQtyInputs([]);
+    setNumSplitsInput('');
+    setSplitModalStep(1);
     setShowSplitModal(false);
   };
 
@@ -4050,78 +4036,121 @@ _Sent from MobileWMS_`;
           visible={showSplitModal}
           transparent={true}
           animationType="fade"
-          onRequestClose={() => setShowSplitModal(false)}
+          onRequestClose={() => {
+            setShowSplitModal(false);
+            setNumSplitsInput('');
+            setSplitQtyInputs([]);
+            setSplitModalStep(1);
+          }}
         >
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-            <View style={{ backgroundColor: '#FFFDE7', borderRadius: 16, padding: 20, width: '100%', maxWidth: 320, borderWidth: 1, borderColor: '#FFF59D' }}>
+            <View style={{ backgroundColor: '#FFFDE7', borderRadius: 16, padding: 20, width: '100%', maxWidth: 340, borderWidth: 1, borderColor: '#FFF59D' }}>
               <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 8 }}>✂️ Split Quantity</Text>
               <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 16 }}>
                 Total: {selectedItem.transactionquantity} | Available: {selectedItem.transactionquantity - splitLines.reduce((s, l) => s + l.qty, 0)}
               </Text>
 
-              {/* Two split input fields */}
-              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 4, textAlign: 'center' }}>Split 1</Text>
+              {splitModalStep === 1 ? (
+                /* Step 1: Ask how many splits */
+                <>
+                  <Text style={{ fontSize: 14, color: COLORS.text, marginBottom: 8, fontWeight: '500' }}>How many splits do you want?</Text>
                   <TextInput
                     style={{
                       borderWidth: 1,
                       borderColor: COLORS.border,
                       borderRadius: 8,
-                      padding: 12,
-                      fontSize: 18,
+                      padding: 14,
+                      fontSize: 22,
                       textAlign: 'center',
                       backgroundColor: COLORS.surface,
+                      marginBottom: 16,
                     }}
-                    placeholder="Qty"
+                    placeholder="e.g. 3"
                     keyboardType="number-pad"
-                    value={splitQtyInput1}
-                    onChangeText={setSplitQtyInput1}
+                    value={numSplitsInput}
+                    onChangeText={setNumSplitsInput}
                     autoFocus
                   />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 4, textAlign: 'center' }}>Split 2</Text>
-                  <TextInput
-                    style={{
-                      borderWidth: 1,
-                      borderColor: COLORS.border,
-                      borderRadius: 8,
-                      padding: 12,
-                      fontSize: 18,
-                      textAlign: 'center',
-                      backgroundColor: COLORS.surface,
-                    }}
-                    placeholder="Qty"
-                    keyboardType="number-pad"
-                    value={splitQtyInput2}
-                    onChangeText={setSplitQtyInput2}
-                  />
-                </View>
-              </View>
-
-              <Text style={{ fontSize: 11, color: COLORS.textSecondary, textAlign: 'center', marginBottom: 12 }}>
-                Enter one or both quantities
-              </Text>
-
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: COLORS.neutral200, padding: 14, borderRadius: 8, alignItems: 'center' }}
-                  onPress={() => {
-                    setShowSplitModal(false);
-                    setSplitQtyInput1('');
-                    setSplitQtyInput2('');
-                  }}
-                >
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: COLORS.primary, padding: 14, borderRadius: 8, alignItems: 'center' }}
-                  onPress={handleSplitQty}
-                >
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>Split</Text>
-                </TouchableOpacity>
-              </View>
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: COLORS.neutral200, padding: 14, borderRadius: 8, alignItems: 'center' }}
+                      onPress={() => {
+                        setShowSplitModal(false);
+                        setNumSplitsInput('');
+                        setSplitQtyInputs([]);
+                        setSplitModalStep(1);
+                      }}
+                    >
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: COLORS.primary, padding: 14, borderRadius: 8, alignItems: 'center' }}
+                      onPress={() => {
+                        const count = parseInt(numSplitsInput) || 0;
+                        if (count < 1) {
+                          Alert.alert('Invalid', 'Please enter a number greater than 0');
+                          return;
+                        }
+                        setSplitQtyInputs(Array(count).fill(''));
+                        setSplitModalStep(2);
+                      }}
+                    >
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>Next</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : (
+                /* Step 2: Enter qty for each split */
+                <>
+                  <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 12 }}>
+                    Enter quantity for each of the {splitQtyInputs.length} splits:
+                  </Text>
+                  <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
+                    {splitQtyInputs.map((val, idx) => (
+                      <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                        <Text style={{ width: 60, fontSize: 13, color: COLORS.textSecondary, fontWeight: '500' }}>Split {idx + 1}</Text>
+                        <TextInput
+                          style={{
+                            flex: 1,
+                            borderWidth: 1,
+                            borderColor: COLORS.border,
+                            borderRadius: 8,
+                            padding: 10,
+                            fontSize: 16,
+                            textAlign: 'center',
+                            backgroundColor: COLORS.surface,
+                          }}
+                          placeholder="Qty"
+                          keyboardType="number-pad"
+                          value={val}
+                          onChangeText={(text) => {
+                            setSplitQtyInputs(prev => {
+                              const updated = [...prev];
+                              updated[idx] = text;
+                              return updated;
+                            });
+                          }}
+                          autoFocus={idx === 0}
+                        />
+                      </View>
+                    ))}
+                  </ScrollView>
+                  <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: COLORS.neutral200, padding: 14, borderRadius: 8, alignItems: 'center' }}
+                      onPress={() => setSplitModalStep(1)}
+                    >
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }}>Back</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: COLORS.primary, padding: 14, borderRadius: 8, alignItems: 'center' }}
+                      onPress={handleSplitQty}
+                    >
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>Split</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
             </View>
           </View>
         </Modal>
