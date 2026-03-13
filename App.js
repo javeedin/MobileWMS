@@ -678,30 +678,36 @@ _Sent from MobileWMS_`;
 
     // If this is first split, also create line for remaining qty with auto-assigned locator
     if (splitLines.length === 0) {
-      // Use already assigned locator from Item Details or get next available
-      const existingLocator = scannedLocator || locatorInput;
-      const remainingLocator = existingLocator || freeLocators[locatorIndex]?.locatorName || '';
-      if (remainingLocator && !existingLocator) {
-        setSelectedLocatorsTemp(prev => {
-          const newSet = new Set(prev);
-          newSet.add(remainingLocator.toUpperCase());
-          return newSet;
-        });
+      const remainingQtyForLine = totalQty - totalSplit;
+      if (remainingQtyForLine > 0) {
+        // Use already assigned locator from Item Details or get next available
+        const existingLocator = scannedLocator || locatorInput;
+        const remainingLocator = existingLocator || freeLocators[locatorIndex]?.locatorName || '';
+        if (remainingLocator && !existingLocator) {
+          setSelectedLocatorsTemp(prev => {
+            const newSet = new Set(prev);
+            newSet.add(remainingLocator.toUpperCase());
+            return newSet;
+          });
+        }
+        const remainingLine = {
+          id: 'original',
+          qty: remainingQtyForLine,
+          locator: remainingLocator,
+          scanned: !!remainingLocator,
+        };
+        setSplitLines([remainingLine, ...newLines]);
+        console.log('Split created with auto-assigned locators:', [remainingLine, ...newLines].map(l => l.locator));
+      } else {
+        setSplitLines(newLines);
+        console.log('Split created (fully allocated):', newLines.map(l => l.locator));
       }
-      const remainingLine = {
-        id: 'original',
-        qty: totalQty - totalSplit,
-        locator: remainingLocator,
-        scanned: !!remainingLocator,
-      };
-      setSplitLines([remainingLine, ...newLines]);
-      console.log('Split created with auto-assigned locators:', [remainingLine, ...newLines].map(l => l.locator));
     } else {
-      // Update the first line's qty (remaining) and add new splits
+      // Update the first line's qty (remaining) and add new splits, remove any zero-qty lines
       setSplitLines(prev => {
         const updated = [...prev];
         updated[0] = { ...updated[0], qty: updated[0].qty - totalSplit };
-        return [...updated, ...newLines];
+        return [...updated, ...newLines].filter(l => l.qty > 0);
       });
       console.log('New splits added with auto-assigned locators:', newLines.map(l => l.locator));
     }
