@@ -382,6 +382,7 @@ export default function App() {
   const [numSplitsInput, setNumSplitsInput] = useState('');
   const [splitQtyInputs, setSplitQtyInputs] = useState([]); // dynamic array of qty strings
   const [scanningForSplitLine, setScanningForSplitLine] = useState(null); // ID of split line being scanned
+  const [splitProcessing, setSplitProcessing] = useState(false);
 
   // Expiration Date state
   const [expirationDate, setExpirationDate] = useState(null);
@@ -633,6 +634,8 @@ _Sent from MobileWMS_`;
 
   // Handle split quantity - supports unlimited splits
   const handleSplitQty = async () => {
+    setSplitProcessing(true);
+    try {
     const qtys = splitQtyInputs.map(v => parseInt(v) || 0).filter(q => q > 0);
     const totalQty = selectedItem?.transactionquantity || 0;
 
@@ -716,6 +719,9 @@ _Sent from MobileWMS_`;
     setNumSplitsInput('');
     setSplitModalStep(1);
     setShowSplitModal(false);
+    } finally {
+      setSplitProcessing(false);
+    }
   };
 
   // Handle scan for specific split line
@@ -4050,6 +4056,12 @@ _Sent from MobileWMS_`;
         >
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
             <View style={{ backgroundColor: '#FFFDE7', borderRadius: 16, padding: 20, width: '100%', maxWidth: 340, borderWidth: 1, borderColor: '#FFF59D' }}>
+              {splitProcessing && (
+                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,253,231,0.92)', borderRadius: 16, justifyContent: 'center', alignItems: 'center', zIndex: 10 }}>
+                  <ActivityIndicator size="large" color={COLORS.primary} />
+                  <Text style={{ marginTop: 12, fontSize: 14, fontWeight: '600', color: COLORS.text }}>Processing splits...</Text>
+                </View>
+              )}
               <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 8 }}>✂️ Split Quantity</Text>
               <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 16 }}>
                 Total: {selectedItem.transactionquantity} | Available: {selectedItem.transactionquantity - splitLines.reduce((s, l) => s + l.qty, 0)}
@@ -4092,13 +4104,17 @@ _Sent from MobileWMS_`;
                       style={{ flex: 1, backgroundColor: COLORS.primary, padding: 14, borderRadius: 8, alignItems: 'center' }}
                       onPress={() => {
                         const count = parseInt(numSplitsInput) || 0;
+                        const totalQty = selectedItem?.transactionquantity || 0;
+                        const currentAllocated = splitLines.reduce((sum, l) => sum + l.qty, 0);
+                        const remainingQty = totalQty - currentAllocated;
                         if (count < 1) {
                           Alert.alert('Invalid', 'Please enter a number greater than 0');
                           return;
                         }
-                        const totalQty = selectedItem?.transactionquantity || 0;
-                        const currentAllocated = splitLines.reduce((sum, l) => sum + l.qty, 0);
-                        const remainingQty = totalQty - currentAllocated;
+                        if (count > remainingQty) {
+                          Alert.alert('Invalid', `Maximum ${remainingQty} splits allowed for remaining quantity of ${remainingQty}`);
+                          return;
+                        }
                         const base = Math.floor(remainingQty / count);
                         const remainder = remainingQty % count;
                         const prefilledQtys = Array(count).fill(0).map((_, i) =>
