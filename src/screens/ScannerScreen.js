@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,19 +6,12 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { BarCodeScanner } from 'expo-barcode-scanner';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { COLORS, SPACING, FONT_SIZES } from '../constants/colors';
 
 export default function ScannerScreen({ navigation }) {
-  const [hasPermission, setHasPermission] = useState(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      const { status } = await BarCodeScanner.requestPermissionsAsync();
-      setHasPermission(status === 'granted');
-    })();
-  }, []);
 
   const handleBarCodeScanned = ({ type, data }) => {
     setScanned(true);
@@ -49,7 +42,7 @@ export default function ScannerScreen({ navigation }) {
     );
   };
 
-  if (hasPermission === null) {
+  if (!permission) {
     return (
       <View style={styles.container}>
         <Text style={styles.message}>Requesting camera permission...</Text>
@@ -57,21 +50,24 @@ export default function ScannerScreen({ navigation }) {
     );
   }
 
-  if (hasPermission === false) {
+  if (!permission.granted) {
     return (
       <View style={styles.container}>
         <Text style={styles.message}>No access to camera</Text>
         <Text style={styles.subMessage}>
           Please enable camera permissions in your device settings
         </Text>
+        <TouchableOpacity style={styles.rescanButton} onPress={requestPermission}>
+          <Text style={styles.rescanText}>Grant Permission</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <BarCodeScanner
-        onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
+      <CameraView
+        onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
         style={StyleSheet.absoluteFillObject}
       />
 
