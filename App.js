@@ -167,6 +167,14 @@ export default function App() {
   const [showSubInventoryModal, setShowSubInventoryModal] = useState(false);
   const [subInventorySearch, setSubInventorySearch] = useState('');
 
+  // Inventory Onhand - Lots & Serials drill-down
+  const [showOnhandLotsModal, setShowOnhandLotsModal] = useState(false);
+  const [onhandLotsItem, setOnhandLotsItem] = useState(null);
+  const [onhandSerialsLoading, setOnhandSerialsLoading] = useState(false);
+  const [onhandSerialsData, setOnhandSerialsData] = useState([]);
+  const [onhandSerialsLot, setOnhandSerialsLot] = useState(null);
+  const [showOnhandSerialsModal, setShowOnhandSerialsModal] = useState(false);
+
   // Stock Locators org/sub selector modal
   const [showLocatorOrgModal, setShowLocatorOrgModal] = useState(false);
   const [locatorSelectedOrg, setLocatorSelectedOrg] = useState(null); // full org object
@@ -1603,10 +1611,10 @@ _Sent from MobileWMS_`;
 
     setOnhandLoading(true);
     try {
-      let url = `${API_BASE}/getonhand?orgainzation_code=${searchOrgCode}`;
+      let url = `${API_BASE}/getonhandsbylocator?P_ORGANIZATIONCODE=${searchOrgCode}`;
 
       if (searchSubinventory) {
-        url += `&subinventory=${searchSubinventory}`;
+        url += `&P_SUBINVENTORY=${searchSubinventory}`;
       }
 
       const response = await fetch(url);
@@ -1615,6 +1623,17 @@ _Sent from MobileWMS_`;
       const transformedData = (data.items || []).map((item, index) => ({
         ...item,
         id: index.toString(),
+        // Normalise field names (API may use mixed case)
+        _itemNumber:    item.itemnumber    || item.ItemNumber    || item.item_number    || 'N/A',
+        _description:   item.itemdescription || item.ItemDescription || item.item_description || '',
+        _locator:       item.locator_id    || item.locator       || item.Locator        || '',
+        _subinventory:  item.subinventorycode || item.SubinventoryCode || item.sub_inventory_code || '',
+        _org:           item.organizationcode || item.OrganizationCode || '',
+        _qty:           item.primaryquantity ?? item.PrimaryQuantity ?? item.qoh ?? 0,
+        _uom:           item.uom           || item.UOM           || '',
+        _lotNumber:     item.lotnumber     || item.LotNumber     || item.lot_number     || '',
+        // Fusion lot-serials link (if API exposes links array)
+        _lotSerialsHref: (item.links || []).find(l => l.name === 'lotSerials')?.href || null,
       }));
 
       setOnhandData(transformedData);
@@ -1623,6 +1642,28 @@ _Sent from MobileWMS_`;
     } catch (error) {
       Alert.alert('Error', 'Failed to fetch onhand data: ' + error.message);
       setOnhandLoading(false);
+    }
+  };
+
+  // Fetch lot serials from Fusion link
+  const fetchLotSerials = async (href, lot) => {
+    setOnhandSerialsLot(lot);
+    setOnhandSerialsLoading(true);
+    setOnhandSerialsData([]);
+    setShowOnhandSerialsModal(true);
+    try {
+      const response = await fetch(href, {
+        headers: {
+          'Authorization': `Basic ${ORACLE_FUSION_AUTH}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const data = await response.json();
+      setOnhandSerialsData(data.items || []);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to fetch serial numbers: ' + e.message);
+    } finally {
+      setOnhandSerialsLoading(false);
     }
   };
 
@@ -5194,27 +5235,56 @@ _Sent from MobileWMS_`;
               contentContainerStyle={styles.onhandList}
               renderItem={({ item }) => (
                 <View style={styles.onhandCard}>
+                  {/* Header row: item number + qty badge */}
                   <View style={styles.onhandCardHeader}>
-                    <Text style={styles.onhandItemNumber}>{item.itemnumber || 'N/A'}</Text>
+                    <Text style={styles.onhandItemNumber}>{item._itemNumber}</Text>
                     <View style={styles.qohBadge}>
-                      <Text style={styles.qohText}>{item.qoh || 0} {item.uom || ''}</Text>
+                      <Text style={styles.qohText}>{item._qty} {item._uom}</Text>
                     </View>
                   </View>
 
-                  {item.itemdescription && (
-                    <Text style={styles.onhandDescription}>{item.itemdescription}</Text>
+                  {/* Description */}
+                  {!!item._description && (
+                    <Text style={styles.onhandDescription}>{item._description}</Text>
                   )}
 
+                  {/* Org / Subinventory / Locator row */}
                   <View style={styles.onhandDetailsRow}>
                     <View style={styles.onhandDetailItem}>
                       <Text style={styles.onhandDetailLabel}>Org:</Text>
-                      <Text style={styles.onhandDetailValue}>{item.organizationcode || 'N/A'}</Text>
+                      <Text style={styles.onhandDetailValue}>{item._org || 'N/A'}</Text>
                     </View>
                     <View style={styles.onhandDetailItem}>
-                      <Text style={styles.onhandDetailLabel}>Subinventory:</Text>
-                      <Text style={styles.onhandDetailValue}>{item.subinventorycode || 'N/A'}</Text>
+                      <Text style={styles.onhandDetailLabel}>Sub:</Text>
+                      <Text style={styles.onhandDetailValue}>{item._subinventory || 'N/A'}</Text>
                     </View>
                   </View>
+
+                  {/* Locator + Lot */}
+                  <View style={styles.onhandDetailsRow}>
+                    {!!item._locator && (
+                      <View style={styles.onhandDetailItem}>
+                        <Text style={styles.onhandDetailLabel}>Locator:</Text>
+                        <Text style={styles.onhandDetailValue}>{item._locator}</Text>
+                      </View>
+                    )}
+                    {!!item._lotNumber && (
+                      <View style={styles.onhandDetailItem}>
+                        <Text style={styles.onhandDetailLabel}>Lot:</Text>
+                        <Text style={styles.onhandDetailValue}>{item._lotNumber}</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Show Lots button */}
+                  {(!!item._lotNumber || !!item._lotSerialsHref) && (
+                    <TouchableOpacity
+                      style={{ marginTop: 8, alignSelf: 'flex-start', backgroundColor: '#1d4ed8', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 6, flexDirection: 'row', alignItems: 'center' }}
+                      onPress={() => { setOnhandLotsItem(item); setShowOnhandLotsModal(true); }}
+                    >
+                      <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>📦 Show Lots</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
             />
@@ -5226,6 +5296,146 @@ _Sent from MobileWMS_`;
             <Text style={styles.emptyStateHint}>Select organization above and tap Fetch</Text>
           </View>
         )}
+        {/* ── Lots Modal ── */}
+        <Modal visible={showOnhandLotsModal} transparent animationType="slide" onRequestClose={() => setShowOnhandLotsModal(false)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%' }}>
+              {/* Header */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: '#111' }}>📦 Lot Details</Text>
+                  {onhandLotsItem && (
+                    <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{onhandLotsItem._itemNumber} — {onhandLotsItem._description}</Text>
+                  )}
+                </View>
+                <TouchableOpacity onPress={() => setShowOnhandLotsModal(false)} style={{ padding: 8, backgroundColor: '#E5E7EB', borderRadius: 20 }}>
+                  <Text style={{ color: '#111111', fontWeight: '700', fontSize: 16 }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView contentContainerStyle={{ padding: 16 }}>
+                {onhandLotsItem && (
+                  <>
+                    {/* Item summary */}
+                    <View style={{ backgroundColor: '#f0f9ff', borderRadius: 10, padding: 12, marginBottom: 16 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 13, color: '#6b7280' }}>Org</Text>
+                        <Text style={{ fontSize: 13, color: '#111', fontWeight: '600' }}>{onhandLotsItem._org || 'N/A'}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 13, color: '#6b7280' }}>Subinventory</Text>
+                        <Text style={{ fontSize: 13, color: '#111', fontWeight: '600' }}>{onhandLotsItem._subinventory || 'N/A'}</Text>
+                      </View>
+                      {!!onhandLotsItem._locator && (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <Text style={{ fontSize: 13, color: '#6b7280' }}>Locator</Text>
+                          <Text style={{ fontSize: 13, color: '#111', fontWeight: '600' }}>{onhandLotsItem._locator}</Text>
+                        </View>
+                      )}
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={{ fontSize: 13, color: '#6b7280' }}>Quantity</Text>
+                        <Text style={{ fontSize: 13, color: '#059669', fontWeight: '700' }}>{onhandLotsItem._qty} {onhandLotsItem._uom}</Text>
+                      </View>
+                    </View>
+
+                    {/* Lot row */}
+                    {onhandLotsItem._lotNumber ? (
+                      <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, padding: 14 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <View>
+                            <Text style={{ fontSize: 12, color: '#6b7280' }}>Lot Number</Text>
+                            <Text style={{ fontSize: 15, fontWeight: '700', color: '#1d4ed8', marginTop: 2 }}>{onhandLotsItem._lotNumber}</Text>
+                          </View>
+                          {onhandLotsItem._lotSerialsHref ? (
+                            <TouchableOpacity
+                              style={{ backgroundColor: '#059669', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7 }}
+                              onPress={() => { setShowOnhandLotsModal(false); fetchLotSerials(onhandLotsItem._lotSerialsHref, onhandLotsItem._lotNumber); }}
+                            >
+                              <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>🔢 Show Serials</Text>
+                            </TouchableOpacity>
+                          ) : (
+                            <Text style={{ fontSize: 12, color: '#9ca3af' }}>No serial link</Text>
+                          )}
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+                        <Text style={{ fontSize: 14, color: '#6b7280' }}>No lot information available for this item.</Text>
+                      </View>
+                    )}
+                  </>
+                )}
+              </ScrollView>
+
+              {/* Close */}
+              <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
+                <TouchableOpacity
+                  style={{ backgroundColor: '#E5E7EB', borderRadius: 10, paddingVertical: 12, alignItems: 'center' }}
+                  onPress={() => setShowOnhandLotsModal(false)}
+                >
+                  <Text style={{ color: '#111111', fontWeight: '700', fontSize: 15 }}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ── Serials Modal ── */}
+        <Modal visible={showOnhandSerialsModal} transparent animationType="slide" onRequestClose={() => setShowOnhandSerialsModal(false)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%' }}>
+              {/* Header */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: '#111' }}>🔢 Serial Numbers</Text>
+                  {onhandSerialsLot && (
+                    <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>Lot: {onhandSerialsLot}</Text>
+                  )}
+                </View>
+                <TouchableOpacity onPress={() => setShowOnhandSerialsModal(false)} style={{ padding: 8, backgroundColor: '#E5E7EB', borderRadius: 20 }}>
+                  <Text style={{ color: '#111111', fontWeight: '700', fontSize: 16 }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              {onhandSerialsLoading ? (
+                <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 48 }}>
+                  <ActivityIndicator size="large" color="#1d4ed8" />
+                  <Text style={{ marginTop: 12, color: '#6b7280', fontSize: 14 }}>Fetching serial numbers...</Text>
+                </View>
+              ) : onhandSerialsData.length === 0 ? (
+                <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 48 }}>
+                  <Text style={{ fontSize: 14, color: '#6b7280' }}>No serial numbers found.</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={onhandSerialsData}
+                  keyExtractor={(_, i) => i.toString()}
+                  contentContainerStyle={{ padding: 12 }}
+                  ListHeaderComponent={<Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>{onhandSerialsData.length} serial(s) found</Text>}
+                  renderItem={({ item, index }) => (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, backgroundColor: index % 2 === 0 ? '#f9fafb' : '#fff', borderRadius: 8, marginBottom: 4, borderWidth: 1, borderColor: '#e5e7eb' }}>
+                      <Text style={{ fontSize: 13, color: '#6b7280', width: 32 }}>{index + 1}.</Text>
+                      <Text style={{ flex: 1, fontSize: 14, color: '#111', fontWeight: '500' }}>
+                        {item.SerialNumber || item.serialNumber || item.serial_number || JSON.stringify(item)}
+                      </Text>
+                    </View>
+                  )}
+                />
+              )}
+
+              {/* Close */}
+              <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
+                <TouchableOpacity
+                  style={{ backgroundColor: '#E5E7EB', borderRadius: 10, paddingVertical: 12, alignItems: 'center' }}
+                  onPress={() => setShowOnhandSerialsModal(false)}
+                >
+                  <Text style={{ color: '#111111', fontWeight: '700', fontSize: 15 }}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         {renderApiInfoModal()}
       </View>
     );
