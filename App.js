@@ -134,7 +134,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.6.3';
+const APP_VERSION = 'v1.6.4';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -6784,13 +6784,21 @@ _Sent from MobileWMS_`;
                   { key: 'bay',   label: 'BAY_CODE',   vals: bayVals,   color: '#d97706', parents: { area: pendingLocFilter.area, zone: pendingLocFilter.zone, row: pendingLocFilter.row } },
                   { key: 'level', label: 'LEVEL_CODE', vals: levelVals, color: '#dc2626', parents: { area: pendingLocFilter.area, zone: pendingLocFilter.zone, row: pendingLocFilter.row, bay: pendingLocFilter.bay } },
                 ].map(seg => {
-                  // Count locators per value, respecting parent pending filters
+                  // Count all locators per value, respecting parent pending filters
                   const countFor = (val) => mappedLocators.filter(loc => {
                     if (seg.parents.area  && loc.area  !== seg.parents.area)  return false;
                     if (seg.parents.zone  && loc.zone  !== seg.parents.zone)  return false;
                     if (seg.parents.row   && loc.row   !== seg.parents.row)   return false;
                     if (seg.parents.bay   && loc.bay   !== seg.parents.bay)   return false;
                     return loc[seg.key] === val;
+                  }).length;
+                  // Count only Used locators per value (same parent constraints)
+                  const usedCountFor = (val) => mappedLocators.filter(loc => {
+                    if (seg.parents.area  && loc.area  !== seg.parents.area)  return false;
+                    if (seg.parents.zone  && loc.zone  !== seg.parents.zone)  return false;
+                    if (seg.parents.row   && loc.row   !== seg.parents.row)   return false;
+                    if (seg.parents.bay   && loc.bay   !== seg.parents.bay)   return false;
+                    return loc[seg.key] === val && loc.status === 'Used';
                   }).length;
                   return (
                   <View key={seg.key} style={{ marginBottom: 18 }}>
@@ -6812,15 +6820,26 @@ _Sent from MobileWMS_`;
                         <Text style={{ fontSize: 13, color: !pendingLocFilter[seg.key] ? '#fff' : '#6b7280', fontWeight: !pendingLocFilter[seg.key] ? '700' : '400' }}>Any</Text>
                       </TouchableOpacity>
                       {seg.vals.map(v => {
-                        const cnt = countFor(v);
+                        const cnt      = countFor(v);
+                        const usedCnt  = usedCountFor(v);
+                        const isSelected = pendingLocFilter[seg.key] === v;
+                        const hasUsed  = usedCnt > 0;
                         return (
                         <TouchableOpacity
                           key={v}
                           onPress={() => setPendingLocFilter(f => ({ ...f, [seg.key]: v }))}
-                          style={{ borderRadius: 16, paddingHorizontal: 14, paddingVertical: 7, marginRight: 6, backgroundColor: pendingLocFilter[seg.key] === v ? seg.color : '#f3f4f6', borderWidth: 1, borderColor: pendingLocFilter[seg.key] === v ? seg.color : '#e5e7eb' }}
+                          style={{
+                            borderRadius: 16, paddingHorizontal: 14, paddingVertical: 7, marginRight: 6,
+                            backgroundColor: isSelected ? seg.color : hasUsed ? '#fffbeb' : '#f3f4f6',
+                            borderWidth: isSelected ? 1 : hasUsed ? 2 : 1,
+                            borderColor: isSelected ? seg.color : hasUsed ? '#f59e0b' : '#e5e7eb',
+                          }}
                         >
-                          <Text style={{ fontSize: 13, color: pendingLocFilter[seg.key] === v ? '#fff' : '#374151', fontWeight: pendingLocFilter[seg.key] === v ? '700' : '400' }}>
-                            {v} <Text style={{ fontSize: 11, opacity: 0.8 }}>({cnt})</Text>
+                          <Text style={{ fontSize: 13, color: isSelected ? '#fff' : '#374151', fontWeight: isSelected || hasUsed ? '700' : '400' }}>
+                            {hasUsed ? '● ' : ''}{v}
+                            {'  '}<Text style={{ fontSize: 11, opacity: 0.85, color: isSelected ? '#fff' : hasUsed ? '#d97706' : '#6b7280' }}>
+                              {hasUsed ? `${usedCnt}u / ${cnt}` : cnt}
+                            </Text>
                           </Text>
                         </TouchableOpacity>
                         );
