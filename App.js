@@ -450,7 +450,7 @@ export default function App() {
             `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/getinventoryorgsformobileapp?USER_NAME=${encodeURIComponent(username)}`
           );
           const orgsData = await orgsResponse.json();
-          // Group by warehouse, collect all subinventory_codes per warehouse
+          // Group by warehouse, collect all subinventories (with locator_id) per warehouse
           const warehouseMap = {};
           (orgsData.items || []).forEach(item => {
             if (!item.warehouse) return;
@@ -458,20 +458,25 @@ export default function App() {
               warehouseMap[item.warehouse] = {
                 warehouse: item.warehouse,
                 warehouse_code: item.warehouse_code || item.warehouse,
-                subinventory_codes: [],
-                locator_id: item.locator_id,
+                subinventories: [], // [{code, locator_id}]
               };
             }
-            if (item.subinventory_code && !warehouseMap[item.warehouse].subinventory_codes.includes(item.subinventory_code)) {
-              warehouseMap[item.warehouse].subinventory_codes.push(item.subinventory_code);
+            if (item.subinventory_code) {
+              const already = warehouseMap[item.warehouse].subinventories.find(s => s.code === item.subinventory_code);
+              if (!already) {
+                warehouseMap[item.warehouse].subinventories.push({
+                  code: item.subinventory_code,
+                  locator_id: item.locator_id || null,
+                });
+              }
             }
           });
           setOrganizations(Object.values(warehouseMap));
         } catch (e) {
           console.error('Failed to fetch organizations:', e);
           setOrganizations([
-            { warehouse: 'AMS', warehouse_code: 'AMS', subinventory_codes: [], locator_id: null },
-            { warehouse: 'MLCECLAIM', warehouse_code: 'MLCECLAIM', subinventory_codes: [], locator_id: null },
+            { warehouse: 'AMS', warehouse_code: 'AMS', subinventories: [] },
+            { warehouse: 'MLCECLAIM', warehouse_code: 'MLCECLAIM', subinventories: [] },
           ]); // fallback
         } finally {
           setOrgsModalLoading(false);
@@ -2880,10 +2885,10 @@ _Sent from MobileWMS_`;
               ))}
             </ScrollView>
             <TouchableOpacity
-              style={[styles.modalCancelButton, { marginTop: 8, alignSelf: 'center', width: '100%' }]}
+              style={{ marginTop: 8, width: '100%', backgroundColor: '#e5e7eb', borderRadius: 8, padding: 14, alignItems: 'center' }}
               onPress={() => setShowApiInfoModal(false)}
             >
-              <Text style={[styles.modalCancelText, { textAlign: 'center' }]}>Close</Text>
+              <Text style={{ color: '#111', fontWeight: '700', fontSize: 15 }}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -4999,12 +5004,12 @@ _Sent from MobileWMS_`;
                           style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}
                           onPress={() => {
                             setSearchOrgCode(org.warehouse_code || org.warehouse);
-                            setSearchSubinventory(org.subinventory_codes?.[0] || '');
+                            setSearchSubinventory(org.subinventories?.[0]?.code || '');
                             setShowOnhandOrgDropdown(false);
                           }}
                         >
                           <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }}>{org.warehouse}</Text>
-                          <Text style={{ fontSize: 11, color: '#888' }}>{org.warehouse_code}{org.subinventory_codes?.length > 0 ? ` • ${org.subinventory_codes.join(', ')}` : ''}</Text>
+                          <Text style={{ fontSize: 11, color: '#888' }}>{org.warehouse_code}{org.subinventories?.length > 0 ? ` • ${org.subinventories.map(s => s.code).join(', ')}` : ''}</Text>
                         </TouchableOpacity>
                       ))}
                     </ScrollView>
@@ -5032,7 +5037,7 @@ _Sent from MobileWMS_`;
                     >
                       <Text style={{ fontSize: 14, color: '#888' }}>All Subinventories</Text>
                     </TouchableOpacity>
-                    {[...new Set(organizations.flatMap(o => o.subinventory_codes || []))].map(sub => (
+                    {[...new Set(organizations.flatMap(o => (o.subinventories || []).map(s => s.code)))].map(sub => (
                       <TouchableOpacity
                         key={sub}
                         style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}
@@ -5920,13 +5925,21 @@ _Sent from MobileWMS_`;
                       <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>{org.warehouse}</Text>
                       <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>Code: {org.warehouse_code}</Text>
                     </View>
-                    {/* Subinventory List */}
-                    {org.subinventory_codes && org.subinventory_codes.length > 0 ? (
-                      org.subinventory_codes.map(sub => {
-                        const isSelected = locatorSelectedOrg?.warehouse === org.warehouse && locatorSelectedSub === sub;
+                    {/* Subinventory List with LID column */}
+                    {/* Column header */}
+                    {org.subinventories && org.subinventories.length > 0 && (
+                      <View style={{ flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 4, backgroundColor: '#e5e7eb' }}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#6b7280', flex: 1 }}>SUBINVENTORY</Text>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#6b7280', width: 80, textAlign: 'center' }}>LID</Text>
+                      </View>
+                    )}
+                    {org.subinventories && org.subinventories.length > 0 ? (
+                      org.subinventories.map(sub => {
+                        const isSelected = locatorSelectedOrg?.warehouse === org.warehouse && locatorSelectedSub === sub.code;
+                        const hasLid = !!sub.locator_id;
                         return (
                           <TouchableOpacity
-                            key={sub}
+                            key={sub.code}
                             style={{
                               flexDirection: 'row',
                               alignItems: 'center',
@@ -5940,13 +5953,23 @@ _Sent from MobileWMS_`;
                             }}
                             onPress={() => {
                               setLocatorSelectedOrg(org);
-                              setLocatorSelectedSub(sub);
+                              setLocatorSelectedSub(sub.code);
                               setShowLocatorOrgModal(false);
                               fetchStockLocators();
                             }}
                           >
-                            <Text style={{ fontSize: 14, color: COLORS.text, flex: 1 }}>📦 {sub}</Text>
-                            {isSelected && <Text style={{ fontSize: 12, color: '#059669', fontWeight: '700' }}>✓ Selected</Text>}
+                            <Text style={{ fontSize: 14, color: COLORS.text, flex: 1 }}>📦 {sub.code}</Text>
+                            {/* LID column */}
+                            <View style={{ width: 80, alignItems: 'center' }}>
+                              {hasLid ? (
+                                <Text style={{ fontSize: 10, color: '#059669', fontWeight: '700', fontFamily: 'monospace' }} numberOfLines={1}>
+                                  ✓ {sub.locator_id.toString().slice(-6)}
+                                </Text>
+                              ) : (
+                                <Text style={{ fontSize: 14, color: '#ef4444', fontWeight: '700' }}>✗</Text>
+                              )}
+                            </View>
+                            {isSelected && <Text style={{ fontSize: 11, color: '#059669', fontWeight: '700', marginLeft: 4 }}>✓</Text>}
                           </TouchableOpacity>
                         );
                       })
@@ -5966,7 +5989,7 @@ _Sent from MobileWMS_`;
                           fetchStockLocators();
                         }}
                       >
-                        <Text style={{ fontSize: 13, color: '#888' }}>All subinventories</Text>
+                        <Text style={{ fontSize: 13, color: '#888' }}>No subinventories configured</Text>
                       </TouchableOpacity>
                     )}
                   </View>
