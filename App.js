@@ -134,7 +134,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.7.1';
+const APP_VERSION = 'v1.7.2';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -5245,6 +5245,54 @@ _Sent from MobileWMS_`;
             </View>
           </View>
         </Modal>
+
+        {/* Locator Org/Sub Picker — shown when no cache found in PO flow */}
+        <Modal visible={showLocatorOrgModal} transparent animationType="slide">
+          <View style={styles.modalOverlay}>
+            <View style={[styles.parameterModalContainer, { maxHeight: '80%' }]}>
+              <Text style={styles.modalTitle}>Select Warehouse & Subinventory</Text>
+              <Text style={styles.modalSubtitle}>Choose a subinventory to download all locators</Text>
+              <ScrollView>
+                {organizations.map(org => (
+                  <View key={org.warehouse} style={{ marginBottom: 10 }}>
+                    <View style={{ backgroundColor: '#059669', borderRadius: 6, paddingHorizontal: 12, paddingVertical: 8 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>{org.warehouse}</Text>
+                      <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>Code: {org.warehouse_code}</Text>
+                    </View>
+                    {org.subinventories && org.subinventories.length > 0 ? (
+                      org.subinventories.map(sub => {
+                        const hasLid = !!sub.locator_id;
+                        return (
+                          <TouchableOpacity
+                            key={sub.code}
+                            style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, backgroundColor: '#f9fafb', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', opacity: hasLid ? 1 : 0.45 }}
+                            onPress={() => hasLid && selectLocatorsForOrg(org, sub.code)}
+                            disabled={!hasLid}
+                          >
+                            <Text style={{ fontSize: 14, color: COLORS.text, flex: 1 }}>📦 {sub.code}</Text>
+                            {hasLid
+                              ? <Text style={{ fontSize: 11, color: '#059669', fontWeight: '700' }}>✓ has LID</Text>
+                              : <Text style={{ fontSize: 11, color: '#ef4444' }}>✗ no LID</Text>
+                            }
+                          </TouchableOpacity>
+                        );
+                      })
+                    ) : (
+                      <Text style={{ padding: 12, color: '#888', fontSize: 13 }}>No subinventories configured</Text>
+                    )}
+                  </View>
+                ))}
+              </ScrollView>
+              <TouchableOpacity
+                style={{ marginTop: 12, backgroundColor: '#E5E7EB', borderRadius: 8, padding: 14, alignItems: 'center' }}
+                onPress={() => { setShowLocatorOrgModal(false); locatorFetchCompleteRef.current = null; }}
+              >
+                <Text style={{ color: '#111', fontWeight: '700', fontSize: 15 }}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
       </View>
     );
   }
