@@ -134,7 +134,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.6.9';
+const APP_VERSION = 'v1.7.0';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -309,6 +309,7 @@ export default function App() {
   const [onhandRefreshing, setOnhandRefreshing] = useState(false);
   const [locatorsCacheInfo, setLocatorsCacheInfo] = useState(null); // {fetchedAt, totalCount, orgCode, subCode}
   const locatorFetchAbortRef = useRef(null); // For cancelling in-flight requests
+  const locatorFetchCompleteRef = useRef(null); // Called with mapped[] after a full fetch — used by PO flow
   // Segment filter state
   // 5-segment locator filter (AREA / ZONE / ROW / BAY / LEVEL)
   const [locFilter, setLocFilter] = useState({ area: '', zone: '', row: '', bay: '', level: '' });
@@ -2028,7 +2029,8 @@ _Sent from MobileWMS_`;
 
   // Fetch ALL locators from Fusion (all pages), save to AsyncStorage cache
   // orgOverride/subOverride fix React async-state race condition
-  const fetchStockLocators = async (orgOverride, subOverride) => {
+  // onComplete(mapped) is called with the result when fetch succeeds (used by PO flow)
+  const fetchStockLocators = async (orgOverride, subOverride, onComplete) => {
     const effectiveOrg = orgOverride ?? locatorSelectedOrg;
     const effectiveSub = subOverride !== undefined ? subOverride : locatorSelectedSub;
 
@@ -2122,6 +2124,13 @@ _Sent from MobileWMS_`;
       setLocatorsLoading(false);
       setLocatorsFetchProgress('');
       console.log(`Done — ${mapped.length} locators cached for ${orgCode}/${effectiveSub}`);
+      // Fire direct callback (if passed)
+      if (onComplete) onComplete(mapped);
+      // Fire ref-based callback set by PO flow (fetchAvailableLocators Path 3)
+      if (locatorFetchCompleteRef.current) {
+        locatorFetchCompleteRef.current(mapped);
+        locatorFetchCompleteRef.current = null;
+      }
 
     } catch (error) {
       if (error.name === 'AbortError') {
@@ -2176,19 +2185,24 @@ _Sent from MobileWMS_`;
               setLocFilter({ area: '', zone: '', row: '', bay: '', level: '' });
               // Refresh onhand status in background
               refreshOnhandStatus(orgCode);
+              // Fire PO-flow callback if set (re-populate available locators picker)
+              if (locatorFetchCompleteRef.current) {
+                locatorFetchCompleteRef.current(locs);
+                locatorFetchCompleteRef.current = null;
+              }
             },
           },
           {
             text: 'Fetch Fresh',
             style: 'destructive',
-            onPress: () => fetchStockLocators(org, subCode),
+            onPress: () => fetchStockLocators(org, subCode, locatorFetchCompleteRef.current),
           },
           { text: 'Cancel', style: 'cancel' },
         ]
       );
     } else {
       // No cache — fetch immediately
-      fetchStockLocators(org, subCode);
+      fetchStockLocators(org, subCode, locatorFetchCompleteRef.current);
     }
   };
 
@@ -2487,99 +2501,34 @@ _Sent from MobileWMS_`;
       console.log('fetchAvailableLocators cache load failed:', e.message);
     }
 
-    // ── Path 3: no cache anywhere — fall back to API ───────────────────────
-    try {
-      // Step 1: Get dynamic locator_id for the subinventory from APEX API
-      let subinventoryLocatorId = '';
-      if (subInventory) {
-        try {
-          const locatorIdUrl = `${API_BASE}/getsubinventorylocatorid?P_ORGANIZATION_CODE=${orgCode}&P_SUB_INVENTORY=${subInventory}`;
-          console.log('Fetching subinventory locator ID:', locatorIdUrl);
-          const locatorIdResponse = await fetch(locatorIdUrl);
-          const locatorIdText = await locatorIdResponse.text();
-          const locatorIdData = JSON.parse(locatorIdText);
-          subinventoryLocatorId = locatorIdData?.items?.[0]?.locator_id || '';
-          console.log('Dynamic locator_id:', subinventoryLocatorId);
-        } catch (e) {
-          console.log('Error fetching subinventory locator ID:', e.message);
-        }
-      }
-
-      if (!subinventoryLocatorId) {
-        console.log('No locator_id found for subinventory:', subInventory, '- cannot fetch locators');
-        setLocatorPickerLoading(false);
-        return [];
-      }
-
-      // Step 2: Fetch Oracle Fusion locators + onhand data in parallel
-      const [fusionResponse, onhandResponse] = await Promise.all([
-        fetch(`${ORACLE_FUSION_BASE}/subinventories/${subinventoryLocatorId}/child/locators?offset=0&limit=500`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Basic ${ORACLE_FUSION_AUTH}`,
-            'Content-Type': 'application/json',
+    // ── Path 3: no cache anywhere — prompt user to fetch all locators ─────────
+    setLocatorPickerLoading(false);
+    Alert.alert(
+      'No Locators Found',
+      'Locator data is not cached on this device.\n\nTap "Fetch Locators" to download and save all locators, then select them here.',
+      [
+        {
+          text: 'Fetch Locators',
+          onPress: () => {
+            // Show org/sub picker — after the full fetch completes,
+            // onComplete fires and populates the available locators picker
+            const onComplete = (mapped) => {
+              const freeLocators = filterFree(mapped);
+              setAvailableLocators(freeLocators);
+              setLocatorPickerLoading(false);
+              // Re-open picker now that data is ready
+              setShowLocatorPicker(true);
+            };
+            // Patch selectLocatorsForOrg to pass onComplete into fetchStockLocators
+            // by storing it on a ref so the modal callback can pick it up
+            locatorFetchCompleteRef.current = onComplete;
+            setShowLocatorOrgModal(true);
           },
-        }),
-        fetch(`${API_BASE}/getonhandsbylocator?P_ORGANIZATIONCODE=${orgCode}`),
-      ]);
-
-      // Parse responses
-      let fusionData = { items: [] };
-      let onhandData = { items: [] };
-
-      try {
-        const fusionText = await fusionResponse.text();
-        fusionData = JSON.parse(fusionText);
-      } catch (e) { }
-
-      try {
-        const onhandText = await onhandResponse.text();
-        onhandData = JSON.parse(onhandText);
-      } catch (e) { }
-
-      const fusionItems = fusionData.items || [];
-      const onhandItems = onhandData.items || [];
-
-      // Create set of used locators
-      const usedLocatorSet = new Set();
-      onhandItems.forEach(item => {
-        const locatorName = item.locator_id || item.locator || '';
-        if (locatorName) usedLocatorSet.add(locatorName.toUpperCase());
-      });
-
-      // Filter to only Free locators:
-      // - Not in on-hand data (from API)
-      // - Not in selectedLocatorsTemp (Case 1: selected but not confirmed)
-      // - Not in confirmedLocators (Case 2: confirmed receipts)
-      const freeLocators = fusionItems
-        .filter(loc => {
-          const locatorName = loc.LocatorName || '';
-          const upperName = locatorName.toUpperCase();
-          const isInOnhand = usedLocatorSet.has(upperName);
-          const isSelectedTemp = selectedLocatorsTemp.has(upperName);
-          const isConfirmed = confirmedLocators.has(upperName);
-          return !isInOnhand && !isSelectedTemp && !isConfirmed;
-        })
-        .map(loc => ({
-          id: loc.InventoryLocationId || loc.LocatorName,
-          locatorName: loc.LocatorName || '',
-          subinventory: loc.SubinventoryCode || '',
-          statusCode: loc.MaterialStatusCode || 'Active',
-        }))
-        .sort((a, b) => a.locatorName.localeCompare(b.locatorName));
-
-      console.log('Available locators:', freeLocators.length, '| Temp selected:', selectedLocatorsTemp.size, '| Confirmed:', confirmedLocators.size);
-      setAvailableLocators(freeLocators);
-      setLocatorPickerLoading(false);
-
-      // Return the free locators for auto-assignment
-      return freeLocators;
-
-    } catch (error) {
-      console.log('Error fetching available locators:', error.message);
-      setLocatorPickerLoading(false);
-      return [];
-    }
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+    return [];
   };
 
   // Auto-assign first available locator when opening Item Details
