@@ -134,7 +134,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.7.0';
+const APP_VERSION = 'v1.7.1';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -2124,11 +2124,11 @@ _Sent from MobileWMS_`;
       setLocatorsLoading(false);
       setLocatorsFetchProgress('');
       console.log(`Done — ${mapped.length} locators cached for ${orgCode}/${effectiveSub}`);
-      // Fire direct callback (if passed)
-      if (onComplete) onComplete(mapped);
-      // Fire ref-based callback set by PO flow (fetchAvailableLocators Path 3)
+      // Fire direct callback (if passed) — receives (mapped, orgCode)
+      if (onComplete) onComplete(mapped, orgCode);
+      // Fire ref-based callback set by PO flow — receives (mapped, orgCode)
       if (locatorFetchCompleteRef.current) {
-        locatorFetchCompleteRef.current(mapped);
+        locatorFetchCompleteRef.current(mapped, orgCode);
         locatorFetchCompleteRef.current = null;
       }
 
@@ -2187,7 +2187,7 @@ _Sent from MobileWMS_`;
               refreshOnhandStatus(orgCode);
               // Fire PO-flow callback if set (re-populate available locators picker)
               if (locatorFetchCompleteRef.current) {
-                locatorFetchCompleteRef.current(locs);
+                locatorFetchCompleteRef.current(locs, orgCode);
                 locatorFetchCompleteRef.current = null;
               }
             },
@@ -2501,27 +2501,38 @@ _Sent from MobileWMS_`;
       console.log('fetchAvailableLocators cache load failed:', e.message);
     }
 
-    // ── Path 3: no cache anywhere — prompt user to fetch all locators ─────────
+    // ── Path 3: no cache — prompt to fetch, then show inline subinventory picker ──
     setLocatorPickerLoading(false);
     Alert.alert(
-      'No Locators Found',
-      'Locator data is not cached on this device.\n\nTap "Fetch Locators" to download and save all locators, then select them here.',
+      'No Locators Cached',
+      'Locator data is not on this device yet.\n\nTap OK to open the subinventory picker — select a subinventory to download all locators and mark which are used.',
       [
         {
-          text: 'Fetch Locators',
+          text: 'OK',
           onPress: () => {
-            // Show org/sub picker — after the full fetch completes,
-            // onComplete fires and populates the available locators picker
-            const onComplete = (mapped) => {
-              const freeLocators = filterFree(mapped);
+            // After the full fetch + onhand refresh, auto-populate the locator picker
+            locatorFetchCompleteRef.current = async (mapped, oc) => {
+              // Mark used locators via Fusion inventoryOnhandBalances
+              let locs = mapped;
+              if (oc) {
+                try {
+                  setLocatorPickerLoading(true);
+                  const usedSet = await refreshOnhandStatus(oc);
+                  if (usedSet) {
+                    locs = mapped.map(loc => ({
+                      ...loc,
+                      status: usedSet.has((loc.locatorName || '').toUpperCase()) ? 'Used' : 'Free',
+                    }));
+                  }
+                } catch (e) {
+                  console.log('Onhand refresh after fetch failed:', e.message);
+                }
+              }
+              const freeLocators = filterFree(locs);
               setAvailableLocators(freeLocators);
               setLocatorPickerLoading(false);
-              // Re-open picker now that data is ready
-              setShowLocatorPicker(true);
+              setShowLocatorPicker(true); // re-open picker with fresh data
             };
-            // Patch selectLocatorsForOrg to pass onComplete into fetchStockLocators
-            // by storing it on a ref so the modal callback can pick it up
-            locatorFetchCompleteRef.current = onComplete;
             setShowLocatorOrgModal(true);
           },
         },
