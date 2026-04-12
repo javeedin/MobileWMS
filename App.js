@@ -151,10 +151,24 @@ export default function App() {
   const [user, setUser] = useState(null);
 
   // Organization state
-  const [selectedOrg, setSelectedOrg] = useState(null);
+  const [selectedOrg, setSelectedOrg] = useState(null); // warehouse_code for API calls
+  const [selectedOrgData, setSelectedOrgData] = useState(null); // full org object
   const [showOrgModal, setShowOrgModal] = useState(false);
-  const [organizations, setOrganizations] = useState([]);
+  const [organizations, setOrganizations] = useState([]); // distinct org objects {warehouse, warehouse_code, subinventory_code, locator_id}
   const [orgsModalLoading, setOrgsModalLoading] = useState(false);
+
+  // API Info modal state
+  const [showApiInfoModal, setShowApiInfoModal] = useState(false);
+  const [apiInfoPage, setApiInfoPage] = useState('');
+
+  // Inventory Onhand dropdowns state
+  const [showOnhandOrgDropdown, setShowOnhandOrgDropdown] = useState(false);
+  const [showOnhandSubDropdown, setShowOnhandSubDropdown] = useState(false);
+
+  // Stock Locators org/sub selector modal
+  const [showLocatorOrgModal, setShowLocatorOrgModal] = useState(false);
+  const [locatorSelectedOrg, setLocatorSelectedOrg] = useState(null); // full org object
+  const [locatorSelectedSub, setLocatorSelectedSub] = useState('');
 
   // Navigation state
   const [currentScreen, setCurrentScreen] = useState('Login');
@@ -436,11 +450,20 @@ export default function App() {
             `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/getinventoryorgsformobileapp?USER_NAME=${encodeURIComponent(username)}`
           );
           const orgsData = await orgsResponse.json();
-          const orgList = (orgsData.items || []).map(item => item.warehouse).filter(Boolean);
-          setOrganizations(orgList);
+          // Deduplicate by warehouse name, keep all fields
+          const seen = new Set();
+          const distinctOrgs = (orgsData.items || []).filter(item => {
+            if (!item.warehouse || seen.has(item.warehouse)) return false;
+            seen.add(item.warehouse);
+            return true;
+          });
+          setOrganizations(distinctOrgs);
         } catch (e) {
           console.error('Failed to fetch organizations:', e);
-          setOrganizations(['AMS', 'MLCECLAIM']); // fallback
+          setOrganizations([
+            { warehouse: 'AMS', warehouse_code: 'AMS', subinventory_code: '', locator_id: null },
+            { warehouse: 'MLCECLAIM', warehouse_code: 'MLCECLAIM', subinventory_code: '', locator_id: null },
+          ]); // fallback
         } finally {
           setOrgsModalLoading(false);
         }
@@ -457,7 +480,8 @@ export default function App() {
 
   // Handle Organization Selection
   const handleOrgSelection = (org) => {
-    setSelectedOrg(org);
+    setSelectedOrg(org.warehouse_code || org.warehouse);
+    setSelectedOrgData(org);
     setShowOrgModal(false);
     setCurrentScreen('Home');
   };
@@ -2776,11 +2800,16 @@ _Sent from MobileWMS_`;
             <ScrollView style={styles.orgScrollView} showsVerticalScrollIndicator={true}>
               {organizations.map((org) => (
                 <TouchableOpacity
-                  key={org}
+                  key={org.warehouse}
                   style={styles.orgButton}
                   onPress={() => handleOrgSelection(org)}
                 >
-                  <Text style={styles.orgButtonText}>{org}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.orgButtonText}>{org.warehouse}</Text>
+                    {org.warehouse_code ? (
+                      <Text style={{ fontSize: 11, color: '#888', marginTop: 2 }}>Code: {org.warehouse_code}{org.subinventory_code ? ` • Sub: ${org.subinventory_code}` : ''}</Text>
+                    ) : null}
+                  </View>
                   <Text style={styles.orgButtonArrow}>→</Text>
                 </TouchableOpacity>
               ))}
@@ -2790,6 +2819,65 @@ _Sent from MobileWMS_`;
       </View>
     </Modal>
   );
+
+  // ---- Global API Info Modal ----
+  const API_INFO = {
+    Inventory: {
+      title: 'Inventory Onhand APIs',
+      color: '#C74634',
+      apis: [
+        { method: 'GET', name: 'Get Onhand', url: '/INVENTORY/getonhand', params: 'orgainzation_code, subinventory (optional)', description: 'Fetches onhand inventory by organization' },
+      ],
+    },
+    StockLocators: {
+      title: 'Stock Locators APIs',
+      color: '#059669',
+      apis: [
+        { method: 'GET', name: 'Get Locators (Fusion)', url: '/subinventories/{id}/child/locators?offset=0&limit=500', params: 'Authorization header', description: 'Master list of all locators from Oracle Fusion' },
+        { method: 'GET', name: 'Get Onhand by Locator (APEX)', url: '/INVENTORY/getonhandsbylocator', params: 'P_ORGANIZATIONCODE', description: 'Onhand inventory grouped by locator (Used/Free status)' },
+        { method: 'GET', name: 'Get Subinventory Locator ID', url: '/INVENTORY/getsubinventorylocatorid', params: 'P_ORGANIZATION_CODE, P_SUB_INVENTORY', description: 'Resolves dynamic Fusion locator ID for a subinventory' },
+      ],
+    },
+  };
+
+  const renderApiInfoModal = () => {
+    const info = API_INFO[apiInfoPage];
+    if (!info) return null;
+    return (
+      <Modal visible={showApiInfoModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.parameterModalContainer, { maxHeight: '80%' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+              <Text style={{ fontSize: 18, marginRight: 6 }}>🔌</Text>
+              <Text style={[styles.modalTitle, { marginBottom: 0 }]}>{info.title}</Text>
+            </View>
+            <Text style={styles.modalSubtitle}>APIs called on this page</Text>
+            <ScrollView style={{ marginTop: 8 }}>
+              {info.apis.map((api, i) => (
+                <View key={i} style={{ backgroundColor: '#f8fafc', borderRadius: 8, padding: 12, marginBottom: 10, borderLeftWidth: 3, borderLeftColor: info.color }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                    <View style={{ backgroundColor: api.method === 'GET' ? '#d1fae5' : '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginRight: 8 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: api.method === 'GET' ? '#065f46' : '#92400e' }}>{api.method}</Text>
+                    </View>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.text }}>{api.name}</Text>
+                  </View>
+                  <Text style={{ fontSize: 10, color: '#0369a1', fontFamily: 'monospace', marginBottom: 4 }}>{api.url}</Text>
+                  <Text style={{ fontSize: 11, color: '#64748b' }}>Params: {api.params}</Text>
+                  <Text style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{api.description}</Text>
+                </View>
+              ))}
+            </ScrollView>
+            <TouchableOpacity
+              style={[styles.modalCancelButton, { marginTop: 8, alignSelf: 'center', width: '100%' }]}
+              onPress={() => setShowApiInfoModal(false)}
+            >
+              <Text style={[styles.modalCancelText, { textAlign: 'center' }]}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
 
   // Login Screen
   if (!isLoggedIn || currentScreen === 'Login') {
@@ -4800,8 +4888,19 @@ _Sent from MobileWMS_`;
         <StatusBar barStyle="light-content" backgroundColor="#C74634" />
 
         {/* Header */}
-        <View style={{ backgroundColor: '#C74634', paddingTop: 40, paddingBottom: 12, paddingHorizontal: 16, alignItems: 'center' }}>
-          <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#fff' }}>Inventory Onhand</Text>
+        <View style={{ backgroundColor: '#C74634', paddingTop: 40, paddingBottom: 12, paddingHorizontal: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <TouchableOpacity onPress={goBack} style={{ padding: 4 }}>
+              <Text style={{ fontSize: 24, color: '#fff' }}>←</Text>
+            </TouchableOpacity>
+            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#fff' }}>Inventory Onhand</Text>
+            <TouchableOpacity
+              onPress={() => { setApiInfoPage('Inventory'); setShowApiInfoModal(true); }}
+              style={{ padding: 4 }}
+            >
+              <Text style={{ fontSize: 18, color: '#fff' }}>🔌</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Search Section */}
@@ -4865,34 +4964,86 @@ _Sent from MobileWMS_`;
           <View style={styles.modalOverlay}>
             <View style={styles.parameterModalContainer}>
               <Text style={styles.modalTitle}>Fetch Parameters</Text>
-              <Text style={styles.modalSubtitle}>Enter search parameters</Text>
+              <Text style={styles.modalSubtitle}>Select organization and subinventory</Text>
 
+              {/* Organization Dropdown */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Organization Code *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter Organization Code (e.g., AMS)"
-                  value={searchOrgCode}
-                  onChangeText={setSearchOrgCode}
-                  autoCapitalize="characters"
-                />
+                <Text style={styles.inputLabel}>Organization *</Text>
+                <TouchableOpacity
+                  style={[styles.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                  onPress={() => { setShowOnhandOrgDropdown(!showOnhandOrgDropdown); setShowOnhandSubDropdown(false); }}
+                >
+                  <Text style={{ color: searchOrgCode ? COLORS.text : '#aaa', fontSize: 14 }}>
+                    {searchOrgCode ? organizations.find(o => o.warehouse_code === searchOrgCode)?.warehouse || searchOrgCode : 'Select Organization'}
+                  </Text>
+                  <Text style={{ color: '#888' }}>▼</Text>
+                </TouchableOpacity>
+                {showOnhandOrgDropdown && (
+                  <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, marginTop: 4, maxHeight: 180 }}>
+                    <ScrollView nestedScrollEnabled>
+                      {organizations.map(org => (
+                        <TouchableOpacity
+                          key={org.warehouse}
+                          style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}
+                          onPress={() => {
+                            setSearchOrgCode(org.warehouse_code || org.warehouse);
+                            setSearchSubinventory(org.subinventory_code || '');
+                            setShowOnhandOrgDropdown(false);
+                          }}
+                        >
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }}>{org.warehouse}</Text>
+                          <Text style={{ fontSize: 11, color: '#888' }}>{org.warehouse_code}{org.subinventory_code ? ` • ${org.subinventory_code}` : ''}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
 
+              {/* Subinventory Dropdown */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Subinventory (Optional)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter Subinventory"
-                  value={searchSubinventory}
-                  onChangeText={setSearchSubinventory}
-                  autoCapitalize="characters"
-                />
+                <TouchableOpacity
+                  style={[styles.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                  onPress={() => { setShowOnhandSubDropdown(!showOnhandSubDropdown); setShowOnhandOrgDropdown(false); }}
+                >
+                  <Text style={{ color: searchSubinventory ? COLORS.text : '#aaa', fontSize: 14 }}>
+                    {searchSubinventory || 'Select Subinventory (optional)'}
+                  </Text>
+                  <Text style={{ color: '#888' }}>▼</Text>
+                </TouchableOpacity>
+                {showOnhandSubDropdown && (
+                  <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, marginTop: 4 }}>
+                    <TouchableOpacity
+                      style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}
+                      onPress={() => { setSearchSubinventory(''); setShowOnhandSubDropdown(false); }}
+                    >
+                      <Text style={{ fontSize: 14, color: '#888' }}>All Subinventories</Text>
+                    </TouchableOpacity>
+                    {[...new Set(organizations.map(o => o.subinventory_code).filter(Boolean))].map(sub => (
+                      <TouchableOpacity
+                        key={sub}
+                        style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}
+                        onPress={() => { setSearchSubinventory(sub); setShowOnhandSubDropdown(false); }}
+                      >
+                        <Text style={{ fontSize: 14, color: COLORS.text }}>{sub}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              {/* API Info */}
+              <View style={{ backgroundColor: '#f0f9ff', borderRadius: 8, padding: 10, marginBottom: 12 }}>
+                <Text style={{ fontSize: 11, color: '#0369a1', fontWeight: '600' }}>🔌 API Used</Text>
+                <Text style={{ fontSize: 10, color: '#0369a1', marginTop: 2 }}>GET /INVENTORY/getonhand</Text>
+                <Text style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>Params: orgainzation_code, subinventory (optional)</Text>
               </View>
 
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   style={styles.modalCancelButton}
-                  onPress={() => setShowParameterModal(false)}
+                  onPress={() => { setShowParameterModal(false); setShowOnhandOrgDropdown(false); setShowOnhandSubDropdown(false); }}
                 >
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
@@ -4957,9 +5108,10 @@ _Sent from MobileWMS_`;
           <View style={styles.emptyStateContainer}>
             <Text style={styles.emptyStateIcon}>📦</Text>
             <Text style={styles.emptyStateText}>No data found</Text>
-            <Text style={styles.emptyStateHint}>Enter search parameters above and tap Fetch</Text>
+            <Text style={styles.emptyStateHint}>Select organization above and tap Fetch</Text>
           </View>
         )}
+        {renderApiInfoModal()}
       </View>
     );
   }
@@ -5722,17 +5874,74 @@ _Sent from MobileWMS_`;
             <TouchableOpacity onPress={goBack} style={{ padding: 4 }}>
               <Text style={{ fontSize: 24, color: '#fff' }}>←</Text>
             </TouchableOpacity>
-            <View style={{ alignItems: 'center', flex: 1 }}>
+            <TouchableOpacity
+              style={{ alignItems: 'center', flex: 1 }}
+              onPress={() => setShowLocatorOrgModal(true)}
+            >
               <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#fff' }}>Stock Locators</Text>
               <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)' }}>
-                {locatorSubinventory} • {selectedOrg || 'MLCECLAIM'}
+                {locatorSelectedSub || locatorSubinventory || 'All'} • {(locatorSelectedOrg?.warehouse_code || selectedOrg || 'Select Org')} ▼
               </Text>
-            </View>
-            <TouchableOpacity onPress={fetchStockLocators} style={{ padding: 4 }}>
-              <Text style={{ fontSize: 20, color: '#fff' }}>🔄</Text>
             </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity onPress={() => { setApiInfoPage('StockLocators'); setShowApiInfoModal(true); }} style={{ padding: 4 }}>
+                <Text style={{ fontSize: 18, color: '#fff' }}>🔌</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={fetchStockLocators} style={{ padding: 4 }}>
+                <Text style={{ fontSize: 20, color: '#fff' }}>🔄</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
+
+        {/* Locator Org/Sub Selector Modal */}
+        <Modal visible={showLocatorOrgModal} transparent animationType="slide">
+          <View style={styles.modalOverlay}>
+            <View style={[styles.parameterModalContainer, { maxHeight: '70%' }]}>
+              <Text style={styles.modalTitle}>Select Warehouse</Text>
+              <Text style={styles.modalSubtitle}>Choose organization and subinventory</Text>
+              <ScrollView>
+                {organizations.map(org => (
+                  <TouchableOpacity
+                    key={org.warehouse}
+                    style={{
+                      padding: 14,
+                      borderRadius: 8,
+                      marginBottom: 8,
+                      backgroundColor: locatorSelectedOrg?.warehouse === org.warehouse ? '#d1fae5' : '#f9fafb',
+                      borderWidth: 1,
+                      borderColor: locatorSelectedOrg?.warehouse === org.warehouse ? '#059669' : COLORS.border,
+                    }}
+                    onPress={() => {
+                      setLocatorSelectedOrg(org);
+                      setLocatorSelectedSub(org.subinventory_code || '');
+                      setShowLocatorOrgModal(false);
+                      // Auto-fetch with new selection
+                      fetchStockLocators();
+                    }}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.text }}>{org.warehouse}</Text>
+                    <Text style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                      Code: {org.warehouse_code}{org.subinventory_code ? ` • Sub: ${org.subinventory_code}` : ''}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              {/* API Info */}
+              <View style={{ backgroundColor: '#f0f9ff', borderRadius: 8, padding: 10, marginTop: 8 }}>
+                <Text style={{ fontSize: 11, color: '#0369a1', fontWeight: '600' }}>🔌 APIs Used</Text>
+                <Text style={{ fontSize: 10, color: '#0369a1', marginTop: 2 }}>GET Oracle Fusion: /subinventories/{'{id}'}/child/locators</Text>
+                <Text style={{ fontSize: 10, color: '#0369a1' }}>GET APEX: /INVENTORY/getonhandsbylocator</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.modalCancelButton, { marginTop: 12, alignSelf: 'center', width: '100%' }]}
+                onPress={() => setShowLocatorOrgModal(false)}
+              >
+                <Text style={[styles.modalCancelText, { textAlign: 'center' }]}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
 
         {/* Collapsible Search Section */}
         <TouchableOpacity
@@ -6357,6 +6566,7 @@ _Sent from MobileWMS_`;
             <Text style={styles.navText}>Scan</Text>
           </TouchableOpacity>
         </View>
+        {renderApiInfoModal()}
       </View>
     );
   }
