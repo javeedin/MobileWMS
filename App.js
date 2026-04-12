@@ -134,7 +134,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.6.6';
+const APP_VERSION = 'v1.6.7';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -4546,14 +4546,14 @@ _Sent from MobileWMS_`;
               const hasSplitLocatorIssue = splitLines.length > 0 && !allSplitLinesScanned();
               const hasNormalLocatorIssue = splitLines.length === 0 && isLocatorEmpty;
               const hasLocatorStatusIssue = splitLines.length === 0 && isLocatorNotFree;
-              const isDisabled = receivingLoading || isAlreadyReceived || hasSplitLocatorIssue || hasNormalLocatorIssue || hasLocatorStatusIssue;
-              // Green for already received, grey for other disabled states, green for enabled
+              const isDisabled = receivingLoading || hasSplitLocatorIssue || hasNormalLocatorIssue || hasLocatorStatusIssue;
+              // Green for already received or enabled, grey for other disabled states
               const buttonBg = isAlreadyReceived ? COLORS.success : (isDisabled ? COLORS.neutral400 : COLORS.success);
 
               // Determine button text
               let buttonText = '✓ Confirm Receipt';
               if (isAlreadyReceived) {
-                buttonText = '✓ Already Received';
+                buttonText = '✓ Receiving Done, Close';
               } else if (hasSplitLocatorIssue) {
                 buttonText = 'Assign all locators first';
               } else if (hasNormalLocatorIssue) {
@@ -4631,8 +4631,8 @@ _Sent from MobileWMS_`;
                     justifyContent: 'center',
                     alignItems: 'center'
                   }}
-                  disabled={isDisabled}
-                  onPress={validateAndConfirm}
+                  disabled={!isAlreadyReceived && isDisabled}
+                  onPress={isAlreadyReceived ? goBack : validateAndConfirm}
                 >
                   {receivingLoading ? (
                     <ActivityIndicator color={COLORS.white} size="small" />
