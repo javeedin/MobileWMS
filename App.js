@@ -134,7 +134,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.6.7';
+const APP_VERSION = 'v1.6.8';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -2425,32 +2425,69 @@ _Sent from MobileWMS_`;
     const orgCode = selectedItem?.organizationcode || selectedOrg || 'MLCECLAIM';
     const subInventory = selectedItem?.subinventory || selectedItem?.SUBINVENTORY || selectedItem?.subinventorycode || selectedItem?.SUBINVENTORYCODE || selectedItem?.sub_inventory_code || '';
 
-    // ── Local cache path — no API call needed ──────────────────────────────
-    if (mappedLocators.length > 0) {
-      const freeLocators = mappedLocators
-        .filter(loc => {
-          if (loc.status !== 'Free') return false;
-          const upperName = (loc.locatorName || '').toUpperCase();
-          if (selectedLocatorsTemp.has(upperName)) return false;
-          if (confirmedLocators.has(upperName)) return false;
-          return true;
-        })
-        .map(loc => ({
-          id: loc.id || loc.locatorName,
-          locatorName: loc.locatorName,
-          subinventory: loc.subinventory || '',
-          statusCode: loc.statusCode || 'Active',
-        }))
-        .sort((a, b) => a.locatorName.localeCompare(b.locatorName));
+    // Shared filter: free + not already picked this session
+    const filterFree = (locs) => locs
+      .filter(loc => {
+        if (loc.status !== 'Free') return false;
+        const upperName = (loc.locatorName || '').toUpperCase();
+        if (selectedLocatorsTemp.has(upperName)) return false;
+        if (confirmedLocators.has(upperName)) return false;
+        return true;
+      })
+      .map(loc => ({
+        id: loc.id || loc.locatorName,
+        locatorName: loc.locatorName,
+        subinventory: loc.subinventory || '',
+        statusCode: loc.statusCode || 'Active',
+      }))
+      .sort((a, b) => a.locatorName.localeCompare(b.locatorName));
 
-      console.log(`Available locators from local cache: ${freeLocators.length} free (subinv: ${subInventory || 'any'})`);
+    // ── Path 1: already in memory (Locators page was visited) ─────────────
+    if (mappedLocators.length > 0) {
+      const freeLocators = filterFree(mappedLocators);
+
+      console.log(`Available locators from memory: ${freeLocators.length} free`);
       setAvailableLocators(freeLocators);
       setLocatorPickerLoading(false);
       return freeLocators;
     }
 
-    // ── No local cache — fall back to API fetch ────────────────────────────
-    // (will populate mappedLocators for future calls via refreshOnhandStatus)
+    // ── Path 2: not in memory — try AsyncStorage cache ─────────────────────
+    // This covers the PO flow where the user hasn't visited the Locators page.
+    // Loading from cache also applies the used-status so previously used
+    // locators (marked by markLocatorsUsedLocally) are excluded.
+    try {
+      const savedRaw = await AsyncStorage.getItem('@wms_last_locator_org_v1');
+      if (savedRaw) {
+        const { orgCode: savedOrg, subCode: savedSub, orgObj } = JSON.parse(savedRaw);
+        if (savedOrg && savedSub) {
+          const cached = await loadLocatorsFromCache(savedOrg, savedSub);
+          if (cached && cached.locators?.length > 0) {
+            let locs = cached.locators;
+            if (locs.length > 0 && locs[0].area === undefined) {
+              locs = locs.map(loc => ({ ...loc, ..._parseLocName(loc.locatorName || '') }));
+            }
+            // Apply onhand status (marks previously used locators)
+            locs = await applyOnhandStatusFromCache(savedOrg, locs);
+            // Populate state so subsequent calls use Path 1 (faster)
+            setMappedLocators(locs);
+            if (orgObj) setLocatorSelectedOrg(orgObj);
+            setLocatorSelectedSub(savedSub);
+            setLocatorsCacheInfo({ fetchedAt: cached.fetchedAt, totalCount: cached.totalCount, orgCode: savedOrg, subCode: savedSub });
+
+            const freeLocators = filterFree(locs);
+            console.log(`Available locators from AsyncStorage cache: ${freeLocators.length} free`);
+            setAvailableLocators(freeLocators);
+            setLocatorPickerLoading(false);
+            return freeLocators;
+          }
+        }
+      }
+    } catch (e) {
+      console.log('fetchAvailableLocators cache load failed:', e.message);
+    }
+
+    // ── Path 3: no cache anywhere — fall back to API ───────────────────────
     try {
       // Step 1: Get dynamic locator_id for the subinventory from APEX API
       let subinventoryLocatorId = '';
