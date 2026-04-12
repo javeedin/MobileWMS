@@ -284,9 +284,14 @@ export default function App() {
   const [onhandLocators, setOnhandLocators] = useState([]); // From getonhandsbylocator
   const [mappedLocators, setMappedLocators] = useState([]); // Combined with Used/Free status
   const [locatorsLoading, setLocatorsLoading] = useState(false);
+  const [locatorsFetchProgress, setLocatorsFetchProgress] = useState('');
   const [locatorSearchQuery, setLocatorSearchQuery] = useState('');
   const [selectedLocatorDetail, setSelectedLocatorDetail] = useState(null); // For drill-down
   const [locatorSubinventory, setLocatorSubinventory] = useState('AMKE'); // Default subinventory
+  // Pagination state
+  const [locatorPageSize, setLocatorPageSize] = useState(100);
+  const [locatorCurrentPage, setLocatorCurrentPage] = useState(1);
+  const locatorFetchAbortRef = useRef(null); // For cancelling in-flight requests
   // Segment filter state
   const [segmentFilters, setSegmentFilters] = useState({ seg1: '', seg2: '', seg3: '' });
   const [showSegmentDropdown, setShowSegmentDropdown] = useState(null); // 'seg1', 'seg2', 'seg3' or null
@@ -1718,7 +1723,16 @@ _Sent from MobileWMS_`;
 
   // Fetch Stock Locators - from Oracle Fusion and map with onhand data
   const fetchStockLocators = async () => {
+    // Cancel any previous in-flight request
+    if (locatorFetchAbortRef.current) {
+      locatorFetchAbortRef.current.abort();
+    }
+    const abortController = new AbortController();
+    locatorFetchAbortRef.current = abortController;
+
     setLocatorsLoading(true);
+    setLocatorsFetchProgress('Starting...');
+    setLocatorCurrentPage(1);
     setFusionLocators([]);
     setOnhandLocators([]);
     setMappedLocators([]);
@@ -1735,6 +1749,7 @@ _Sent from MobileWMS_`;
         `No Locator ID configured for subinventory "${locatorSelectedSub || 'selected'}". Please configure it in Oracle or select a different subinventory (look for ✓ in the LID column).`
       );
       setLocatorsLoading(false);
+      setLocatorsFetchProgress('');
       return;
     }
 
@@ -1746,6 +1761,8 @@ _Sent from MobileWMS_`;
       let hasMore = true;
 
       while (hasMore) {
+        if (abortController.signal.aborted) break;
+        setLocatorsFetchProgress(`Fetching locators... ${allFusionItems.length} loaded`);
         const fusionResponse = await fetch(
           `${ORACLE_FUSION_BASE}/subinventories/${fusionLocatorId}/child/locators?offset=${offset}&limit=${LIMIT}`,
           {
@@ -1754,6 +1771,7 @@ _Sent from MobileWMS_`;
               'Authorization': `Basic ${ORACLE_FUSION_AUTH}`,
               'Content-Type': 'application/json',
             },
+            signal: abortController.signal,
           }
         );
         const fusionText = await fusionResponse.text();
@@ -1768,18 +1786,25 @@ _Sent from MobileWMS_`;
         offset += LIMIT;
       }
 
+      if (abortController.signal.aborted) {
+        setLocatorsLoading(false);
+        setLocatorsFetchProgress('');
+        return;
+      }
+
       console.log('Total Fusion locators fetched:', allFusionItems.length);
       if (allFusionItems.length > 0) {
         setLocatorSubinventory(allFusionItems[0].SubinventoryCode || 'AMKE');
       }
       setFusionLocators(allFusionItems);
 
-      // --- Fetch APEX onhand by locator (with high limit to avoid default pagination) ---
+      // --- Fetch APEX onhand by locator ---
+      setLocatorsFetchProgress(`${allFusionItems.length} locators loaded. Fetching onhand data...`);
       const onhandResponse = await fetch(
-        `${API_BASE}/getonhandsbylocator?P_ORGANIZATIONCODE=${orgCode}&limit=9999`
+        `${API_BASE}/getonhandsbylocator?P_ORGANIZATIONCODE=${orgCode}&limit=9999`,
+        { signal: abortController.signal }
       );
       const onhandText = await onhandResponse.text();
-      console.log('Onhand response status:', onhandResponse.status);
 
       let onhandData = { items: [] };
       try { onhandData = JSON.parse(onhandText); } catch (e) {}
@@ -1831,11 +1856,17 @@ _Sent from MobileWMS_`;
 
       setMappedLocators(mapped);
       setLocatorsLoading(false);
+      setLocatorsFetchProgress('');
 
     } catch (error) {
-      console.log('Stock Locators Error:', error.message);
-      Alert.alert('Error', 'Failed to fetch stock locators: ' + error.message);
+      if (error.name === 'AbortError') {
+        console.log('Fetch cancelled by user');
+      } else {
+        console.log('Stock Locators Error:', error.message);
+        Alert.alert('Error', 'Failed to fetch stock locators: ' + error.message);
+      }
       setLocatorsLoading(false);
+      setLocatorsFetchProgress('');
     }
   };
 
@@ -5890,6 +5921,11 @@ _Sent from MobileWMS_`;
     const usedCount = mappedLocators.filter(l => l.status === 'Used').length;
     const freeCount = mappedLocators.filter(l => l.status === 'Free').length;
 
+    // Pagination
+    const totalPages = Math.max(1, Math.ceil(filteredLocators.length / locatorPageSize));
+    const safePage = Math.min(locatorCurrentPage, totalPages);
+    const paginatedLocators = filteredLocators.slice((safePage - 1) * locatorPageSize, safePage * locatorPageSize);
+
     const hasActiveFilters = segmentFilters.seg1 || segmentFilters.seg2 || segmentFilters.seg3;
 
     const clearAllFilters = () => {
@@ -6019,10 +6055,10 @@ _Sent from MobileWMS_`;
                 <Text style={{ fontSize: 10, color: '#0369a1' }}>GET APEX: /INVENTORY/getonhandsbylocator</Text>
               </View>
               <TouchableOpacity
-                style={[styles.modalCancelButton, { marginTop: 12, alignSelf: 'center', width: '100%' }]}
+                style={{ marginTop: 12, width: '100%', backgroundColor: '#E5E7EB', borderRadius: 8, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#9ca3af' }}
                 onPress={() => setShowLocatorOrgModal(false)}
               >
-                <Text style={[styles.modalCancelText, { textAlign: 'center', color: '#000' }]}>Cancel</Text>
+                <Text style={{ color: '#111111', fontWeight: '700', fontSize: 15, textAlign: 'center' }}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -6358,9 +6394,19 @@ _Sent from MobileWMS_`;
         {/* Locators List - for All and Available tabs */}
         {stockLocatorsTab !== 'map' && (
           locatorsLoading ? (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
               <ActivityIndicator size="large" color="#059669" />
-              <Text style={{ marginTop: 12, color: COLORS.textSecondary }}>Loading locators...</Text>
+              <Text style={{ marginTop: 12, color: COLORS.textSecondary, textAlign: 'center' }}>
+                {locatorsFetchProgress || 'Loading locators...'}
+              </Text>
+              <TouchableOpacity
+                style={{ marginTop: 20, backgroundColor: '#fee2e2', borderRadius: 8, paddingHorizontal: 24, paddingVertical: 10, borderWidth: 1, borderColor: '#ef4444' }}
+                onPress={() => {
+                  if (locatorFetchAbortRef.current) locatorFetchAbortRef.current.abort();
+                }}
+              >
+                <Text style={{ color: '#dc2626', fontWeight: '700', fontSize: 14 }}>✕ Cancel Request</Text>
+              </TouchableOpacity>
             </View>
           ) : filteredLocators.length === 0 ? (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
@@ -6375,8 +6421,26 @@ _Sent from MobileWMS_`;
               )}
             </View>
           ) : (
+            <>
+              {/* Page size + summary bar */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#f0fdf4', borderBottomWidth: 1, borderBottomColor: '#d1fae5' }}>
+                <Text style={{ fontSize: 12, color: '#065f46', flex: 1 }}>
+                  {filteredLocators.length} locators • page {safePage}/{totalPages}
+                </Text>
+                <Text style={{ fontSize: 11, color: '#6b7280', marginRight: 6 }}>Per page:</Text>
+                {[100, 200, 300].map(size => (
+                  <TouchableOpacity
+                    key={size}
+                    onPress={() => { setLocatorPageSize(size); setLocatorCurrentPage(1); }}
+                    style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, marginLeft: 4, backgroundColor: locatorPageSize === size ? '#059669' : '#e5e7eb' }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: locatorPageSize === size ? '#fff' : '#374151' }}>{size}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
             <FlatList
-              data={filteredLocators}
+              data={paginatedLocators}
               keyExtractor={(item) => String(item.id)}
               contentContainerStyle={{ padding: 12 }}
               onScrollBeginDrag={() => setShowSegmentDropdown(null)}
@@ -6447,6 +6511,32 @@ _Sent from MobileWMS_`;
                 </TouchableOpacity>
               )}
             />
+
+              {/* Pagination bar */}
+              {totalPages > 1 && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5e7eb', gap: 8 }}>
+                  <TouchableOpacity
+                    disabled={safePage <= 1}
+                    onPress={() => setLocatorCurrentPage(p => Math.max(1, p - 1))}
+                    style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 6, backgroundColor: safePage <= 1 ? '#f3f4f6' : '#059669' }}
+                  >
+                    <Text style={{ color: safePage <= 1 ? '#9ca3af' : '#fff', fontWeight: '700' }}>‹ Prev</Text>
+                  </TouchableOpacity>
+
+                  <Text style={{ fontSize: 13, color: COLORS.text, fontWeight: '600', paddingHorizontal: 8 }}>
+                    {safePage} / {totalPages}
+                  </Text>
+
+                  <TouchableOpacity
+                    disabled={safePage >= totalPages}
+                    onPress={() => setLocatorCurrentPage(p => Math.min(totalPages, p + 1))}
+                    style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 6, backgroundColor: safePage >= totalPages ? '#f3f4f6' : '#059669' }}
+                  >
+                    <Text style={{ color: safePage >= totalPages ? '#9ca3af' : '#fff', fontWeight: '700' }}>Next ›</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </>
           )
         )}
 
