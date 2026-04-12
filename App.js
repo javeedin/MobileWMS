@@ -134,7 +134,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.6.1';
+const APP_VERSION = 'v1.6.2';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -1561,6 +1561,15 @@ _Sent from MobileWMS_`;
   useEffect(() => {
     if (isLoggedIn && currentScreen === 'Home') {
       onRefresh();
+      // Silently refresh used/free locator status in background after login
+      AsyncStorage.getItem('@wms_last_locator_org_v1')
+        .then(raw => {
+          if (raw) {
+            const saved = JSON.parse(raw);
+            if (saved.orgCode) refreshOnhandStatus(saved.orgCode);
+          }
+        })
+        .catch(() => {});
     }
   }, [isLoggedIn]);
 
@@ -1842,6 +1851,74 @@ _Sent from MobileWMS_`;
     } catch (e) {}
   };
 
+  // ── Onhand-status cache (used/free) — separate lightweight key per org ──────
+  // Stores only the set of locator names that have inventory, so we don't
+  // need to rewrite the full 10k-locator cache every time status changes.
+  const ONHAND_STATUS_KEY = (orgCode) => `@wms_used_locs_v1_${orgCode}`;
+
+  // Fetch inventoryOnhandBalances from Fusion, build "used" set, save to cache,
+  // and update in-memory mappedLocators status. Safe to call in background.
+  const refreshOnhandStatus = async (orgCode) => {
+    if (!orgCode) return;
+    try {
+      const PAGE_SIZE = 500;
+      let offset = 0;
+      let allItems = [];
+      let hasMore = true;
+
+      while (hasMore) {
+        const res = await fetch(
+          `${ORACLE_FUSION_BASE}/inventoryOnhandBalances?q=OrganizationCode=${orgCode}&limit=${PAGE_SIZE}&offset=${offset}`,
+          { headers: { 'Authorization': `Basic ${ORACLE_FUSION_AUTH}`, 'Content-Type': 'application/json' } }
+        );
+        const data = await res.json();
+        const items = data.items || [];
+        allItems = allItems.concat(items);
+        hasMore = data.hasMore === true && items.length === PAGE_SIZE;
+        offset += PAGE_SIZE;
+      }
+
+      // Build set of locator names that have inventory
+      const usedSet = new Set();
+      allItems.forEach(item => {
+        // Fusion may use Locator, LocatorId, or LocatorName depending on the view
+        const loc = item.Locator || item.LocatorId || item.LocatorName || item.locator || '';
+        if (loc) usedSet.add(loc);
+      });
+
+      // Persist the set so it survives app restarts
+      await AsyncStorage.setItem(
+        ONHAND_STATUS_KEY(orgCode),
+        JSON.stringify({ fetchedAt: new Date().toISOString(), used: Array.from(usedSet) })
+      );
+
+      // Update in-memory locators (if loaded)
+      setMappedLocators(prev =>
+        prev.length === 0 ? prev :
+        prev.map(loc => ({ ...loc, status: usedSet.has(loc.locatorName) ? 'Used' : 'Free' }))
+      );
+
+      console.log(`Onhand status refreshed: ${usedSet.size} used locators for ${orgCode}`);
+      return usedSet;
+    } catch (e) {
+      console.log('Onhand status refresh error:', e.message);
+      return null;
+    }
+  };
+
+  // Apply a saved onhand-status cache onto an array of locator objects
+  const applyOnhandStatusFromCache = async (orgCode, locs) => {
+    try {
+      const raw = await AsyncStorage.getItem(ONHAND_STATUS_KEY(orgCode));
+      if (!raw) return locs;
+      const { used } = JSON.parse(raw);
+      const usedSet = new Set(used);
+      return locs.map(loc => ({ ...loc, status: usedSet.has(loc.locatorName) ? 'Used' : 'Free' }));
+    } catch (e) {
+      return locs;
+    }
+  };
+
   // Format a cache timestamp for display: "15 Apr 10:30"
   const formatCacheDate = (isoStr) => {
     if (!isoStr) return '';
@@ -2038,9 +2115,8 @@ _Sent from MobileWMS_`;
         [
           {
             text: 'Use Cached',
-            onPress: () => {
+            onPress: async () => {
               // Backward-compat: old cache entries may lack area/zone/row/bay/level
-              // If the first locator is missing 'area', re-parse from locatorName
               let locs = cached.locators;
               if (locs.length > 0 && locs[0].area === undefined) {
                 locs = locs.map(loc => {
@@ -2048,11 +2124,15 @@ _Sent from MobileWMS_`;
                   return { ...loc, ...segs };
                 });
               }
+              // Apply latest onhand status (used/free) from its own cache key
+              locs = await applyOnhandStatusFromCache(orgCode, locs);
               setMappedLocators(locs);
               setFusionLocators([]);
               setMapDisplayLimit(100);
               setLocatorsCacheInfo({ fetchedAt: cached.fetchedAt, totalCount: cached.totalCount, orgCode, subCode });
               setLocFilter({ area: '', zone: '', row: '', bay: '', level: '' });
+              // Refresh onhand status in background
+              refreshOnhandStatus(orgCode);
             },
           },
           {
@@ -2121,6 +2201,8 @@ _Sent from MobileWMS_`;
             return { ...loc, ...segs };
           });
         }
+        // Apply the latest onhand status (used/free) from its own cache key
+        locs = await applyOnhandStatusFromCache(orgCode, locs);
         setMappedLocators(locs);
         setFusionLocators([]);
         setMapDisplayLimit(100);
@@ -2129,6 +2211,8 @@ _Sent from MobileWMS_`;
         // Auto-open filter modal so user can search right away
         setPendingLocFilter({ area: '', zone: '', row: '', bay: '', level: '' });
         setShowLocFilterModal(true);
+        // Refresh onhand status in background so the list is up to date
+        refreshOnhandStatus(orgCode);
       } else {
         // No cache — open org/sub picker
         setShowLocatorOrgModal(true);
@@ -6644,7 +6728,12 @@ _Sent from MobileWMS_`;
           {mappedLocators.length > 0 && (
             <TouchableOpacity
               style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: activeFilterCount >= 2 ? '#059669' : '#1d4ed8', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, marginLeft: 8 }}
-              onPress={() => { setPendingLocFilter({ ...locFilter }); setShowLocFilterModal(true); }}
+              onPress={() => {
+                const oc = locatorSelectedOrg?.warehouse_code || selectedOrg;
+                if (oc) refreshOnhandStatus(oc); // refresh used/free before filtering
+                setPendingLocFilter({ ...locFilter });
+                setShowLocFilterModal(true);
+              }}
             >
               {activeFilterCount >= 2 && <Text style={{ fontSize: 10, backgroundColor: '#fff', color: '#059669', borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1, marginRight: 4, fontWeight: '700' }}>{activeFilterCount}</Text>}
               <Text style={{ fontSize: 13, color: '#fff', fontWeight: '700' }}>⚙ Filter</Text>
