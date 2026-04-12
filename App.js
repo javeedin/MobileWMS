@@ -134,7 +134,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.5.9';
+const APP_VERSION = 'v1.6.0';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -2063,6 +2063,54 @@ _Sent from MobileWMS_`;
     }
   };
 
+  // Navigate to StockLocators — cache-first, never re-fetch if data is already available
+  const navigateToLocators = async () => {
+    navigateTo('StockLocators');
+
+    // Already loaded in memory → just open filter modal if needed
+    if (mappedLocators.length > 0) {
+      const activeCount = [locFilter.area, locFilter.zone, locFilter.row, locFilter.bay, locFilter.level].filter(Boolean).length;
+      if (activeCount < 2) {
+        setPendingLocFilter({ area: '', zone: '', row: '', bay: '', level: '' });
+        setShowLocFilterModal(true);
+      }
+      return;
+    }
+
+    // Not in memory — try cache silently (no prompt)
+    const orgCode = locatorSelectedOrg?.warehouse_code || selectedOrg;
+    const subCode = locatorSelectedSub;
+    if (!orgCode || !subCode) {
+      setShowLocatorOrgModal(true);
+      return;
+    }
+    try {
+      const cached = await loadLocatorsFromCache(orgCode, subCode);
+      if (cached && cached.locators?.length > 0) {
+        let locs = cached.locators;
+        if (locs.length > 0 && locs[0].area === undefined) {
+          locs = locs.map(loc => {
+            const segs = _parseLocName(loc.locatorName || '');
+            return { ...loc, ...segs };
+          });
+        }
+        setMappedLocators(locs);
+        setFusionLocators([]);
+        setMapDisplayLimit(100);
+        setLocatorsCacheInfo({ fetchedAt: cached.fetchedAt, totalCount: cached.totalCount, orgCode, subCode });
+        setLocFilter({ area: '', zone: '', row: '', bay: '', level: '' });
+        // Auto-open filter modal so user can search right away
+        setPendingLocFilter({ area: '', zone: '', row: '', bay: '', level: '' });
+        setShowLocFilterModal(true);
+      } else {
+        // No cache — open org/sub picker
+        setShowLocatorOrgModal(true);
+      }
+    } catch (e) {
+      setShowLocatorOrgModal(true);
+    }
+  };
+
   // Load next batch of locators from Fusion (appends to existing)
   const fetchMoreLocators = async () => {
     const effectiveOrg = locatorSelectedOrg;
@@ -3639,10 +3687,7 @@ _Sent from MobileWMS_`;
             {/* Stock Locators */}
             <TouchableOpacity
               style={styles.compactMenuCard}
-              onPress={() => {
-                fetchStockLocators();
-                navigateTo('StockLocators');
-              }}
+              onPress={() => navigateToLocators()}
             >
               <View style={[styles.compactMenuIconBg, { backgroundColor: '#d1fae5' }]}>
                 <Text style={styles.compactMenuIcon}>📍</Text>
@@ -6838,7 +6883,7 @@ _Sent from MobileWMS_`;
               data={filteredLocators}
               keyExtractor={(item) => String(item.id)}
               contentContainerStyle={{ padding: 12 }}
-              onScrollBeginDrag={() => setShowSegmentDropdown(null)}
+              onScrollBeginDrag={() => {}}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={{
