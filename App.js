@@ -134,7 +134,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.6.2';
+const APP_VERSION = 'v1.6.3';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -306,6 +306,7 @@ export default function App() {
   const [locatorApiHasMore, setLocatorApiHasMore] = useState(false);
   const [locatorFetchingMore, setLocatorFetchingMore] = useState(false);
   const [mapDisplayLimit, setMapDisplayLimit] = useState(100);
+  const [onhandRefreshing, setOnhandRefreshing] = useState(false);
   const [locatorsCacheInfo, setLocatorsCacheInfo] = useState(null); // {fetchedAt, totalCount, orgCode, subCode}
   const locatorFetchAbortRef = useRef(null); // For cancelling in-flight requests
   // Segment filter state
@@ -1860,6 +1861,7 @@ _Sent from MobileWMS_`;
   // and update in-memory mappedLocators status. Safe to call in background.
   const refreshOnhandStatus = async (orgCode) => {
     if (!orgCode) return;
+    setOnhandRefreshing(true);
     try {
       const PAGE_SIZE = 500;
       let offset = 0;
@@ -1902,7 +1904,10 @@ _Sent from MobileWMS_`;
       return usedSet;
     } catch (e) {
       console.log('Onhand status refresh error:', e.message);
+      Alert.alert('Onhand Refresh Failed', e.message);
       return null;
+    } finally {
+      setOnhandRefreshing(false);
     }
   };
 
@@ -6569,6 +6574,21 @@ _Sent from MobileWMS_`;
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <TouchableOpacity onPress={() => { setApiInfoPage('StockLocators'); setShowApiInfoModal(true); }} style={{ padding: 4 }}>
                 <Text style={{ fontSize: 18, color: '#fff' }}>🔌</Text>
+              </TouchableOpacity>
+              {/* Fetch Onhand — refresh Used/Free status from Fusion */}
+              <TouchableOpacity
+                style={{ padding: 4, opacity: onhandRefreshing ? 0.5 : 1 }}
+                disabled={onhandRefreshing}
+                onPress={() => {
+                  const oc = locatorSelectedOrg?.warehouse_code || selectedOrg;
+                  if (!oc) { Alert.alert('Select Warehouse', 'Please select a warehouse first.'); return; }
+                  refreshOnhandStatus(oc);
+                }}
+              >
+                {onhandRefreshing
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Text style={{ fontSize: 18, color: '#fff' }}>📦</Text>
+                }
               </TouchableOpacity>
               {/* Refresh: check cache first, prompt if data exists */}
               <TouchableOpacity
