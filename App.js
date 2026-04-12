@@ -164,6 +164,8 @@ export default function App() {
   // Inventory Onhand dropdowns state
   const [showOnhandOrgDropdown, setShowOnhandOrgDropdown] = useState(false);
   const [showOnhandSubDropdown, setShowOnhandSubDropdown] = useState(false);
+  const [showSubInventoryModal, setShowSubInventoryModal] = useState(false);
+  const [subInventorySearch, setSubInventorySearch] = useState('');
 
   // Stock Locators org/sub selector modal
   const [showLocatorOrgModal, setShowLocatorOrgModal] = useState(false);
@@ -5065,37 +5067,18 @@ _Sent from MobileWMS_`;
                 )}
               </View>
 
-              {/* Subinventory Dropdown */}
+              {/* Subinventory Selector */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Subinventory (Optional)</Text>
                 <TouchableOpacity
                   style={[styles.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
-                  onPress={() => { setShowOnhandSubDropdown(!showOnhandSubDropdown); setShowOnhandOrgDropdown(false); }}
+                  onPress={() => { setSubInventorySearch(''); setShowSubInventoryModal(true); setShowOnhandOrgDropdown(false); }}
                 >
                   <Text style={{ color: searchSubinventory ? COLORS.text : '#aaa', fontSize: 14 }}>
                     {searchSubinventory || 'Select Subinventory (optional)'}
                   </Text>
                   <Text style={{ color: '#888' }}>▼</Text>
                 </TouchableOpacity>
-                {showOnhandSubDropdown && (
-                  <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, marginTop: 4 }}>
-                    <TouchableOpacity
-                      style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}
-                      onPress={() => { setSearchSubinventory(''); setShowOnhandSubDropdown(false); }}
-                    >
-                      <Text style={{ fontSize: 14, color: '#888' }}>All Subinventories</Text>
-                    </TouchableOpacity>
-                    {[...new Set(organizations.flatMap(o => (o.subinventories || []).map(s => s.code)))].map(sub => (
-                      <TouchableOpacity
-                        key={sub}
-                        style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}
-                        onPress={() => { setSearchSubinventory(sub); setShowOnhandSubDropdown(false); }}
-                      >
-                        <Text style={{ fontSize: 14, color: COLORS.text }}>{sub}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
               </View>
 
               {/* API Info */}
@@ -5108,7 +5091,7 @@ _Sent from MobileWMS_`;
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   style={styles.modalCancelButton}
-                  onPress={() => { setShowParameterModal(false); setShowOnhandOrgDropdown(false); setShowOnhandSubDropdown(false); }}
+                  onPress={() => { setShowParameterModal(false); setShowOnhandOrgDropdown(false); }}
                 >
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
@@ -5120,6 +5103,73 @@ _Sent from MobileWMS_`;
                   <Text style={styles.modalFetchText}>Fetch Data</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Subinventory Picker Modal */}
+        <Modal
+          visible={showSubInventoryModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowSubInventoryModal(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '70%', paddingBottom: 24 }}>
+              {/* Header */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: '#111' }}>Select Subinventory</Text>
+                <TouchableOpacity
+                  onPress={() => setShowSubInventoryModal(false)}
+                  style={{ backgroundColor: '#f3f4f6', borderRadius: 20, width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Text style={{ fontSize: 16, color: '#111', fontWeight: '700' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Search */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', margin: 12, backgroundColor: '#f3f4f6', borderRadius: 10, paddingHorizontal: 12 }}>
+                <Text style={{ fontSize: 16, marginRight: 8, color: '#6b7280' }}>🔍</Text>
+                <TextInput
+                  style={{ flex: 1, fontSize: 14, paddingVertical: 10, color: '#111' }}
+                  placeholder="Search subinventory..."
+                  placeholderTextColor="#9ca3af"
+                  value={subInventorySearch}
+                  onChangeText={setSubInventorySearch}
+                  autoCapitalize="characters"
+                />
+                {subInventorySearch.length > 0 && (
+                  <TouchableOpacity onPress={() => setSubInventorySearch('')}>
+                    <Text style={{ fontSize: 14, color: '#6b7280' }}>✕</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* List */}
+              <ScrollView keyboardShouldPersistTaps="handled">
+                {/* All option */}
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f3f4f6', backgroundColor: !searchSubinventory ? '#f0fdf4' : '#fff' }}
+                  onPress={() => { setSearchSubinventory(''); setShowSubInventoryModal(false); }}
+                >
+                  <Text style={{ flex: 1, fontSize: 14, color: !searchSubinventory ? '#059669' : '#374151' }}>All Subinventories</Text>
+                  {!searchSubinventory && <Text style={{ color: '#059669', fontSize: 16 }}>✓</Text>}
+                </TouchableOpacity>
+
+                {[...new Set(organizations.flatMap(o => (o.subinventories || []).map(s => s.code)))]
+                  .filter(sub => !subInventorySearch || sub.toLowerCase().includes(subInventorySearch.toLowerCase()))
+                  .map(sub => (
+                    <TouchableOpacity
+                      key={sub}
+                      style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f3f4f6', backgroundColor: searchSubinventory === sub ? '#f0fdf4' : '#fff' }}
+                      onPress={() => { setSearchSubinventory(sub); setShowSubInventoryModal(false); }}
+                    >
+                      <Text style={{ flex: 1, fontSize: 14, color: searchSubinventory === sub ? '#059669' : '#374151', fontWeight: searchSubinventory === sub ? '700' : '400' }}>{sub}</Text>
+                      {searchSubinventory === sub && <Text style={{ color: '#059669', fontSize: 16 }}>✓</Text>}
+                    </TouchableOpacity>
+                  ))
+                }
+              </ScrollView>
             </View>
           </View>
         </Modal>
