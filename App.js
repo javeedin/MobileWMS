@@ -134,7 +134,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.7.2';
+const APP_VERSION = 'v1.7.3';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -308,6 +308,8 @@ export default function App() {
   const [mapDisplayLimit, setMapDisplayLimit] = useState(100);
   const [onhandRefreshing, setOnhandRefreshing] = useState(false);
   const [locatorsCacheInfo, setLocatorsCacheInfo] = useState(null); // {fetchedAt, totalCount, orgCode, subCode}
+  const [showPOFetchModal, setShowPOFetchModal] = useState(false); // progress overlay for PO-flow locator fetch
+  const [poFetchDoneResult, setPoFetchDoneResult] = useState(null); // {total, usedCount, freeCount} shown after fetch+onhand
   const locatorFetchAbortRef = useRef(null); // For cancelling in-flight requests
   const locatorFetchCompleteRef = useRef(null); // Called with mapped[] after a full fetch — used by PO flow
   // Segment filter state
@@ -2510,13 +2512,11 @@ _Sent from MobileWMS_`;
         {
           text: 'OK',
           onPress: () => {
-            // After the full fetch + onhand refresh, auto-populate the locator picker
+            // After full fetch + onhand refresh, show done card then open picker
             locatorFetchCompleteRef.current = async (mapped, oc) => {
-              // Mark used locators via Fusion inventoryOnhandBalances
               let locs = mapped;
               if (oc) {
                 try {
-                  setLocatorPickerLoading(true);
                   const usedSet = await refreshOnhandStatus(oc);
                   if (usedSet) {
                     locs = mapped.map(loc => ({
@@ -2531,8 +2531,13 @@ _Sent from MobileWMS_`;
               const freeLocators = filterFree(locs);
               setAvailableLocators(freeLocators);
               setLocatorPickerLoading(false);
-              setShowLocatorPicker(true); // re-open picker with fresh data
+              // Show done summary — user taps "View Available" to open picker
+              const usedCnt = locs.filter(l => l.status === 'Used').length;
+              const freeCnt = locs.filter(l => l.status === 'Free').length;
+              setPoFetchDoneResult({ total: locs.length, usedCount: usedCnt, freeCount: freeCnt });
             };
+            setShowPOFetchModal(true);
+            setPoFetchDoneResult(null);
             setShowLocatorOrgModal(true);
           },
         },
@@ -5242,6 +5247,81 @@ _Sent from MobileWMS_`;
                   </TouchableOpacity>
                 )}
               </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* PO-flow locator fetch progress overlay — locked during processing */}
+        <Modal
+          visible={showPOFetchModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => {
+            // Only allow Android back-button dismiss when done; block during fetch/onhand
+            if (poFetchDoneResult && !locatorsLoading && !onhandRefreshing) {
+              setShowPOFetchModal(false);
+            }
+          }}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 20, padding: 28, width: '92%', alignItems: 'center', elevation: 10 }}>
+              {locatorsLoading ? (
+                /* Fetching all locator pages */
+                <>
+                  <ActivityIndicator size="large" color="#059669" />
+                  <Text style={{ marginTop: 16, fontSize: 16, fontWeight: '700', color: '#111' }}>Fetching Locators</Text>
+                  <Text style={{ marginTop: 8, fontSize: 13, color: '#6b7280', textAlign: 'center', lineHeight: 20 }}>
+                    {locatorsFetchProgress || 'Starting...'}
+                  </Text>
+                  <TouchableOpacity
+                    style={{ marginTop: 20, backgroundColor: '#fee2e2', borderRadius: 10, paddingHorizontal: 28, paddingVertical: 10, borderWidth: 1, borderColor: '#ef4444' }}
+                    onPress={() => { locatorFetchAbortRef.current?.abort(); setShowPOFetchModal(false); }}
+                  >
+                    <Text style={{ color: '#dc2626', fontWeight: '700', fontSize: 14 }}>✕ Cancel</Text>
+                  </TouchableOpacity>
+                </>
+              ) : onhandRefreshing ? (
+                /* Running inventoryOnhandBalances */
+                <>
+                  <ActivityIndicator size="large" color="#d97706" />
+                  <Text style={{ marginTop: 16, fontSize: 16, fontWeight: '700', color: '#111' }}>Checking Inventory</Text>
+                  <Text style={{ marginTop: 8, fontSize: 13, color: '#6b7280', textAlign: 'center', lineHeight: 20 }}>
+                    Fetching onhand balances from Oracle Fusion{'\n'}to mark which locators are used…
+                  </Text>
+                </>
+              ) : poFetchDoneResult ? (
+                /* Done — show summary */
+                <>
+                  <Text style={{ fontSize: 44, marginBottom: 8 }}>✅</Text>
+                  <Text style={{ fontSize: 17, fontWeight: '700', color: '#059669', marginBottom: 4 }}>Locators Ready</Text>
+                  <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 20 }}>Cached and used-status applied</Text>
+                  <View style={{ flexDirection: 'row', gap: 10, width: '100%', marginBottom: 20 }}>
+                    <View style={{ flex: 1, backgroundColor: '#f0fdf4', borderRadius: 10, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#bbf7d0' }}>
+                      <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#059669' }}>{poFetchDoneResult.total.toLocaleString()}</Text>
+                      <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Total</Text>
+                    </View>
+                    <View style={{ flex: 1, backgroundColor: '#fef3c7', borderRadius: 10, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#fde68a' }}>
+                      <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#d97706' }}>{poFetchDoneResult.usedCount.toLocaleString()}</Text>
+                      <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Used</Text>
+                    </View>
+                    <View style={{ flex: 1, backgroundColor: '#d1fae5', borderRadius: 10, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#6ee7b7' }}>
+                      <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#059669' }}>{poFetchDoneResult.freeCount.toLocaleString()}</Text>
+                      <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Free</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#059669', borderRadius: 12, paddingVertical: 14, width: '100%', alignItems: 'center' }}
+                    onPress={() => { setShowPOFetchModal(false); setShowLocatorPicker(true); }}
+                  >
+                    <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>
+                      View {poFetchDoneResult.freeCount.toLocaleString()} Available Locators →
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                /* Transitioning between states */
+                <ActivityIndicator size="large" color="#059669" />
+              )}
             </View>
           </View>
         </Modal>
