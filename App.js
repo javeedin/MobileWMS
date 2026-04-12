@@ -11077,7 +11077,7 @@ const styles = StyleSheet.create({
   },
   modalCancelButton: {
     flex: 1,
-    backgroundColor: COLORS.neutral50,
+    backgroundColor: '#E5E7EB',
     borderRadius: RADIUS.md,
     padding: SPACING.md,
     alignItems: 'center',
@@ -11086,7 +11086,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.neutral200,
   },
   modalCancelText: {
-    color: COLORS.neutral600,
+    color: '#111111',
     fontSize: FONT_SIZES.md,
     fontWeight: '600',
   },
