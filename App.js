@@ -134,7 +134,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.6.5';
+const APP_VERSION = 'v1.6.6';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -755,24 +755,31 @@ _Sent from MobileWMS_`;
 
     // If this is first split, also create line for remaining qty with auto-assigned locator
     if (splitLines.length === 0) {
-      // Use already assigned locator from Item Details or get next available
-      const existingLocator = scannedLocator || locatorInput;
-      const remainingLocator = existingLocator || freeLocators[locatorIndex]?.locatorName || '';
-      if (remainingLocator && !existingLocator) {
-        setSelectedLocatorsTemp(prev => {
-          const newSet = new Set(prev);
-          newSet.add(remainingLocator.toUpperCase());
-          return newSet;
-        });
+      const remainingQtyAfterSplit = totalQty - totalSplit;
+      if (remainingQtyAfterSplit > 0) {
+        // User split only part of the total — keep the remainder as the original line
+        const existingLocator = scannedLocator || locatorInput;
+        const remainingLocator = existingLocator || freeLocators[locatorIndex]?.locatorName || '';
+        if (remainingLocator && !existingLocator) {
+          setSelectedLocatorsTemp(prev => {
+            const newSet = new Set(prev);
+            newSet.add(remainingLocator.toUpperCase());
+            return newSet;
+          });
+        }
+        const remainingLine = {
+          id: 'original',
+          qty: remainingQtyAfterSplit,
+          locator: remainingLocator,
+          scanned: !!remainingLocator,
+        };
+        setSplitLines([remainingLine, ...newLines]);
+        console.log('Split created with remainder line:', [remainingLine, ...newLines].map(l => `${l.locator}(${l.qty})`));
+      } else {
+        // User split 100% of quantity — no remainder line needed
+        setSplitLines(newLines);
+        console.log('Split created (no remainder):', newLines.map(l => `${l.locator}(${l.qty})`));
       }
-      const remainingLine = {
-        id: 'original',
-        qty: totalQty - totalSplit,
-        locator: remainingLocator,
-        scanned: !!remainingLocator,
-      };
-      setSplitLines([remainingLine, ...newLines]);
-      console.log('Split created with auto-assigned locators:', [remainingLine, ...newLines].map(l => l.locator));
     } else {
       // Update the first line's qty (remaining) and add new splits
       setSplitLines(prev => {
