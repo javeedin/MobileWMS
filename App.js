@@ -301,6 +301,10 @@ export default function App() {
   // Pagination state
   const [locatorPageSize, setLocatorPageSize] = useState(100);
   const [locatorCurrentPage, setLocatorCurrentPage] = useState(1);
+  const [locatorFusionOffset, setLocatorFusionOffset] = useState(0); // next offset to fetch from Fusion
+  const [locatorApiHasMore, setLocatorApiHasMore] = useState(false); // more pages available on server
+  const [locatorFetchingMore, setLocatorFetchingMore] = useState(false); // loading state for "Load More"
+  const [mapDisplayLimit, setMapDisplayLimit] = useState(100); // how many locators to show in map view
   const locatorFetchAbortRef = useRef(null); // For cancelling in-flight requests
   // Segment filter state
   const [segmentFilters, setSegmentFilters] = useState({ seg1: '', seg2: '', seg3: '' });
@@ -1765,7 +1769,43 @@ _Sent from MobileWMS_`;
   // ============= STOCK LOCATORS FUNCTIONS =============
 
   // Fetch Stock Locators - from Oracle Fusion and map with onhand data
-  const fetchStockLocators = async () => {
+  // Helper: build mapped-locators array from fusion items + onhand items
+  const _buildMappedLocators = (fusionItems, onhandItems) => {
+    const onhandLocatorSet = new Set();
+    const onhandByLocator = {};
+    onhandItems.forEach(item => {
+      const locatorName = item.locator_id || item.locator || '';
+      if (locatorName) {
+        onhandLocatorSet.add(locatorName);
+        if (!onhandByLocator[locatorName]) onhandByLocator[locatorName] = [];
+        onhandByLocator[locatorName].push(item);
+      }
+    });
+    return fusionItems.map(loc => {
+      const locatorName = loc.LocatorName || '';
+      const isUsed = onhandLocatorSet.has(locatorName);
+      const items = onhandByLocator[locatorName] || [];
+      const totalQty = items.reduce((sum, i) => sum + (parseFloat(i.primaryquantity) || 0), 0);
+      return {
+        ...loc,
+        id: loc.InventoryLocationId || locatorName,
+        locatorName,
+        subinventory: loc.SubinventoryCode || '',
+        status: isUsed ? 'Used' : 'Free',
+        statusCode: loc.MaterialStatusCode || 'Active',
+        itemCount: items.length,
+        totalQuantity: totalQty,
+        items,
+        creationDate: loc.CreationDate,
+      };
+    });
+  };
+
+  // FIX: accept orgOverride/subOverride to avoid React async-state race condition
+  const fetchStockLocators = async (orgOverride, subOverride) => {
+    const effectiveOrg = orgOverride ?? locatorSelectedOrg;
+    const effectiveSub = subOverride !== undefined ? subOverride : locatorSelectedSub;
+
     // Cancel any previous in-flight request
     if (locatorFetchAbortRef.current) {
       locatorFetchAbortRef.current.abort();
@@ -1776,20 +1816,23 @@ _Sent from MobileWMS_`;
     setLocatorsLoading(true);
     setLocatorsFetchProgress('Starting...');
     setLocatorCurrentPage(1);
+    setLocatorFusionOffset(0);
+    setLocatorApiHasMore(false);
+    setMapDisplayLimit(100);
     setFusionLocators([]);
     setOnhandLocators([]);
     setMappedLocators([]);
 
-    const orgCode = locatorSelectedOrg?.warehouse_code || selectedOrg || 'MLCECLAIM';
+    const orgCode = effectiveOrg?.warehouse_code || selectedOrg || 'MLCECLAIM';
 
     // Get locator_id from selected subinventory in org data
-    const selectedSubObj = locatorSelectedOrg?.subinventories?.find(s => s.code === locatorSelectedSub);
+    const selectedSubObj = effectiveOrg?.subinventories?.find(s => s.code === effectiveSub);
     const fusionLocatorId = selectedSubObj?.locator_id;
 
     if (!fusionLocatorId) {
       Alert.alert(
         'Locator ID Missing',
-        `No Locator ID configured for subinventory "${locatorSelectedSub || 'selected'}". Please configure it in Oracle or select a different subinventory (look for ✓ in the LID column).`
+        `No Locator ID configured for subinventory "${effectiveSub || 'selected'}". Please configure it in Oracle or select a different subinventory (look for ✓ in the LID column).`
       );
       setLocatorsLoading(false);
       setLocatorsFetchProgress('');
@@ -1797,106 +1840,53 @@ _Sent from MobileWMS_`;
     }
 
     try {
-      // --- Fetch Fusion locators with full pagination ---
-      const LIMIT = 500;
-      let offset = 0;
-      let allFusionItems = [];
-      let hasMore = true;
+      // --- Fetch FIRST page only from Fusion (lazy – more loaded via "Load Next" button) ---
+      const LIMIT = locatorPageSize;
+      setLocatorsFetchProgress(`Fetching first ${LIMIT} locators...`);
 
-      while (hasMore) {
-        if (abortController.signal.aborted) break;
-        setLocatorsFetchProgress(`Fetching locators... ${allFusionItems.length} loaded`);
-        const fusionResponse = await fetch(
-          `${ORACLE_FUSION_BASE}/subinventories/${fusionLocatorId}/child/locators?offset=${offset}&limit=${LIMIT}`,
-          {
-            method: 'GET',
-            headers: {
-              'Authorization': `Basic ${ORACLE_FUSION_AUTH}`,
-              'Content-Type': 'application/json',
-            },
-            signal: abortController.signal,
-          }
-        );
-        const fusionText = await fusionResponse.text();
-        let fusionData = { items: [], hasMore: false };
-        try { fusionData = JSON.parse(fusionText); } catch (e) {}
+      const fusionResponse = await fetch(
+        `${ORACLE_FUSION_BASE}/subinventories/${fusionLocatorId}/child/locators?offset=0&limit=${LIMIT}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Basic ${ORACLE_FUSION_AUTH}`,
+            'Content-Type': 'application/json',
+          },
+          signal: abortController.signal,
+        }
+      );
+      const fusionText = await fusionResponse.text();
+      let fusionData = { items: [], hasMore: false };
+      try { fusionData = JSON.parse(fusionText); } catch (e) {}
 
-        const pageItems = fusionData.items || [];
-        allFusionItems = allFusionItems.concat(pageItems);
-        console.log(`Fusion page offset=${offset}: ${pageItems.length} items, hasMore=${fusionData.hasMore}`);
+      if (abortController.signal.aborted) { setLocatorsLoading(false); setLocatorsFetchProgress(''); return; }
 
-        hasMore = fusionData.hasMore === true && pageItems.length === LIMIT;
-        offset += LIMIT;
-      }
+      const pageItems = fusionData.items || [];
+      const serverHasMore = fusionData.hasMore === true;
 
-      if (abortController.signal.aborted) {
-        setLocatorsLoading(false);
-        setLocatorsFetchProgress('');
-        return;
-      }
+      console.log(`Fusion first page: ${pageItems.length} items, hasMore=${serverHasMore}`);
+      if (pageItems.length > 0) setLocatorSubinventory(pageItems[0].SubinventoryCode || 'AMKE');
+      setFusionLocators(pageItems);
+      setLocatorFusionOffset(LIMIT);
+      setLocatorApiHasMore(serverHasMore);
 
-      console.log('Total Fusion locators fetched:', allFusionItems.length);
-      if (allFusionItems.length > 0) {
-        setLocatorSubinventory(allFusionItems[0].SubinventoryCode || 'AMKE');
-      }
-      setFusionLocators(allFusionItems);
-
-      // --- Fetch APEX onhand by locator ---
-      setLocatorsFetchProgress(`${allFusionItems.length} locators loaded. Fetching onhand data...`);
+      // --- Fetch APEX onhand for org ---
+      setLocatorsFetchProgress(`${pageItems.length} locators loaded. Fetching onhand data...`);
       const onhandResponse = await fetch(
         `${API_BASE}/getonhandsbylocator?P_ORGANIZATIONCODE=${orgCode}&limit=9999`,
         { signal: abortController.signal }
       );
+      if (abortController.signal.aborted) { setLocatorsLoading(false); setLocatorsFetchProgress(''); return; }
+
       const onhandText = await onhandResponse.text();
+      let onhandRaw = { items: [] };
+      try { onhandRaw = JSON.parse(onhandText); } catch (e) {}
 
-      let onhandData = { items: [] };
-      try { onhandData = JSON.parse(onhandText); } catch (e) {}
-
-      const onhandItems = onhandData.items || [];
-      console.log('Onhand items count:', onhandItems.length);
+      const onhandItems = onhandRaw.items || [];
       setOnhandLocators(onhandItems);
 
-      const fusionItems = allFusionItems;
-
-      // Map locators - mark as Used or Free
-      const onhandLocatorSet = new Set();
-      const onhandByLocator = {};
-
-      onhandItems.forEach(item => {
-        const locatorName = item.locator_id || item.locator || '';
-        if (locatorName) {
-          onhandLocatorSet.add(locatorName);
-          if (!onhandByLocator[locatorName]) {
-            onhandByLocator[locatorName] = [];
-          }
-          onhandByLocator[locatorName].push(item);
-        }
-      });
-
-      const mapped = fusionItems.map(loc => {
-        const locatorName = loc.LocatorName || '';
-        const isUsed = onhandLocatorSet.has(locatorName);
-        const items = onhandByLocator[locatorName] || [];
-        const totalQty = items.reduce((sum, i) => sum + (parseFloat(i.primaryquantity) || 0), 0);
-
-        return {
-          ...loc,
-          id: loc.InventoryLocationId || locatorName,
-          locatorName: locatorName,
-          subinventory: loc.SubinventoryCode || '',
-          status: isUsed ? 'Used' : 'Free',
-          statusCode: loc.MaterialStatusCode || 'Active',
-          itemCount: items.length,
-          totalQuantity: totalQty,
-          items: items,
-          creationDate: loc.CreationDate,
-        };
-      });
-
+      const mapped = _buildMappedLocators(pageItems, onhandItems);
       console.log('Mapped locators count:', mapped.length);
-      console.log('Used locators:', mapped.filter(l => l.status === 'Used').length);
-      console.log('Free locators:', mapped.filter(l => l.status === 'Free').length);
-
       setMappedLocators(mapped);
       setLocatorsLoading(false);
       setLocatorsFetchProgress('');
@@ -1910,6 +1900,50 @@ _Sent from MobileWMS_`;
       }
       setLocatorsLoading(false);
       setLocatorsFetchProgress('');
+    }
+  };
+
+  // Load next batch of locators from Fusion (appends to existing)
+  const fetchMoreLocators = async () => {
+    const effectiveOrg = locatorSelectedOrg;
+    const effectiveSub = locatorSelectedSub;
+
+    const selectedSubObj = effectiveOrg?.subinventories?.find(s => s.code === effectiveSub);
+    const fusionLocatorId = selectedSubObj?.locator_id;
+    if (!fusionLocatorId || locatorFetchingMore) return;
+
+    setLocatorFetchingMore(true);
+    const LIMIT = locatorPageSize;
+    try {
+      const fusionResponse = await fetch(
+        `${ORACLE_FUSION_BASE}/subinventories/${fusionLocatorId}/child/locators?offset=${locatorFusionOffset}&limit=${LIMIT}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Basic ${ORACLE_FUSION_AUTH}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      const fusionText = await fusionResponse.text();
+      let fusionData = { items: [], hasMore: false };
+      try { fusionData = JSON.parse(fusionText); } catch (e) {}
+
+      const pageItems = fusionData.items || [];
+      const serverHasMore = fusionData.hasMore === true;
+      console.log(`Fusion next page offset=${locatorFusionOffset}: ${pageItems.length} items, hasMore=${serverHasMore}`);
+
+      const newFusionItems = [...fusionLocators, ...pageItems];
+      setFusionLocators(newFusionItems);
+      setLocatorFusionOffset(locatorFusionOffset + LIMIT);
+      setLocatorApiHasMore(serverHasMore);
+
+      const mapped = _buildMappedLocators(newFusionItems, onhandLocators);
+      setMappedLocators(mapped);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to load more locators: ' + e.message);
+    } finally {
+      setLocatorFetchingMore(false);
     }
   };
 
@@ -6268,7 +6302,8 @@ _Sent from MobileWMS_`;
                               setLocatorSelectedOrg(org);
                               setLocatorSelectedSub(sub.code);
                               setShowLocatorOrgModal(false);
-                              fetchStockLocators();
+                              // Pass values directly — avoids React async-state race condition
+                              fetchStockLocators(org, sub.code);
                             }}
                           >
                             <Text style={{ fontSize: 14, color: COLORS.text, flex: 1 }}>📦 {sub.code}</Text>
@@ -6299,7 +6334,7 @@ _Sent from MobileWMS_`;
                           setLocatorSelectedOrg(org);
                           setLocatorSelectedSub('');
                           setShowLocatorOrgModal(false);
-                          fetchStockLocators();
+                          fetchStockLocators(org, '');
                         }}
                       >
                         <Text style={{ fontSize: 13, color: '#888' }}>No subinventories configured</Text>
@@ -6773,29 +6808,44 @@ _Sent from MobileWMS_`;
             />
 
               {/* Pagination bar */}
-              {totalPages > 1 && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5e7eb', gap: 8 }}>
-                  <TouchableOpacity
-                    disabled={safePage <= 1}
-                    onPress={() => setLocatorCurrentPage(p => Math.max(1, p - 1))}
-                    style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 6, backgroundColor: safePage <= 1 ? '#f3f4f6' : '#059669' }}
-                  >
-                    <Text style={{ color: safePage <= 1 ? '#9ca3af' : '#fff', fontWeight: '700' }}>‹ Prev</Text>
-                  </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5e7eb', gap: 8, flexWrap: 'wrap' }}>
+                <TouchableOpacity
+                  disabled={safePage <= 1}
+                  onPress={() => setLocatorCurrentPage(p => Math.max(1, p - 1))}
+                  style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 6, backgroundColor: safePage <= 1 ? '#f3f4f6' : '#059669' }}
+                >
+                  <Text style={{ color: safePage <= 1 ? '#9ca3af' : '#fff', fontWeight: '700' }}>‹ Prev</Text>
+                </TouchableOpacity>
 
-                  <Text style={{ fontSize: 13, color: COLORS.text, fontWeight: '600', paddingHorizontal: 8 }}>
-                    {safePage} / {totalPages}
-                  </Text>
+                <Text style={{ fontSize: 13, color: COLORS.text, fontWeight: '600', paddingHorizontal: 8 }}>
+                  {safePage} / {totalPages}
+                </Text>
 
+                {/* Next local page OR load next batch from server */}
+                {safePage < totalPages ? (
                   <TouchableOpacity
-                    disabled={safePage >= totalPages}
-                    onPress={() => setLocatorCurrentPage(p => Math.min(totalPages, p + 1))}
-                    style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 6, backgroundColor: safePage >= totalPages ? '#f3f4f6' : '#059669' }}
+                    onPress={() => setLocatorCurrentPage(p => p + 1)}
+                    style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 6, backgroundColor: '#059669' }}
                   >
-                    <Text style={{ color: safePage >= totalPages ? '#9ca3af' : '#fff', fontWeight: '700' }}>Next ›</Text>
+                    <Text style={{ color: '#fff', fontWeight: '700' }}>Next ›</Text>
                   </TouchableOpacity>
-                </View>
-              )}
+                ) : locatorApiHasMore ? (
+                  <TouchableOpacity
+                    onPress={fetchMoreLocators}
+                    disabled={locatorFetchingMore}
+                    style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 6, backgroundColor: locatorFetchingMore ? '#d1fae5' : '#1d4ed8', flexDirection: 'row', alignItems: 'center' }}
+                  >
+                    {locatorFetchingMore
+                      ? <><ActivityIndicator size="small" color="#059669" style={{ marginRight: 6 }} /><Text style={{ color: '#059669', fontWeight: '700' }}>Loading...</Text></>
+                      : <Text style={{ color: '#fff', fontWeight: '700' }}>Load Next {locatorPageSize} ›</Text>
+                    }
+                  </TouchableOpacity>
+                ) : (
+                  <View style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 6, backgroundColor: '#f3f4f6' }}>
+                    <Text style={{ color: '#9ca3af', fontWeight: '700' }}>End</Text>
+                  </View>
+                )}
+              </View>
             </>
           )
         )}
@@ -6823,11 +6873,19 @@ _Sent from MobileWMS_`;
               </View>
             </View>
 
-            {/* Map by Area (Segment 1) */}
+            {/* Map counter */}
+            {mappedLocators.length > 0 && (
+              <Text style={{ textAlign: 'center', fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
+                Showing {Math.min(mapDisplayLimit, mappedLocators.length)} of {mappedLocators.length} locators
+              </Text>
+            )}
+
+            {/* Map by Area (Segment 1) — limited to mapDisplayLimit items to avoid crash */}
             {(() => {
+              const visibleMapLocators = mappedLocators.slice(0, mapDisplayLimit);
               // Group locators by Area (seg1) and Bin (seg2)
               const areaGroups = {};
-              mappedLocators.forEach(loc => {
+              visibleMapLocators.forEach(loc => {
                 const parts = (loc.locatorName || '').split('-');
                 const area = parts[0] || 'Unknown';
                 const bin = parts[1] || '';
@@ -6858,7 +6916,7 @@ _Sent from MobileWMS_`;
                 return '#ef4444'; // Red - High
               };
 
-              return Object.entries(areaGroups).sort().map(([area, data]) => (
+              const areaElements = Object.entries(areaGroups).sort().map(([area, data]) => (
                 <View key={area} style={{ marginBottom: 16 }}>
                   {/* Area Header */}
                   <View style={{
@@ -6946,7 +7004,36 @@ _Sent from MobileWMS_`;
                   </View>
                 </View>
               ));
+
+              return <>{areaElements}</>;
             })()}
+
+            {/* Map pagination: Show Next 100 (local) or Load from Server */}
+            <View style={{ marginTop: 12, marginBottom: 4, alignItems: 'center' }}>
+              {mapDisplayLimit < mappedLocators.length ? (
+                <TouchableOpacity
+                  style={{ backgroundColor: '#059669', borderRadius: 8, paddingHorizontal: 24, paddingVertical: 10 }}
+                  onPress={() => setMapDisplayLimit(l => l + 100)}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>
+                    Show Next 100 ({mappedLocators.length - mapDisplayLimit} more loaded)
+                  </Text>
+                </TouchableOpacity>
+              ) : locatorApiHasMore ? (
+                <TouchableOpacity
+                  onPress={fetchMoreLocators}
+                  disabled={locatorFetchingMore}
+                  style={{ backgroundColor: locatorFetchingMore ? '#d1fae5' : '#1d4ed8', borderRadius: 8, paddingHorizontal: 24, paddingVertical: 10, flexDirection: 'row', alignItems: 'center' }}
+                >
+                  {locatorFetchingMore
+                    ? <><ActivityIndicator size="small" color="#059669" style={{ marginRight: 6 }} /><Text style={{ color: '#059669', fontWeight: '700' }}>Loading...</Text></>
+                    : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Load Next {locatorPageSize} from Server</Text>
+                  }
+                </TouchableOpacity>
+              ) : mappedLocators.length > 0 ? (
+                <Text style={{ fontSize: 12, color: '#6b7280' }}>All {mappedLocators.length} locators shown in map</Text>
+              ) : null}
+            </View>
 
             {/* Summary Card */}
             <View style={{
