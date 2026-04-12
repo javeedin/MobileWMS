@@ -134,7 +134,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.6.8';
+const APP_VERSION = 'v1.6.9';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -6717,6 +6717,42 @@ _Sent from MobileWMS_`;
                 }}
               >
                 <Text style={{ fontSize: 20, color: '#fff' }}>🔄</Text>
+              </TouchableOpacity>
+              {/* Clear Cache — removes all locator + onhand-status data from AsyncStorage */}
+              <TouchableOpacity
+                style={{ padding: 4 }}
+                onPress={() => {
+                  const orgCode = locatorSelectedOrg?.warehouse_code || selectedOrg;
+                  const subCode = locatorSelectedSub;
+                  Alert.alert(
+                    '🗑 Clear Locator Cache',
+                    `This will delete all cached locators${orgCode && subCode ? ` for ${orgCode}/${subCode}` : ''} and the used-status data from this device.\n\nThe app will fall back to API on next locator fetch.`,
+                    [
+                      {
+                        text: 'Clear Cache',
+                        style: 'destructive',
+                        onPress: async () => {
+                          try {
+                            const promises = [];
+                            if (orgCode && subCode) promises.push(clearLocatorsCache(orgCode, subCode));
+                            if (orgCode) promises.push(AsyncStorage.removeItem(ONHAND_STATUS_KEY(orgCode)));
+                            await Promise.all(promises);
+                          } catch (e) {}
+                          // Reset in-memory state
+                          setMappedLocators([]);
+                          setFusionLocators([]);
+                          setOnhandLocators([]);
+                          setLocatorsCacheInfo(null);
+                          setLocFilter({ area: '', zone: '', row: '', bay: '', level: '' });
+                          Alert.alert('Done', 'Locator cache cleared. API will be used on next fetch.');
+                        },
+                      },
+                      { text: 'Cancel', style: 'cancel' },
+                    ]
+                  );
+                }}
+              >
+                <Text style={{ fontSize: 18, color: '#fff' }}>🗑</Text>
               </TouchableOpacity>
             </View>
           </View>
