@@ -153,7 +153,8 @@ export default function App() {
   // Organization state
   const [selectedOrg, setSelectedOrg] = useState(null);
   const [showOrgModal, setShowOrgModal] = useState(false);
-  const organizations = ['AMS', 'MLCECLAIM'];
+  const [organizations, setOrganizations] = useState([]);
+  const [orgsModalLoading, setOrgsModalLoading] = useState(false);
 
   // Navigation state
   const [currentScreen, setCurrentScreen] = useState('Login');
@@ -428,6 +429,21 @@ export default function App() {
         setUser({ name: username, username: username });
         setIsLoggedIn(true);
         setShowOrgModal(true);
+        // Fetch organizations for logged-in user
+        setOrgsModalLoading(true);
+        try {
+          const orgsResponse = await fetch(
+            `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/getinventoryorgsformobileapp?USER_NAME=${encodeURIComponent(username)}`
+          );
+          const orgsData = await orgsResponse.json();
+          const orgList = (orgsData.items || []).map(item => item.warehouse).filter(Boolean);
+          setOrganizations(orgList);
+        } catch (e) {
+          console.error('Failed to fetch organizations:', e);
+          setOrganizations(['AMS', 'MLCECLAIM']); // fallback
+        } finally {
+          setOrgsModalLoading(false);
+        }
       } else {
         Alert.alert('Login Failed', data.message || data.MESSAGE || 'Invalid username or password');
       }
@@ -2754,18 +2770,22 @@ _Sent from MobileWMS_`;
           <Text style={styles.modalTitle}>Select Organization</Text>
           <Text style={styles.modalSubtitle}>Choose your organization</Text>
 
-          <ScrollView style={styles.orgScrollView} showsVerticalScrollIndicator={true}>
-            {organizations.map((org) => (
-              <TouchableOpacity
-                key={org}
-                style={styles.orgButton}
-                onPress={() => handleOrgSelection(org)}
-              >
-                <Text style={styles.orgButtonText}>{org}</Text>
-                <Text style={styles.orgButtonArrow}>→</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          {orgsModalLoading ? (
+            <ActivityIndicator size="large" color={COLORS.primary} style={{ marginVertical: 24 }} />
+          ) : (
+            <ScrollView style={styles.orgScrollView} showsVerticalScrollIndicator={true}>
+              {organizations.map((org) => (
+                <TouchableOpacity
+                  key={org}
+                  style={styles.orgButton}
+                  onPress={() => handleOrgSelection(org)}
+                >
+                  <Text style={styles.orgButtonText}>{org}</Text>
+                  <Text style={styles.orgButtonArrow}>→</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
         </View>
       </View>
     </Modal>
@@ -10129,7 +10149,7 @@ const styles = StyleSheet.create({
   // ========== BOTTOM NAVIGATION ==========
   bottomNav: {
     flexDirection: 'row',
-    backgroundColor: COLORS.surface,
+    backgroundColor: '#F3F4F6',
     borderTopWidth: 1,
     borderTopColor: COLORS.neutral100,
     paddingVertical: SPACING.sm,
