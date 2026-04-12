@@ -134,7 +134,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.6.0';
+const APP_VERSION = 'v1.6.1';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -2022,6 +2022,12 @@ _Sent from MobileWMS_`;
     setShowLocatorOrgModal(false);
 
     const orgCode = org?.warehouse_code || selectedOrg || '';
+
+    // Persist this selection so we can restore it on next app start
+    try {
+      await AsyncStorage.setItem('@wms_last_locator_org_v1', JSON.stringify({ orgCode, subCode, orgObj: org }));
+    } catch (e) {}
+
     const cached = await loadLocatorsFromCache(orgCode, subCode);
 
     if (cached && cached.locators && cached.locators.length > 0) {
@@ -2077,13 +2083,34 @@ _Sent from MobileWMS_`;
       return;
     }
 
-    // Not in memory — try cache silently (no prompt)
-    const orgCode = locatorSelectedOrg?.warehouse_code || selectedOrg;
-    const subCode = locatorSelectedSub;
+    // Not in memory — resolve org/sub from state or last-saved selection
+    let orgCode = locatorSelectedOrg?.warehouse_code || selectedOrg;
+    let subCode = locatorSelectedSub;
+    let orgObj  = locatorSelectedOrg;
+
     if (!orgCode || !subCode) {
+      // State is empty (fresh app start) — restore last selection from AsyncStorage
+      try {
+        const savedRaw = await AsyncStorage.getItem('@wms_last_locator_org_v1');
+        if (savedRaw) {
+          const saved = JSON.parse(savedRaw);
+          orgCode = saved.orgCode;
+          subCode = saved.subCode;
+          orgObj  = saved.orgObj;
+          // Restore state so subsequent fetch/refresh operations work
+          if (orgObj) setLocatorSelectedOrg(orgObj);
+          if (subCode) setLocatorSelectedSub(subCode);
+        }
+      } catch (e) {}
+    }
+
+    if (!orgCode || !subCode) {
+      // Truly no selection ever made — open picker
       setShowLocatorOrgModal(true);
       return;
     }
+
+    // Try cache silently
     try {
       const cached = await loadLocatorsFromCache(orgCode, subCode);
       if (cached && cached.locators?.length > 0) {
