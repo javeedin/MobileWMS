@@ -1723,13 +1723,17 @@ _Sent from MobileWMS_`;
     setOnhandLocators([]);
     setMappedLocators([]);
 
-    const orgCode = selectedOrg || 'MLCECLAIM';
+    const orgCode = locatorSelectedOrg?.warehouse_code || selectedOrg || 'MLCECLAIM';
+
+    // Get locator_id from selected subinventory in org data
+    const selectedSub = locatorSelectedOrg?.subinventories?.find(s => s.code === locatorSelectedSub);
+    const fusionLocatorId = selectedSub?.locator_id || '00020000000EACED00057708000110D931FEAC3100000003423242';
 
     try {
       // Fetch both APIs in parallel
       const [fusionResponse, onhandResponse] = await Promise.all([
-        // Oracle Fusion API - Get all locators
-        fetch(`${ORACLE_FUSION_BASE}/subinventories/00020000000EACED00057708000110D931FEAC3100000003423242/child/locators?offset=0&limit=500`, {
+        // Oracle Fusion API - Get all locators using dynamic locator_id
+        fetch(`${ORACLE_FUSION_BASE}/subinventories/${fusionLocatorId}/child/locators?offset=0&limit=500`, {
           method: 'GET',
           headers: {
             'Authorization': `Basic ${ORACLE_FUSION_AUTH}`,
@@ -2832,21 +2836,27 @@ _Sent from MobileWMS_`;
   );
 
   // ---- Global API Info Modal ----
+  // Dynamic API info — uses actual selected org/subinventory values
+  const _locApiOrgCode = locatorSelectedOrg?.warehouse_code || selectedOrg || 'MLC';
+  const _locApiSub = locatorSelectedSub || 'B2B';
+  const _locApiLid = locatorSelectedOrg?.subinventories?.find(s => s.code === locatorSelectedSub)?.locator_id || '00020000000EACED00057708000110D931FEAC3100000003423242';
+  const _invApiOrg = searchOrgCode || selectedOrg || 'MLC';
+
   const API_INFO = {
     Inventory: {
       title: 'Inventory Onhand APIs',
       color: '#C74634',
       apis: [
-        { method: 'GET', name: 'Get Onhand', url: 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhand?orgainzation_code=MLC', params: 'orgainzation_code, subinventory (optional)', description: 'Fetches onhand inventory by organization' },
+        { method: 'GET', name: 'Get Onhand', url: `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhand?orgainzation_code=${_invApiOrg}`, params: 'orgainzation_code, subinventory (optional)', description: 'Fetches onhand inventory by organization' },
       ],
     },
     StockLocators: {
       title: 'Stock Locators APIs',
       color: '#059669',
       apis: [
-        { method: 'GET', name: 'Get Locators (Fusion)', url: 'https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05/subinventories/{locator_id}/child/locators?offset=0&limit=500', params: 'Authorization (Basic)', description: 'Master list of all locators from Oracle Fusion' },
-        { method: 'GET', name: 'Get Onhand by Locator', url: 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandsbylocator?P_ORGANIZATIONCODE=MLC', params: 'P_ORGANIZATIONCODE', description: 'Onhand inventory grouped by locator (Used/Free status)' },
-        { method: 'GET', name: 'Get Subinventory Locator ID', url: 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getsubinventorylocatorid?P_ORGANIZATION_CODE=MLC&P_SUB_INVENTORY=B2B', params: 'P_ORGANIZATION_CODE, P_SUB_INVENTORY', description: 'Resolves dynamic Fusion locator ID for a subinventory' },
+        { method: 'GET', name: 'Get Locators (Fusion)', url: `https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05/subinventories/${_locApiLid}/child/locators?offset=0&limit=500`, params: 'Authorization (Basic)', description: 'Master list of all locators from Oracle Fusion' },
+        { method: 'GET', name: 'Get Onhand by Locator', url: `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandsbylocator?P_ORGANIZATIONCODE=${_locApiOrgCode}`, params: 'P_ORGANIZATIONCODE', description: 'Onhand inventory grouped by locator (Used/Free status)' },
+        { method: 'GET', name: 'Get Subinventory Locator ID', url: `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getsubinventorylocatorid?P_ORGANIZATION_CODE=${_locApiOrgCode}&P_SUB_INVENTORY=${_locApiSub}`, params: 'P_ORGANIZATION_CODE, P_SUB_INVENTORY', description: 'Resolves dynamic Fusion locator ID for a subinventory' },
       ],
     },
   };
