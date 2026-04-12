@@ -2815,12 +2815,6 @@ _Sent from MobileWMS_`;
                 >
                   <View style={{ flex: 1 }}>
                     <Text style={styles.orgButtonText}>{org.warehouse}</Text>
-                    {org.warehouse_code ? (
-                      <Text style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
-                        Code: {org.warehouse_code}
-                        {org.subinventory_codes?.length > 0 ? ` • Sub: ${org.subinventory_codes.join(', ')}` : ''}
-                      </Text>
-                    ) : null}
                   </View>
                   <Text style={styles.orgButtonArrow}>→</Text>
                 </TouchableOpacity>
@@ -2838,16 +2832,16 @@ _Sent from MobileWMS_`;
       title: 'Inventory Onhand APIs',
       color: '#C74634',
       apis: [
-        { method: 'GET', name: 'Get Onhand', url: '/INVENTORY/getonhand', params: 'orgainzation_code, subinventory (optional)', description: 'Fetches onhand inventory by organization' },
+        { method: 'GET', name: 'Get Onhand', url: 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhand?orgainzation_code=MLC', params: 'orgainzation_code, subinventory (optional)', description: 'Fetches onhand inventory by organization' },
       ],
     },
     StockLocators: {
       title: 'Stock Locators APIs',
       color: '#059669',
       apis: [
-        { method: 'GET', name: 'Get Locators (Fusion)', url: '/subinventories/{id}/child/locators?offset=0&limit=500', params: 'Authorization header', description: 'Master list of all locators from Oracle Fusion' },
-        { method: 'GET', name: 'Get Onhand by Locator (APEX)', url: '/INVENTORY/getonhandsbylocator', params: 'P_ORGANIZATIONCODE', description: 'Onhand inventory grouped by locator (Used/Free status)' },
-        { method: 'GET', name: 'Get Subinventory Locator ID', url: '/INVENTORY/getsubinventorylocatorid', params: 'P_ORGANIZATION_CODE, P_SUB_INVENTORY', description: 'Resolves dynamic Fusion locator ID for a subinventory' },
+        { method: 'GET', name: 'Get Locators (Fusion)', url: 'https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05/subinventories/{locator_id}/child/locators?offset=0&limit=500', params: 'Authorization (Basic)', description: 'Master list of all locators from Oracle Fusion' },
+        { method: 'GET', name: 'Get Onhand by Locator', url: 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandsbylocator?P_ORGANIZATIONCODE=MLC', params: 'P_ORGANIZATIONCODE', description: 'Onhand inventory grouped by locator (Used/Free status)' },
+        { method: 'GET', name: 'Get Subinventory Locator ID', url: 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getsubinventorylocatorid?P_ORGANIZATION_CODE=MLC&P_SUB_INVENTORY=B2B', params: 'P_ORGANIZATION_CODE, P_SUB_INVENTORY', description: 'Resolves dynamic Fusion locator ID for a subinventory' },
       ],
     },
   };
@@ -2871,7 +2865,13 @@ _Sent from MobileWMS_`;
                     <View style={{ backgroundColor: api.method === 'GET' ? '#d1fae5' : '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginRight: 8 }}>
                       <Text style={{ fontSize: 10, fontWeight: '700', color: api.method === 'GET' ? '#065f46' : '#92400e' }}>{api.method}</Text>
                     </View>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.text }}>{api.name}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.text, flex: 1 }}>{api.name}</Text>
+                    <TouchableOpacity
+                      onPress={() => Share.share({ message: api.url, title: api.name })}
+                      style={{ padding: 4, backgroundColor: '#e0f2fe', borderRadius: 6 }}
+                    >
+                      <Text style={{ fontSize: 14 }}>📋</Text>
+                    </TouchableOpacity>
                   </View>
                   <Text style={{ fontSize: 10, color: '#0369a1', fontFamily: 'monospace', marginBottom: 4 }}>{api.url}</Text>
                   <Text style={{ fontSize: 11, color: '#64748b' }}>Params: {api.params}</Text>
@@ -5982,7 +5982,7 @@ _Sent from MobileWMS_`;
                 style={[styles.modalCancelButton, { marginTop: 12, alignSelf: 'center', width: '100%' }]}
                 onPress={() => setShowLocatorOrgModal(false)}
               >
-                <Text style={[styles.modalCancelText, { textAlign: 'center' }]}>Cancel</Text>
+                <Text style={[styles.modalCancelText, { textAlign: 'center', color: '#000' }]}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </View>
