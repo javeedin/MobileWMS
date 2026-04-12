@@ -1726,62 +1726,60 @@ _Sent from MobileWMS_`;
     const orgCode = locatorSelectedOrg?.warehouse_code || selectedOrg || 'MLCECLAIM';
 
     // Get locator_id from selected subinventory in org data
-    const selectedSub = locatorSelectedOrg?.subinventories?.find(s => s.code === locatorSelectedSub);
-    const fusionLocatorId = selectedSub?.locator_id || '00020000000EACED00057708000110D931FEAC3100000003423242';
+    const selectedSubObj = locatorSelectedOrg?.subinventories?.find(s => s.code === locatorSelectedSub);
+    const fusionLocatorId = selectedSubObj?.locator_id || '00020000000EACED00057708000110D931FEAC3100000003423242';
 
     try {
-      // Fetch both APIs in parallel
-      const [fusionResponse, onhandResponse] = await Promise.all([
-        // Oracle Fusion API - Get all locators using dynamic locator_id
-        fetch(`${ORACLE_FUSION_BASE}/subinventories/${fusionLocatorId}/child/locators?offset=0&limit=500`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Basic ${ORACLE_FUSION_AUTH}`,
-            'Content-Type': 'application/json',
-          },
-        }),
-        // APEX API - Get onhand by locator
-        fetch(`${API_BASE}/getonhandsbylocator?P_ORGANIZATIONCODE=${orgCode}`),
-      ]);
+      // --- Fetch Fusion locators with full pagination ---
+      const LIMIT = 500;
+      let offset = 0;
+      let allFusionItems = [];
+      let hasMore = true;
 
-      // Parse Fusion response
-      const fusionText = await fusionResponse.text();
-      console.log('========== FUSION LOCATORS API ==========');
-      console.log('Status:', fusionResponse.status);
-      console.log('Response:', fusionText.substring(0, 500));
+      while (hasMore) {
+        const fusionResponse = await fetch(
+          `${ORACLE_FUSION_BASE}/subinventories/${fusionLocatorId}/child/locators?offset=${offset}&limit=${LIMIT}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Basic ${ORACLE_FUSION_AUTH}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+        const fusionText = await fusionResponse.text();
+        let fusionData = { items: [], hasMore: false };
+        try { fusionData = JSON.parse(fusionText); } catch (e) {}
 
-      let fusionData = { items: [] };
-      try {
-        fusionData = JSON.parse(fusionText);
-      } catch (e) {
-        console.log('Failed to parse Fusion response');
+        const pageItems = fusionData.items || [];
+        allFusionItems = allFusionItems.concat(pageItems);
+        console.log(`Fusion page offset=${offset}: ${pageItems.length} items, hasMore=${fusionData.hasMore}`);
+
+        hasMore = fusionData.hasMore === true && pageItems.length === LIMIT;
+        offset += LIMIT;
       }
 
-      const fusionItems = fusionData.items || [];
-      console.log('Fusion locators count:', fusionItems.length);
-      if (fusionItems.length > 0) {
-        console.log('First Fusion locator:', JSON.stringify(fusionItems[0]));
-        // Extract SubinventoryCode for title
-        setLocatorSubinventory(fusionItems[0].SubinventoryCode || 'AMKE');
+      console.log('Total Fusion locators fetched:', allFusionItems.length);
+      if (allFusionItems.length > 0) {
+        setLocatorSubinventory(allFusionItems[0].SubinventoryCode || 'AMKE');
       }
-      setFusionLocators(fusionItems);
+      setFusionLocators(allFusionItems);
 
-      // Parse Onhand response
+      // --- Fetch APEX onhand by locator (with high limit to avoid default pagination) ---
+      const onhandResponse = await fetch(
+        `${API_BASE}/getonhandsbylocator?P_ORGANIZATIONCODE=${orgCode}&limit=9999`
+      );
       const onhandText = await onhandResponse.text();
-      console.log('========== ONHAND LOCATORS API ==========');
-      console.log('Status:', onhandResponse.status);
-      console.log('Response:', onhandText.substring(0, 500));
+      console.log('Onhand response status:', onhandResponse.status);
 
       let onhandData = { items: [] };
-      try {
-        onhandData = JSON.parse(onhandText);
-      } catch (e) {
-        console.log('Failed to parse Onhand response');
-      }
+      try { onhandData = JSON.parse(onhandText); } catch (e) {}
 
       const onhandItems = onhandData.items || [];
       console.log('Onhand items count:', onhandItems.length);
       setOnhandLocators(onhandItems);
+
+      const fusionItems = allFusionItems;
 
       // Map locators - mark as Used or Free
       const onhandLocatorSet = new Set();
@@ -2854,7 +2852,7 @@ _Sent from MobileWMS_`;
       title: 'Stock Locators APIs',
       color: '#059669',
       apis: [
-        { method: 'GET', name: 'Get Locators (Fusion)', url: `https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05/subinventories/${_locApiLid}/child/locators?offset=0&limit=500`, params: 'Authorization (Basic)', description: 'Master list of all locators from Oracle Fusion' },
+        { method: 'GET', name: 'Get Locators (Fusion) — paginated', url: `https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05/subinventories/${_locApiLid}/child/locators?offset=0&limit=500`, params: 'Authorization (Basic), offset, limit=500 (loops until hasMore=false)', description: 'Fetches all locators in pages of 500 until hasMore is false' },
         { method: 'GET', name: 'Get Onhand by Locator', url: `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandsbylocator?P_ORGANIZATIONCODE=${_locApiOrgCode}`, params: 'P_ORGANIZATIONCODE', description: 'Onhand inventory grouped by locator (Used/Free status)' },
         { method: 'GET', name: 'Get Subinventory Locator ID', url: `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getsubinventorylocatorid?P_ORGANIZATION_CODE=${_locApiOrgCode}&P_SUB_INVENTORY=${_locApiSub}`, params: 'P_ORGANIZATION_CODE, P_SUB_INVENTORY', description: 'Resolves dynamic Fusion locator ID for a subinventory' },
       ],
