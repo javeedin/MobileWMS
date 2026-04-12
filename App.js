@@ -134,7 +134,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.6.4';
+const APP_VERSION = 'v1.6.5';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -1255,6 +1255,10 @@ _Sent from MobileWMS_`;
             locatorsToConfirm.forEach(loc => newTemp.delete(loc));
             return newTemp;
           });
+
+          // Mark these locators as Used in local cache (persists across restarts)
+          const oc = selectedItem?.organizationcode || selectedOrg;
+          markLocatorsUsedLocally(locatorsToConfirm, oc);
         }
         return prev;
       });
@@ -1880,12 +1884,12 @@ _Sent from MobileWMS_`;
         offset += PAGE_SIZE;
       }
 
-      // Build set of locator names that have inventory
+      // Build set of locator names that have inventory (uppercase for consistent matching)
       const usedSet = new Set();
       allItems.forEach(item => {
         // Fusion may use Locator, LocatorId, or LocatorName depending on the view
         const loc = item.Locator || item.LocatorId || item.LocatorName || item.locator || '';
-        if (loc) usedSet.add(loc);
+        if (loc) usedSet.add(loc.toUpperCase());
       });
 
       // Persist the set so it survives app restarts
@@ -1912,15 +1916,42 @@ _Sent from MobileWMS_`;
   };
 
   // Apply a saved onhand-status cache onto an array of locator objects
+  // Uses uppercase comparison so locally-confirmed locators (stored uppercase) match
   const applyOnhandStatusFromCache = async (orgCode, locs) => {
     try {
       const raw = await AsyncStorage.getItem(ONHAND_STATUS_KEY(orgCode));
       if (!raw) return locs;
       const { used } = JSON.parse(raw);
-      const usedSet = new Set(used);
-      return locs.map(loc => ({ ...loc, status: usedSet.has(loc.locatorName) ? 'Used' : 'Free' }));
+      const usedSet = new Set((used || []).map(n => (n || '').toUpperCase()));
+      return locs.map(loc => ({ ...loc, status: usedSet.has((loc.locatorName || '').toUpperCase()) ? 'Used' : 'Free' }));
     } catch (e) {
       return locs;
+    }
+  };
+
+  // Mark locators as Used in both in-memory state and AsyncStorage status cache.
+  // Called after a receipt or split is successfully processed.
+  const markLocatorsUsedLocally = async (locatorNames, orgCode) => {
+    if (!locatorNames || locatorNames.length === 0) return;
+    const upperNames = new Set(locatorNames.map(n => (n || '').toUpperCase()));
+
+    // Update in-memory mappedLocators
+    setMappedLocators(prev => prev.map(loc =>
+      upperNames.has((loc.locatorName || '').toUpperCase()) ? { ...loc, status: 'Used' } : loc
+    ));
+
+    // Persist to the onhand status cache
+    if (!orgCode) return;
+    try {
+      const key = ONHAND_STATUS_KEY(orgCode);
+      const raw = await AsyncStorage.getItem(key);
+      const existing = raw ? JSON.parse(raw) : { fetchedAt: new Date().toISOString(), used: [] };
+      const usedSet = new Set((existing.used || []).map(n => (n || '').toUpperCase()));
+      upperNames.forEach(n => usedSet.add(n));
+      await AsyncStorage.setItem(key, JSON.stringify({ ...existing, used: Array.from(usedSet) }));
+      console.log(`Marked ${locatorNames.length} locator(s) as Used in local cache: ${locatorNames.join(', ')}`);
+    } catch (e) {
+      console.log('Error marking locators used locally:', e.message);
     }
   };
 
@@ -2387,6 +2418,32 @@ _Sent from MobileWMS_`;
     const orgCode = selectedItem?.organizationcode || selectedOrg || 'MLCECLAIM';
     const subInventory = selectedItem?.subinventory || selectedItem?.SUBINVENTORY || selectedItem?.subinventorycode || selectedItem?.SUBINVENTORYCODE || selectedItem?.sub_inventory_code || '';
 
+    // ── Local cache path — no API call needed ──────────────────────────────
+    if (mappedLocators.length > 0) {
+      const freeLocators = mappedLocators
+        .filter(loc => {
+          if (loc.status !== 'Free') return false;
+          const upperName = (loc.locatorName || '').toUpperCase();
+          if (selectedLocatorsTemp.has(upperName)) return false;
+          if (confirmedLocators.has(upperName)) return false;
+          return true;
+        })
+        .map(loc => ({
+          id: loc.id || loc.locatorName,
+          locatorName: loc.locatorName,
+          subinventory: loc.subinventory || '',
+          statusCode: loc.statusCode || 'Active',
+        }))
+        .sort((a, b) => a.locatorName.localeCompare(b.locatorName));
+
+      console.log(`Available locators from local cache: ${freeLocators.length} free (subinv: ${subInventory || 'any'})`);
+      setAvailableLocators(freeLocators);
+      setLocatorPickerLoading(false);
+      return freeLocators;
+    }
+
+    // ── No local cache — fall back to API fetch ────────────────────────────
+    // (will populate mappedLocators for future calls via refreshOnhandStatus)
     try {
       // Step 1: Get dynamic locator_id for the subinventory from APEX API
       let subinventoryLocatorId = '';
