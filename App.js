@@ -1727,7 +1727,16 @@ _Sent from MobileWMS_`;
 
     // Get locator_id from selected subinventory in org data
     const selectedSubObj = locatorSelectedOrg?.subinventories?.find(s => s.code === locatorSelectedSub);
-    const fusionLocatorId = selectedSubObj?.locator_id || '00020000000EACED00057708000110D931FEAC3100000003423242';
+    const fusionLocatorId = selectedSubObj?.locator_id;
+
+    if (!fusionLocatorId) {
+      Alert.alert(
+        'Locator ID Missing',
+        `No Locator ID configured for subinventory "${locatorSelectedSub || 'selected'}". Please configure it in Oracle or select a different subinventory (look for ✓ in the LID column).`
+      );
+      setLocatorsLoading(false);
+      return;
+    }
 
     try {
       // --- Fetch Fusion locators with full pagination ---
