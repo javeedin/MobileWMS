@@ -1777,16 +1777,51 @@ _Sent from MobileWMS_`;
 
   const saveLocatorsToCache = async (orgCode, subCode, mappedItems) => {
     try {
+      // Strip to essential fields only — avoids AsyncStorage 6 MB SQLite limit
+      const slim = mappedItems.map(loc => ({
+        id:            loc.id,
+        locatorName:   loc.locatorName,
+        area:          loc.area,
+        zone:          loc.zone,
+        row:           loc.row,
+        bay:           loc.bay,
+        level:         loc.level,
+        subinventory:  loc.subinventory,
+        status:        loc.status,
+        statusCode:    loc.statusCode,
+        itemCount:     loc.itemCount,
+        totalQuantity: loc.totalQuantity,
+        creationDate:  loc.creationDate,
+        // Keep onhand items but only essential fields
+        items: (loc.items || []).map(i => ({
+          itemnumber:      i.itemnumber      || i.ItemNumber      || '',
+          itemdescription: i.itemdescription || i.ItemDescription || '',
+          primaryquantity: i.primaryquantity || i.PrimaryQuantity || 0,
+          uom:             i.uom             || i.UOM             || '',
+          locator:         i.locator_id      || i.locator         || '',
+        })),
+      }));
+
       const payload = JSON.stringify({
         fetchedAt: new Date().toISOString(),
         orgCode, subCode,
-        totalCount: mappedItems.length,
-        locators: mappedItems,
+        totalCount: slim.length,
+        locators: slim,
       });
+
+      console.log(`Cache payload size: ${(payload.length / 1024).toFixed(1)} KB`);
       await AsyncStorage.setItem(LOCATOR_CACHE_KEY(orgCode, subCode), payload);
-      console.log(`Cached ${mappedItems.length} locators for ${orgCode}/${subCode}`);
+      console.log(`Cached ${slim.length} locators for ${orgCode}/${subCode}`);
     } catch (e) {
       console.log('Cache save error:', e.message);
+      // If still too large, warn the user
+      if (e.message && e.message.includes('full')) {
+        Alert.alert(
+          'Cache Storage Full',
+          'The locator data is too large to save locally. You will need to fetch fresh data each session. Try reducing the dataset by using a more specific subinventory.',
+          [{ text: 'OK' }]
+        );
+      }
     }
   };
 
