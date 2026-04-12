@@ -134,7 +134,7 @@ const SHADOWS = {
 };
 
 // App Version
-const APP_VERSION = 'v1.5.8';
+const APP_VERSION = 'v1.5.9';
 
 // API Configuration
 const API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
@@ -2033,7 +2033,16 @@ _Sent from MobileWMS_`;
           {
             text: 'Use Cached',
             onPress: () => {
-              setMappedLocators(cached.locators);
+              // Backward-compat: old cache entries may lack area/zone/row/bay/level
+              // If the first locator is missing 'area', re-parse from locatorName
+              let locs = cached.locators;
+              if (locs.length > 0 && locs[0].area === undefined) {
+                locs = locs.map(loc => {
+                  const segs = _parseLocName(loc.locatorName || '');
+                  return { ...loc, ...segs };
+                });
+              }
+              setMappedLocators(locs);
               setFusionLocators([]);
               setMapDisplayLimit(100);
               setLocatorsCacheInfo({ fetchedAt: cached.fetchedAt, totalCount: cached.totalCount, orgCode, subCode });
@@ -6345,17 +6354,26 @@ _Sent from MobileWMS_`;
     const activeFilterCount = [locFilter.area, locFilter.zone, locFilter.row, locFilter.bay, locFilter.level].filter(Boolean).length;
     const hasEnoughFilters  = activeFilterCount >= 2;
 
-    const filteredLocators = hasEnoughFilters ? mappedLocators.filter(loc => {
+    // segFilteredLocators: segment filters only (no status/tab filter) — used for KPI counts
+    const segFilteredLocators = hasEnoughFilters ? mappedLocators.filter(loc => {
       if (locFilter.area  && loc.area  !== locFilter.area)  return false;
       if (locFilter.zone  && loc.zone  !== locFilter.zone)  return false;
       if (locFilter.row   && loc.row   !== locFilter.row)   return false;
       if (locFilter.bay   && loc.bay   !== locFilter.bay)   return false;
       if (locFilter.level && loc.level !== locFilter.level) return false;
-      return stockLocatorsTab === 'all' || loc.status === 'Free';
+      return true;
+    }) : mappedLocators;
+
+    // filteredLocators: segment filters + tab/status filter — used for list & map
+    const filteredLocators = hasEnoughFilters ? segFilteredLocators.filter(loc => {
+      if (stockLocatorsTab === 'available') return loc.status === 'Free';
+      if (stockLocatorsTab === 'used')      return loc.status === 'Used';
+      return true; // 'all'
     }) : [];
 
-    const usedCount  = mappedLocators.filter(l => l.status === 'Used').length;
-    const freeCount  = mappedLocators.filter(l => l.status === 'Free').length;
+    // KPI counts from segment-filtered data (or all when no filter)
+    const usedCount = segFilteredLocators.filter(l => l.status === 'Used').length;
+    const freeCount = segFilteredLocators.filter(l => l.status === 'Free').length;
 
     const clearAllFilters = () => {
       setLocFilter({ area: '', zone: '', row: '', bay: '', level: '' });
@@ -6579,12 +6597,21 @@ _Sent from MobileWMS_`;
               <ScrollView contentContainerStyle={{ padding: 16 }}>
                 {/* Helper to render one segment row */}
                 {[
-                  { key: 'area',  label: 'AREA_CODE',  vals: areaVals,  color: '#059669' },
-                  { key: 'zone',  label: 'ZONE_CODE',  vals: zoneVals,  color: '#0284c7' },
-                  { key: 'row',   label: 'ROW_CODE',   vals: rowVals,   color: '#7c3aed' },
-                  { key: 'bay',   label: 'BAY_CODE',   vals: bayVals,   color: '#d97706' },
-                  { key: 'level', label: 'LEVEL_CODE', vals: levelVals, color: '#dc2626' },
-                ].map(seg => (
+                  { key: 'area',  label: 'AREA_CODE',  vals: areaVals,  color: '#059669', parents: {} },
+                  { key: 'zone',  label: 'ZONE_CODE',  vals: zoneVals,  color: '#0284c7', parents: { area: pendingLocFilter.area } },
+                  { key: 'row',   label: 'ROW_CODE',   vals: rowVals,   color: '#7c3aed', parents: { area: pendingLocFilter.area, zone: pendingLocFilter.zone } },
+                  { key: 'bay',   label: 'BAY_CODE',   vals: bayVals,   color: '#d97706', parents: { area: pendingLocFilter.area, zone: pendingLocFilter.zone, row: pendingLocFilter.row } },
+                  { key: 'level', label: 'LEVEL_CODE', vals: levelVals, color: '#dc2626', parents: { area: pendingLocFilter.area, zone: pendingLocFilter.zone, row: pendingLocFilter.row, bay: pendingLocFilter.bay } },
+                ].map(seg => {
+                  // Count locators per value, respecting parent pending filters
+                  const countFor = (val) => mappedLocators.filter(loc => {
+                    if (seg.parents.area  && loc.area  !== seg.parents.area)  return false;
+                    if (seg.parents.zone  && loc.zone  !== seg.parents.zone)  return false;
+                    if (seg.parents.row   && loc.row   !== seg.parents.row)   return false;
+                    if (seg.parents.bay   && loc.bay   !== seg.parents.bay)   return false;
+                    return loc[seg.key] === val;
+                  }).length;
+                  return (
                   <View key={seg.key} style={{ marginBottom: 18 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                       <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: seg.color, marginRight: 6 }} />
@@ -6603,18 +6630,24 @@ _Sent from MobileWMS_`;
                       >
                         <Text style={{ fontSize: 13, color: !pendingLocFilter[seg.key] ? '#fff' : '#6b7280', fontWeight: !pendingLocFilter[seg.key] ? '700' : '400' }}>Any</Text>
                       </TouchableOpacity>
-                      {seg.vals.map(v => (
+                      {seg.vals.map(v => {
+                        const cnt = countFor(v);
+                        return (
                         <TouchableOpacity
                           key={v}
                           onPress={() => setPendingLocFilter(f => ({ ...f, [seg.key]: v }))}
                           style={{ borderRadius: 16, paddingHorizontal: 14, paddingVertical: 7, marginRight: 6, backgroundColor: pendingLocFilter[seg.key] === v ? seg.color : '#f3f4f6', borderWidth: 1, borderColor: pendingLocFilter[seg.key] === v ? seg.color : '#e5e7eb' }}
                         >
-                          <Text style={{ fontSize: 13, color: pendingLocFilter[seg.key] === v ? '#fff' : '#374151', fontWeight: pendingLocFilter[seg.key] === v ? '700' : '400' }}>{v}</Text>
+                          <Text style={{ fontSize: 13, color: pendingLocFilter[seg.key] === v ? '#fff' : '#374151', fontWeight: pendingLocFilter[seg.key] === v ? '700' : '400' }}>
+                            {v} <Text style={{ fontSize: 11, opacity: 0.8 }}>({cnt})</Text>
+                          </Text>
                         </TouchableOpacity>
-                      ))}
+                        );
+                      })}
                     </ScrollView>
                   </View>
-                ))}
+                  );
+                })}
 
                 {/* Validation hint */}
                 {[pendingLocFilter.area, pendingLocFilter.zone, pendingLocFilter.row, pendingLocFilter.bay, pendingLocFilter.level].filter(Boolean).length < 2 && (
@@ -6676,7 +6709,7 @@ _Sent from MobileWMS_`;
               fontWeight: '600',
               color: stockLocatorsTab === 'all' ? '#059669' : COLORS.textSecondary,
             }}>
-              All ({hasEnoughFilters ? filteredLocators.length : mappedLocators.length})
+              All ({hasEnoughFilters ? segFilteredLocators.length : mappedLocators.length})
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -6717,22 +6750,34 @@ _Sent from MobileWMS_`;
           </TouchableOpacity>
         </View>
 
-        {/* Summary Stats - hide on map view */}
-        {stockLocatorsTab !== 'map' && (
-        <View style={{ flexDirection: 'row', padding: 12, backgroundColor: '#f0fdf4', gap: 12 }}>
-          <View style={{ flex: 1, backgroundColor: '#fff', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#bbf7d0' }}>
-            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#059669' }}>{usedCount}</Text>
-            <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>Used</Text>
+        {/* Summary Stats — clickable KPI cards, based on filtered data */}
+        {stockLocatorsTab !== 'map' && hasEnoughFilters && (
+          <View style={{ flexDirection: 'row', padding: 12, backgroundColor: '#f0fdf4', gap: 10 }}>
+            {/* Used card */}
+            <TouchableOpacity
+              onPress={() => setStockLocatorsTab(stockLocatorsTab === 'used' ? 'all' : 'used')}
+              style={{ flex: 1, backgroundColor: stockLocatorsTab === 'used' ? '#fef3c7' : '#fff', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: stockLocatorsTab === 'used' ? 2 : 1, borderColor: stockLocatorsTab === 'used' ? '#d97706' : '#bbf7d0' }}
+            >
+              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#d97706' }}>{usedCount}</Text>
+              <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>Used {stockLocatorsTab === 'used' ? '✓' : ''}</Text>
+            </TouchableOpacity>
+            {/* Free card */}
+            <TouchableOpacity
+              onPress={() => setStockLocatorsTab(stockLocatorsTab === 'available' ? 'all' : 'available')}
+              style={{ flex: 1, backgroundColor: stockLocatorsTab === 'available' ? '#d1fae5' : '#fff', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: stockLocatorsTab === 'available' ? 2 : 1, borderColor: stockLocatorsTab === 'available' ? '#059669' : '#bbf7d0' }}
+            >
+              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#10b981' }}>{freeCount}</Text>
+              <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>Free {stockLocatorsTab === 'available' ? '✓' : ''}</Text>
+            </TouchableOpacity>
+            {/* Total showing */}
+            <TouchableOpacity
+              onPress={() => setStockLocatorsTab('all')}
+              style={{ flex: 1, backgroundColor: stockLocatorsTab === 'all' ? '#ede9fe' : '#fff', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: stockLocatorsTab === 'all' ? 2 : 1, borderColor: stockLocatorsTab === 'all' ? '#7c3aed' : '#bbf7d0' }}
+            >
+              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#6b7280' }}>{segFilteredLocators.length}</Text>
+              <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>All {stockLocatorsTab === 'all' ? '✓' : ''}</Text>
+            </TouchableOpacity>
           </View>
-          <View style={{ flex: 1, backgroundColor: '#fff', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#bbf7d0' }}>
-            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#10b981' }}>{freeCount}</Text>
-            <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>Free</Text>
-          </View>
-          <View style={{ flex: 1, backgroundColor: '#fff', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#bbf7d0' }}>
-            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#6b7280' }}>{filteredLocators.length}</Text>
-            <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>Showing</Text>
-          </View>
-        </View>
         )}
 
         {/* Locators List - for All and Available tabs */}
