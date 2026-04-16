@@ -396,6 +396,14 @@ export default function App() {
   const [showApiConsole, setShowApiConsole] = useState(false); // API Console visibility
   const [apiLogs, setApiLogs] = useState([]); // API Console log entries
 
+  // Fusion serial allocation state
+  const [showAllocateChoice, setShowAllocateChoice] = useState(false);
+  const [showFusionAllocResult, setShowFusionAllocResult] = useState(false);
+  const [fusionAllocLoading, setFusionAllocLoading] = useState(false);
+  const [fusionAllocSerials, setFusionAllocSerials] = useState([]); // all fetched serials
+  const [fusionAllocSelected, setFusionAllocSelected] = useState([]); // auto-selected (qty)
+  const [fusionAllocError, setFusionAllocError] = useState('');
+
   // Call Center state
   const [mobileContacts, setMobileContacts] = useState([]);
   const [contactsLoading, setContactsLoading] = useState(false);
@@ -2785,6 +2793,91 @@ _Sent from MobileWMS_`;
       },
       ...prev.slice(0, 19), // keep last 20
     ]);
+  };
+
+  // Fusion serial allocation — chains onhand → lots → lotSerials
+  const handleFusionAllocate = async () => {
+    setShowAllocateChoice(false);
+    setFusionAllocLoading(true);
+    setFusionAllocError('');
+    setFusionAllocSerials([]);
+    setFusionAllocSelected([]);
+    setShowFusionAllocResult(true);
+
+    const FUSION_BASE = 'https://iacney-test.fa.ocs.oraclecloud.com';
+    const authHeader = 'Basic ' + btoa('erparun:Fusion@1234');
+    const headers = { 'Authorization': authHeader, 'Content-Type': 'application/json' };
+
+    const orgCode = selectedShipOrder?.organization_name || '';
+    const itemNumber = pickingLine?.item_number || '';
+    const locator = pickingLine?.locator || '';
+    const lotNumber = pickingLine?.lot_number || '';
+    const neededQty = pickingLine?.qty || 1;
+
+    try {
+      // Step 1: inventoryOnhandBalances
+      const onhandUrl = `${FUSION_BASE}/fscmRestApi/resources/11.13.18.05/inventoryOnhandBalances?q=OrganizationCode=${encodeURIComponent(orgCode)};ItemNumber=${encodeURIComponent(itemNumber)};Locator=${encodeURIComponent(locator)}&limit=500`;
+      logApiCall('GET', onhandUrl, { OrganizationCode: orgCode, ItemNumber: itemNumber, Locator: locator }, null, '...');
+      const onhandRes = await fetch(onhandUrl, { headers });
+      const onhandData = await onhandRes.json();
+      logApiCall('GET', onhandUrl, { OrganizationCode: orgCode, ItemNumber: itemNumber, Locator: locator }, onhandData, onhandRes.status);
+
+      const onhandItems = onhandData.items || [];
+      if (onhandItems.length === 0) {
+        setFusionAllocError('No onhand balance found for this item/locator/org combination.');
+        setFusionAllocLoading(false);
+        return;
+      }
+
+      // Step 2: find lots link from first onhand item
+      const lotsLink = (onhandItems[0].links || []).find(l => l.name === 'lots');
+      if (!lotsLink) {
+        setFusionAllocError('No lots link found in onhand response.');
+        setFusionAllocLoading(false);
+        return;
+      }
+
+      logApiCall('GET', lotsLink.href, {}, null, '...');
+      const lotsRes = await fetch(lotsLink.href, { headers });
+      const lotsData = await lotsRes.json();
+      logApiCall('GET', lotsLink.href, {}, lotsData, lotsRes.status);
+
+      const lotsItems = lotsData.items || [];
+      if (lotsItems.length === 0) {
+        setFusionAllocError('No lots found for this locator.');
+        setFusionAllocLoading(false);
+        return;
+      }
+
+      // Step 3: find matching lot (or use first if no match)
+      const matchedLot = lotsItems.find(l => l.LotNumber === lotNumber) || lotsItems[0];
+      const lotSerialsLink = (matchedLot.links || []).find(l => l.name === 'lotSerials');
+      if (!lotSerialsLink) {
+        setFusionAllocError(`No lotSerials link for lot ${matchedLot.LotNumber}.`);
+        setFusionAllocLoading(false);
+        return;
+      }
+
+      logApiCall('GET', lotSerialsLink.href, {}, null, '...');
+      const serialsRes = await fetch(lotSerialsLink.href, { headers });
+      const serialsData = await serialsRes.json();
+      logApiCall('GET', lotSerialsLink.href, {}, serialsData, serialsRes.status);
+
+      const allSerials = (serialsData.items || []).map(s => s.SerialNumber).filter(Boolean);
+      if (allSerials.length === 0) {
+        setFusionAllocError('No serial numbers found for this lot.');
+        setFusionAllocLoading(false);
+        return;
+      }
+
+      const selected = allSerials.slice(0, neededQty);
+      setFusionAllocSerials(allSerials);
+      setFusionAllocSelected(selected);
+    } catch (err) {
+      setFusionAllocError('API error: ' + err.message);
+    } finally {
+      setFusionAllocLoading(false);
+    }
   };
 
   // Fetch Ship Orders (Pending Picking Details)
@@ -8497,9 +8590,17 @@ _Sent from MobileWMS_`;
                   {/* === SERIALS TAB === */}
                   {pickModalTab === 'serials' && (
                     <View>
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#334155', marginBottom: 12 }}>
-                        Allocated Serial Numbers for {selectedShipOrder?.source_order_number}
-                      </Text>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#334155', flex: 1 }}>
+                          Allocated Serials for {selectedShipOrder?.source_order_number}
+                        </Text>
+                        <TouchableOpacity
+                          style={{ backgroundColor: '#7c3aed', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 }}
+                          onPress={() => setShowAllocateChoice(true)}
+                        >
+                          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Allocate</Text>
+                        </TouchableOpacity>
+                      </View>
 
                       {pickSerialsLoading ? (
                         <View style={{ padding: 40, alignItems: 'center' }}>
@@ -8550,6 +8651,140 @@ _Sent from MobileWMS_`;
             </View>
           </View>
         </Modal>
+
+        {/* Allocate Choice Popup */}
+        <Modal visible={showAllocateChoice} transparent animationType="fade" onRequestClose={() => setShowAllocateChoice(false)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 360 }}>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: '#1e293b', marginBottom: 6 }}>Select Allocation Source</Text>
+              <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 20 }}>
+                Item: {pickingLine?.item_number}  •  Qty: {pickingLine?.qty}  •  Lot: {pickingLine?.lot_number || 'N/A'}
+              </Text>
+
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, padding: 14, marginBottom: 10, backgroundColor: '#f8fafc' }}
+                onPress={() => { setShowAllocateChoice(false); /* Option A — handled later */ Alert.alert('Coming Soon', 'APEX onhand allocation will be added later.'); }}
+              >
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#dbeafe', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                  <Text style={{ fontWeight: '700', color: '#1d4ed8' }}>A</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#334155' }}>Allocate from APEX Onhand</Text>
+                  <Text style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Use local WMS onhand data</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#7c3aed', borderRadius: 10, padding: 14, marginBottom: 20, backgroundColor: '#faf5ff' }}
+                onPress={handleFusionAllocate}
+              >
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#ede9fe', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                  <Text style={{ fontWeight: '700', color: '#7c3aed' }}>B</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#5b21b6' }}>Fetch Directly from Fusion</Text>
+                  <Text style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Query Oracle Fusion onhand API</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={{ padding: 10, alignItems: 'center' }} onPress={() => setShowAllocateChoice(false)}>
+                <Text style={{ color: '#64748b', fontSize: 14 }}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Fusion Allocation Result Popup */}
+        <Modal visible={showFusionAllocResult} transparent animationType="slide" onRequestClose={() => setShowFusionAllocResult(false)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '85%' }}>
+              {/* Header */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }}>
+                <Text style={{ fontSize: 17, fontWeight: '700', color: '#1e293b' }}>Fusion Serial Allocation</Text>
+                <TouchableOpacity onPress={() => setShowFusionAllocResult(false)}>
+                  <Text style={{ fontSize: 20, color: '#64748b' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              {fusionAllocLoading ? (
+                <View style={{ padding: 60, alignItems: 'center' }}>
+                  <ActivityIndicator size="large" color="#7c3aed" />
+                  <Text style={{ marginTop: 16, color: '#64748b', fontSize: 14 }}>Fetching from Oracle Fusion...</Text>
+                  <Text style={{ marginTop: 4, color: '#94a3b8', fontSize: 12 }}>onhand → lots → lotSerials</Text>
+                </View>
+              ) : fusionAllocError ? (
+                <View style={{ padding: 40, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 32, marginBottom: 12 }}>⚠️</Text>
+                  <Text style={{ fontSize: 14, color: '#dc2626', textAlign: 'center' }}>{fusionAllocError}</Text>
+                  <TouchableOpacity style={{ marginTop: 20, padding: 12 }} onPress={() => setShowFusionAllocResult(false)}>
+                    <Text style={{ color: '#64748b' }}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <ScrollView contentContainerStyle={{ padding: 16 }}>
+                  {/* Range Summary */}
+                  {fusionAllocSelected.length > 0 && (
+                    <View style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#86efac', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#15803d', marginBottom: 8, letterSpacing: 0.5 }}>AUTO-SELECTED RANGE ({fusionAllocSelected.length} of {pickingLine?.qty} needed)</Text>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 11, color: '#64748b' }}>From</Text>
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#166534', fontFamily: 'monospace' }}>{fusionAllocSelected[0]}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 11, color: '#64748b' }}>To</Text>
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#166534', fontFamily: 'monospace' }}>{fusionAllocSelected[fusionAllocSelected.length - 1]}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Serial List */}
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 8, letterSpacing: 0.5 }}>
+                    ALL SERIALS ({fusionAllocSerials.length} available)
+                  </Text>
+                  {fusionAllocSerials.map((sn, idx) => {
+                    const isSelected = fusionAllocSelected.includes(sn);
+                    return (
+                      <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 10, backgroundColor: isSelected ? '#f0fdf4' : idx % 2 === 0 ? '#f8fafc' : '#fff', borderBottomWidth: 1, borderBottomColor: '#f1f5f9', borderRadius: 4, marginBottom: 2 }}>
+                        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: isSelected ? '#16a34a' : '#e2e8f0', justifyContent: 'center', alignItems: 'center', marginRight: 10 }}>
+                          {isSelected && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>✓</Text>}
+                        </View>
+                        <Text style={{ fontSize: 12, fontFamily: 'monospace', color: isSelected ? '#15803d' : '#64748b', fontWeight: isSelected ? '600' : '400' }}>{sn}</Text>
+                        {isSelected && <View style={{ marginLeft: 'auto', backgroundColor: '#dcfce7', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                          <Text style={{ fontSize: 9, color: '#166534', fontWeight: '700' }}>SELECTED</Text>
+                        </View>}
+                      </View>
+                    );
+                  })}
+
+                  {/* OK Button */}
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#7c3aed', borderRadius: 10, padding: 16, alignItems: 'center', marginTop: 20 }}
+                    onPress={() => {
+                      if (fusionAllocSelected.length > 0) {
+                        const fromSerial = fusionAllocSelected[0];
+                        const toSerial = fusionAllocSelected[fusionAllocSelected.length - 1];
+                        const lotNo = pickingLine?.lot_number || '';
+                        setAllocatedLotsSummary([{ fromserialnumber: fromSerial, toserialnumber: toSerial, lotnumber: lotNo, qty: fusionAllocSelected.length }]);
+                        setAllocatedLots(fusionAllocSelected.map(sn => ({ serial_number: sn, lot_number: lotNo })));
+                      }
+                      setShowFusionAllocResult(false);
+                      setPickModalTab('details');
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>OK — Use These Serials</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={{ padding: 12, alignItems: 'center', marginTop: 4 }} onPress={() => setShowFusionAllocResult(false)}>
+                    <Text style={{ color: '#64748b' }}>Cancel</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              )}
+            </View>
+          </View>
+        </Modal>
+
       </View>
     );
   }
