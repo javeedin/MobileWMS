@@ -8123,9 +8123,9 @@ _Sent from MobileWMS_`;
                 <View style={styles.shipLineInfo}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
                     <Text style={styles.shipLineItemNumber}>{line.item_number}</Text>
-                    {line.id && (
+                    {line.line_number && (
                       <View style={{ marginLeft: 8, backgroundColor: '#e0f2fe', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
-                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#0369a1' }}>Line {line.id}</Text>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#0369a1' }}>Line {line.line_number}</Text>
                       </View>
                     )}
                   </View>
