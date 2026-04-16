@@ -8478,16 +8478,16 @@ _Sent from MobileWMS_`;
                         {allocatedLotsSummary.length > 0 ? (
                           allocatedLotsSummary.map((lot, idx) => (
                             <View key={idx} style={{ marginBottom: idx < allocatedLotsSummary.length - 1 ? 8 : 0 }}>
-                              <Text style={{ fontSize: 12, color: '#166534', fontWeight: '600' }}>{lot.lot_number}</Text>
-                              <Text style={{ fontSize: 12, color: '#15803d' }}>Qty: {lot.allocated_quantity}</Text>
+                              <Text style={{ fontSize: 12, color: '#166534', fontWeight: '600' }}>{lot.lot_number || lot.lotnumber}</Text>
+                              <Text style={{ fontSize: 12, color: '#15803d' }}>Qty: {lot.allocated_quantity || lot.qty}</Text>
                               <View style={{ flexDirection: 'row', marginTop: 4 }}>
                                 <View style={{ flex: 1, backgroundColor: '#dcfce7', borderRadius: 4, padding: 6, marginRight: 4 }}>
                                   <Text style={{ fontSize: 10, color: '#166534' }}>From</Text>
-                                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#166534' }}>{lot.first_serial}</Text>
+                                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#166534' }}>{lot.fromserialnumber || lot.first_serial}</Text>
                                 </View>
                                 <View style={{ flex: 1, backgroundColor: '#dcfce7', borderRadius: 4, padding: 6, marginLeft: 4 }}>
                                   <Text style={{ fontSize: 10, color: '#166534' }}>To</Text>
-                                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#166534' }}>{lot.last_serial}</Text>
+                                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#166534' }}>{lot.toserialnumber || lot.last_serial}</Text>
                                 </View>
                               </View>
                             </View>
@@ -8783,6 +8783,15 @@ _Sent from MobileWMS_`;
                           const lotNo = pickingLine?.lot_number || '';
                           setAllocatedLotsSummary([{ fromserialnumber: fromSerial, toserialnumber: toSerial, lotnumber: lotNo, qty: fusionAllocSelected.length }]);
                           setAllocatedLots(fusionAllocSelected.map(sn => ({ serial_number: sn, lot_number: lotNo })));
+                          // Write range back to the line card on the order lines page
+                          setSelectedShipOrder(prev => ({
+                            ...prev,
+                            lines: prev.lines.map(l =>
+                              l.lineId === pickingLine?.lineId
+                                ? { ...l, first_serial: fromSerial, last_serial: toSerial }
+                                : l
+                            ),
+                          }));
                           setShowFusionAllocResult(false);
                           setPickModalTab('details');
                         }}
