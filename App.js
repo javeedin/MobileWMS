@@ -393,6 +393,8 @@ export default function App() {
   const [showPickProgress, setShowPickProgress] = useState(false); // Progress popup visibility
   const [pickStep1Status, setPickStep1Status] = useState('idle'); // idle | loading | done | error
   const [pickStep2Status, setPickStep2Status] = useState('idle'); // idle | loading | done | error
+  const [showApiConsole, setShowApiConsole] = useState(false); // API Console visibility
+  const [apiLogs, setApiLogs] = useState([]); // API Console log entries
 
   // Call Center state
   const [mobileContacts, setMobileContacts] = useState([]);
@@ -2766,6 +2768,22 @@ _Sent from MobileWMS_`;
     }
   };
 
+  // API Console helper — push a log entry
+  const logApiCall = (method, url, params, response, status) => {
+    setApiLogs(prev => [
+      {
+        id: Date.now(),
+        ts: new Date().toLocaleTimeString(),
+        method,
+        url,
+        params,
+        response,
+        status,
+      },
+      ...prev.slice(0, 19), // keep last 20
+    ]);
+  };
+
   // Fetch Ship Orders (Pending Picking Details)
   const fetchShipOrders = async () => {
     setShipOrdersLoading(true);
@@ -2812,16 +2830,17 @@ _Sent from MobileWMS_`;
 
   // Fetch allocated lots (individual serials) for an order
   const fetchAllocatedLots = async (orderNo) => {
+    const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/getallocatedlots?P_ORDER_NO=${encodeURIComponent(orderNo)}`;
     try {
       setPickSerialsLoading(true);
-      const response = await fetch(
-        `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/getallocatedlots?P_ORDER_NO=${encodeURIComponent(orderNo)}`
-      );
+      const response = await fetch(url);
       const data = await response.json();
       setAllocatedLots(data.items || []);
+      logApiCall('GET', url, { P_ORDER_NO: orderNo }, data, response.status);
     } catch (error) {
       console.log('Failed to fetch allocated lots:', error);
       setAllocatedLots([]);
+      logApiCall('GET', url, { P_ORDER_NO: orderNo }, { error: error.message }, 'ERR');
     } finally {
       setPickSerialsLoading(false);
     }
@@ -2829,16 +2848,17 @@ _Sent from MobileWMS_`;
 
   // Fetch allocated lots summary (serial range) for an order
   const fetchAllocatedLotsSummary = async (orderNo) => {
+    const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/allocatedlotssummary?P_ORDER_NO=${encodeURIComponent(orderNo)}`;
     try {
-      const response = await fetch(
-        `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/allocatedlotssummary?P_ORDER_NO=${encodeURIComponent(orderNo)}`
-      );
+      const response = await fetch(url);
       const data = await response.json();
       setAllocatedLotsSummary(data.items || []);
+      logApiCall('GET', url, { P_ORDER_NO: orderNo }, data, response.status);
       return data.items || [];
     } catch (error) {
       console.log('Failed to fetch allocated lots summary:', error);
       setAllocatedLotsSummary([]);
+      logApiCall('GET', url, { P_ORDER_NO: orderNo }, { error: error.message }, 'ERR');
       return [];
     }
   };
@@ -2867,7 +2887,9 @@ _Sent from MobileWMS_`;
         data = JSON.parse(rawText);
       } catch (parseError) {
         console.log('Auto Allocate Lots - Parse error:', rawText);
+        data = { raw: rawText };
       }
+      logApiCall('POST', url, { P_ORDER_NUMBER: orderNo }, data, response.status);
       Alert.alert('Success', 'Lots allocated successfully');
       // Refresh both serial data and summary after allocation
       await Promise.all([
@@ -2895,6 +2917,8 @@ _Sent from MobileWMS_`;
     setShowPickProgress(false);
     setPickStep1Status('idle');
     setPickStep2Status('idle');
+    setApiLogs([]);
+    setShowApiConsole(false);
     setShowPickModal(true);
 
     // Fetch allocated lots summary for serial range display
@@ -2942,9 +2966,11 @@ _Sent from MobileWMS_`;
       try { step1Data = JSON.parse(raw1); } catch (_) { step1Data = { raw: raw1 }; }
       console.log('[STEP 1] PARSED     :', JSON.stringify(step1Data, null, 2));
       console.log('=======================================================');
+      logApiCall('POST', url1, payload, step1Data, res1.status);
     } catch (e) {
       console.log('[STEP 1] NETWORK ERROR:', e.message);
       step1Data = { error: e.message };
+      logApiCall('POST', `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/sopickconfirm`, { P_ORDER_NUMBER: orderNo, P_PICK_SLIP_NO: pickSlipNo }, step1Data, 'ERR');
     }
     setPickStep1Status('done'); // always mark done
 
@@ -2964,9 +2990,11 @@ _Sent from MobileWMS_`;
       try { step2Data = JSON.parse(raw2); } catch (_) { step2Data = { raw: raw2.substring(0, 200) }; }
       console.log('[STEP 2] PARSED JSON  :', JSON.stringify(step2Data, null, 2));
       console.log('=======================================================');
+      logApiCall('PUT', url2, { transactionId }, step2Data, res2.status);
     } catch (e) {
       console.log('[STEP 2] NETWORK ERROR:', e.message);
       step2Data = { error: e.message };
+      logApiCall('PUT', `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/updatepickconfirmstatus/${transactionId}`, { transactionId }, step2Data, 'ERR');
     }
     setPickStep2Status('done'); // always mark done
 
@@ -8346,6 +8374,82 @@ _Sent from MobileWMS_`;
                           )}
                         </View>
                       )}
+
+                      {/* API Console */}
+                      <View style={{ marginTop: 12, borderWidth: 1, borderColor: '#6366f1', borderRadius: 8, overflow: 'hidden' }}>
+                        <TouchableOpacity
+                          style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1e1b4b', padding: 12 }}
+                          onPress={() => setShowApiConsole(prev => !prev)}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Text style={{ fontSize: 13, color: '#a5b4fc', marginRight: 6 }}>⚡</Text>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: '#a5b4fc' }}>API Console</Text>
+                            {apiLogs.length > 0 && (
+                              <View style={{ marginLeft: 8, backgroundColor: '#4f46e5', borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2 }}>
+                                <Text style={{ fontSize: 10, color: '#fff', fontWeight: '700' }}>{apiLogs.length}</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={{ fontSize: 14, color: '#a5b4fc' }}>{showApiConsole ? '▲' : '▼'}</Text>
+                        </TouchableOpacity>
+                        {showApiConsole && (
+                          <View style={{ backgroundColor: '#0f172a' }}>
+                            {/* Static reference table */}
+                            <View style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#1e293b' }}>
+                              <Text style={{ fontSize: 10, color: '#94a3b8', fontWeight: '700', marginBottom: 6, letterSpacing: 1 }}>ALL SERVICES ON THIS SCREEN</Text>
+                              {[
+                                { method: 'GET',  label: 'Pending Picking Details',    path: 'INVENTORY/pendingpickingdetails',                       params: '(none)' },
+                                { method: 'GET',  label: 'Get Allocated Lots',          path: 'FUSIONCLIENTERP/inventory/getallocatedlots',            params: 'P_ORDER_NO' },
+                                { method: 'GET',  label: 'Allocated Lots Summary',      path: 'FUSIONCLIENTERP/inventory/allocatedlotssummary',        params: 'P_ORDER_NO' },
+                                { method: 'POST', label: 'Auto Allocate Lots',          path: 'FUSIONCLIENTERP/inventory/allocatelots',                params: 'P_ORDER_NUMBER' },
+                                { method: 'POST', label: 'SO Pick Confirm (Step 1)',    path: 'FUSIONCLIENTERP/inventory/sopickconfirm',               params: 'P_ORDER_NUMBER, P_PICK_SLIP_NO' },
+                                { method: 'PUT',  label: 'Update Pick Status (Step 2)', path: 'INVENTORY/updatepickconfirmstatus/{id}',                params: 'transactionId (URL)' },
+                              ].map((svc, i) => (
+                                <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 }}>
+                                  <View style={{ width: 38, borderRadius: 3, backgroundColor: svc.method === 'GET' ? '#064e3b' : svc.method === 'POST' ? '#1e3a5f' : '#4c1d1d', padding: 2, marginRight: 8, alignItems: 'center' }}>
+                                    <Text style={{ fontSize: 9, fontWeight: '700', color: svc.method === 'GET' ? '#34d399' : svc.method === 'POST' ? '#60a5fa' : '#f87171' }}>{svc.method}</Text>
+                                  </View>
+                                  <View style={{ flex: 1 }}>
+                                    <Text style={{ fontSize: 11, color: '#e2e8f0', fontWeight: '600' }}>{svc.label}</Text>
+                                    <Text style={{ fontSize: 9, color: '#64748b', fontFamily: 'monospace' }}>{svc.path}</Text>
+                                    <Text style={{ fontSize: 9, color: '#475569' }}>params: {svc.params}</Text>
+                                  </View>
+                                </View>
+                              ))}
+                            </View>
+                            {/* Live log */}
+                            <View style={{ padding: 10 }}>
+                              <Text style={{ fontSize: 10, color: '#94a3b8', fontWeight: '700', marginBottom: 6, letterSpacing: 1 }}>LIVE LOG ({apiLogs.length})</Text>
+                              {apiLogs.length === 0 ? (
+                                <Text style={{ fontSize: 11, color: '#475569', fontStyle: 'italic' }}>No calls made yet in this session</Text>
+                              ) : (
+                                apiLogs.map((log) => (
+                                  <View key={log.id} style={{ marginBottom: 10, borderLeftWidth: 2, borderLeftColor: log.status === 'ERR' ? '#ef4444' : '#22c55e', paddingLeft: 8 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+                                      <View style={{ borderRadius: 3, backgroundColor: log.method === 'GET' ? '#064e3b' : log.method === 'POST' ? '#1e3a5f' : '#4c1d1d', paddingHorizontal: 5, paddingVertical: 1, marginRight: 6 }}>
+                                        <Text style={{ fontSize: 9, fontWeight: '700', color: log.method === 'GET' ? '#34d399' : log.method === 'POST' ? '#60a5fa' : '#f87171' }}>{log.method}</Text>
+                                      </View>
+                                      <View style={{ borderRadius: 3, backgroundColor: log.status === 'ERR' ? '#7f1d1d' : '#14532d', paddingHorizontal: 5, paddingVertical: 1, marginRight: 6 }}>
+                                        <Text style={{ fontSize: 9, fontWeight: '700', color: log.status === 'ERR' ? '#fca5a5' : '#86efac' }}>{log.status}</Text>
+                                      </View>
+                                      <Text style={{ fontSize: 9, color: '#64748b' }}>{log.ts}</Text>
+                                    </View>
+                                    <Text style={{ fontSize: 9, color: '#7dd3fc', fontFamily: 'monospace' }} numberOfLines={2}>{log.url}</Text>
+                                    {log.params && Object.keys(log.params).length > 0 && (
+                                      <Text style={{ fontSize: 9, color: '#fbbf24', fontFamily: 'monospace', marginTop: 2 }}>
+                                        req: {JSON.stringify(log.params)}
+                                      </Text>
+                                    )}
+                                    <Text style={{ fontSize: 9, color: '#94a3b8', fontFamily: 'monospace', marginTop: 2 }} numberOfLines={3}>
+                                      res: {JSON.stringify(log.response).substring(0, 200)}{JSON.stringify(log.response).length > 200 ? '…' : ''}
+                                    </Text>
+                                  </View>
+                                ))
+                              )}
+                            </View>
+                          </View>
+                        )}
+                      </View>
 
                       {/* Cancel */}
                       <TouchableOpacity
