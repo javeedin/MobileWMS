@@ -2805,8 +2805,7 @@ _Sent from MobileWMS_`;
     setShowFusionAllocResult(true);
 
     const FUSION_BASE = 'https://iacney-test.fa.ocs.oraclecloud.com';
-    const authHeader = 'Basic ' + btoa('erparun:Fusion@1234');
-    const headers = { 'Authorization': authHeader, 'Content-Type': 'application/json' };
+    const headers = { 'Authorization': `Basic ${ORACLE_FUSION_AUTH}`, 'Content-Type': 'application/json' };
 
     const orgCode = selectedShipOrder?.organization_name || '';
     const itemNumber = pickingLine?.item_number || '';
@@ -2814,35 +2813,60 @@ _Sent from MobileWMS_`;
     const lotNumber = pickingLine?.lot_number || '';
     const neededQty = pickingLine?.qty || 1;
 
+    console.log('=== [FUSION ALLOCATE] START ===');
+    console.log('[FUSION ALLOCATE] Org:', orgCode, '| Item:', itemNumber, '| Locator:', locator, '| Lot:', lotNumber, '| Qty:', neededQty);
+
     try {
       // Step 1: inventoryOnhandBalances
       const onhandUrl = `${FUSION_BASE}/fscmRestApi/resources/11.13.18.05/inventoryOnhandBalances?q=OrganizationCode=${encodeURIComponent(orgCode)};ItemNumber=${encodeURIComponent(itemNumber)};Locator=${encodeURIComponent(locator)}&limit=500`;
-      logApiCall('GET', onhandUrl, { OrganizationCode: orgCode, ItemNumber: itemNumber, Locator: locator }, null, '...');
+      console.log('[STEP 1] GET', onhandUrl);
       const onhandRes = await fetch(onhandUrl, { headers });
-      const onhandData = await onhandRes.json();
+      const onhandRaw = await onhandRes.text();
+      console.log('[STEP 1] HTTP STATUS:', onhandRes.status);
+      console.log('[STEP 1] RAW:', onhandRaw.substring(0, 500));
+      let onhandData;
+      try { onhandData = JSON.parse(onhandRaw); } catch (e) {
+        const msg = `Onhand API parse error (HTTP ${onhandRes.status}): ${onhandRaw.substring(0, 200)}`;
+        console.log('[STEP 1] PARSE ERROR:', msg);
+        setFusionAllocError(msg);
+        setFusionAllocLoading(false);
+        return;
+      }
       logApiCall('GET', onhandUrl, { OrganizationCode: orgCode, ItemNumber: itemNumber, Locator: locator }, onhandData, onhandRes.status);
 
       const onhandItems = onhandData.items || [];
+      console.log('[STEP 1] Items count:', onhandItems.length);
       if (onhandItems.length === 0) {
-        setFusionAllocError('No onhand balance found for this item/locator/org combination.');
+        setFusionAllocError('No onhand balance found for Org: ' + orgCode + ', Item: ' + itemNumber + ', Locator: ' + locator);
         setFusionAllocLoading(false);
         return;
       }
 
       // Step 2: find lots link from first onhand item
       const lotsLink = (onhandItems[0].links || []).find(l => l.name === 'lots');
+      console.log('[STEP 2] Lots link:', lotsLink?.href);
       if (!lotsLink) {
         setFusionAllocError('No lots link found in onhand response.');
         setFusionAllocLoading(false);
         return;
       }
 
-      logApiCall('GET', lotsLink.href, {}, null, '...');
       const lotsRes = await fetch(lotsLink.href, { headers });
-      const lotsData = await lotsRes.json();
+      const lotsRaw = await lotsRes.text();
+      console.log('[STEP 2] HTTP STATUS:', lotsRes.status);
+      console.log('[STEP 2] RAW:', lotsRaw.substring(0, 500));
+      let lotsData;
+      try { lotsData = JSON.parse(lotsRaw); } catch (e) {
+        const msg = `Lots API parse error (HTTP ${lotsRes.status}): ${lotsRaw.substring(0, 200)}`;
+        console.log('[STEP 2] PARSE ERROR:', msg);
+        setFusionAllocError(msg);
+        setFusionAllocLoading(false);
+        return;
+      }
       logApiCall('GET', lotsLink.href, {}, lotsData, lotsRes.status);
 
       const lotsItems = lotsData.items || [];
+      console.log('[STEP 2] Lots count:', lotsItems.length, '| Lot numbers:', lotsItems.map(l => l.LotNumber).join(', '));
       if (lotsItems.length === 0) {
         setFusionAllocError('No lots found for this locator.');
         setFusionAllocLoading(false);
@@ -2851,21 +2875,35 @@ _Sent from MobileWMS_`;
 
       // Step 3: find matching lot (or use first if no match)
       const matchedLot = lotsItems.find(l => l.LotNumber === lotNumber) || lotsItems[0];
+      console.log('[STEP 3] Using lot:', matchedLot.LotNumber);
       const lotSerialsLink = (matchedLot.links || []).find(l => l.name === 'lotSerials');
+      console.log('[STEP 3] LotSerials link:', lotSerialsLink?.href);
       if (!lotSerialsLink) {
         setFusionAllocError(`No lotSerials link for lot ${matchedLot.LotNumber}.`);
         setFusionAllocLoading(false);
         return;
       }
 
-      logApiCall('GET', lotSerialsLink.href, {}, null, '...');
       const serialsRes = await fetch(lotSerialsLink.href, { headers });
-      const serialsData = await serialsRes.json();
+      const serialsRaw = await serialsRes.text();
+      console.log('[STEP 3] HTTP STATUS:', serialsRes.status);
+      console.log('[STEP 3] RAW:', serialsRaw.substring(0, 500));
+      let serialsData;
+      try { serialsData = JSON.parse(serialsRaw); } catch (e) {
+        const msg = `LotSerials API parse error (HTTP ${serialsRes.status}): ${serialsRaw.substring(0, 200)}`;
+        console.log('[STEP 3] PARSE ERROR:', msg);
+        setFusionAllocError(msg);
+        setFusionAllocLoading(false);
+        return;
+      }
       logApiCall('GET', lotSerialsLink.href, {}, serialsData, serialsRes.status);
 
       const allSerials = (serialsData.items || []).map(s => s.SerialNumber).filter(Boolean);
+      console.log('[STEP 3] Serials count:', allSerials.length, '| First 5:', allSerials.slice(0, 5).join(', '));
+      console.log('=== [FUSION ALLOCATE] END ===');
+
       if (allSerials.length === 0) {
-        setFusionAllocError('No serial numbers found for this lot.');
+        setFusionAllocError('No serial numbers found for lot: ' + matchedLot.LotNumber);
         setFusionAllocLoading(false);
         return;
       }
@@ -2874,6 +2912,7 @@ _Sent from MobileWMS_`;
       setFusionAllocSerials(allSerials);
       setFusionAllocSelected(selected);
     } catch (err) {
+      console.log('[FUSION ALLOCATE] EXCEPTION:', err.message);
       setFusionAllocError('API error: ' + err.message);
     } finally {
       setFusionAllocLoading(false);
