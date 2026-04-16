@@ -8763,9 +8763,9 @@ _Sent from MobileWMS_`;
                 <ScrollView contentContainerStyle={{ padding: 16 }}>
                   {/* Range Summary */}
                   {fusionAllocSelected.length > 0 && (
-                    <View style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#86efac', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+                    <View style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#86efac', borderRadius: 10, padding: 14, marginBottom: 12 }}>
                       <Text style={{ fontSize: 12, fontWeight: '700', color: '#15803d', marginBottom: 8, letterSpacing: 0.5 }}>AUTO-SELECTED RANGE ({fusionAllocSelected.length} of {pickingLine?.qty} needed)</Text>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 }}>
                         <View style={{ flex: 1 }}>
                           <Text style={{ fontSize: 11, color: '#64748b' }}>From</Text>
                           <Text style={{ fontSize: 13, fontWeight: '700', color: '#166534', fontFamily: 'monospace' }}>{fusionAllocSelected[0]}</Text>
@@ -8775,6 +8775,26 @@ _Sent from MobileWMS_`;
                           <Text style={{ fontSize: 13, fontWeight: '700', color: '#166534', fontFamily: 'monospace' }}>{fusionAllocSelected[fusionAllocSelected.length - 1]}</Text>
                         </View>
                       </View>
+                      <TouchableOpacity
+                        style={{ backgroundColor: '#7c3aed', borderRadius: 8, padding: 13, alignItems: 'center', marginBottom: 8 }}
+                        onPress={() => {
+                          const fromSerial = fusionAllocSelected[0];
+                          const toSerial = fusionAllocSelected[fusionAllocSelected.length - 1];
+                          const lotNo = pickingLine?.lot_number || '';
+                          setAllocatedLotsSummary([{ fromserialnumber: fromSerial, toserialnumber: toSerial, lotnumber: lotNo, qty: fusionAllocSelected.length }]);
+                          setAllocatedLots(fusionAllocSelected.map(sn => ({ serial_number: sn, lot_number: lotNo })));
+                          setShowFusionAllocResult(false);
+                          setPickModalTab('details');
+                        }}
+                      >
+                        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>OK — Use These Serials</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={{ backgroundColor: '#f1f5f9', borderRadius: 8, padding: 11, alignItems: 'center' }}
+                        onPress={() => setShowFusionAllocResult(false)}
+                      >
+                        <Text style={{ color: '#475569', fontWeight: '600', fontSize: 14 }}>Close</Text>
+                      </TouchableOpacity>
                     </View>
                   )}
 
@@ -8797,27 +8817,6 @@ _Sent from MobileWMS_`;
                     );
                   })}
 
-                  {/* OK Button */}
-                  <TouchableOpacity
-                    style={{ backgroundColor: '#7c3aed', borderRadius: 10, padding: 16, alignItems: 'center', marginTop: 20 }}
-                    onPress={() => {
-                      if (fusionAllocSelected.length > 0) {
-                        const fromSerial = fusionAllocSelected[0];
-                        const toSerial = fusionAllocSelected[fusionAllocSelected.length - 1];
-                        const lotNo = pickingLine?.lot_number || '';
-                        setAllocatedLotsSummary([{ fromserialnumber: fromSerial, toserialnumber: toSerial, lotnumber: lotNo, qty: fusionAllocSelected.length }]);
-                        setAllocatedLots(fusionAllocSelected.map(sn => ({ serial_number: sn, lot_number: lotNo })));
-                      }
-                      setShowFusionAllocResult(false);
-                      setPickModalTab('details');
-                    }}
-                  >
-                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>OK — Use These Serials</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity style={{ padding: 12, alignItems: 'center', marginTop: 4 }} onPress={() => setShowFusionAllocResult(false)}>
-                    <Text style={{ color: '#64748b' }}>Cancel</Text>
-                  </TouchableOpacity>
                 </ScrollView>
               )}
             </View>
