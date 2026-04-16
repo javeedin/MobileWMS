@@ -8270,12 +8270,20 @@ _Sent from MobileWMS_`;
                 </View>
               )}
 
-              <TouchableOpacity
-                style={styles.pickLineButton}
-                onPress={() => handlePickLine(line)}
-              >
-                <Text style={styles.pickLineButtonText}>📋 Pick</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#7c3aed', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                  onPress={() => { setPickingLine(line); setShowAllocateChoice(true); }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>🔢 Allocate</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.pickLineButton, { flex: 1 }]}
+                  onPress={() => handlePickLine(line)}
+                >
+                  <Text style={styles.pickLineButtonText}>📋 Pick</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         />
@@ -8590,17 +8598,9 @@ _Sent from MobileWMS_`;
                   {/* === SERIALS TAB === */}
                   {pickModalTab === 'serials' && (
                     <View>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#334155', flex: 1 }}>
-                          Allocated Serials for {selectedShipOrder?.source_order_number}
-                        </Text>
-                        <TouchableOpacity
-                          style={{ backgroundColor: '#7c3aed', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 }}
-                          onPress={() => setShowAllocateChoice(true)}
-                        >
-                          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Allocate</Text>
-                        </TouchableOpacity>
-                      </View>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#334155', marginBottom: 12 }}>
+                        Allocated Serials for {selectedShipOrder?.source_order_number}
+                      </Text>
 
                       {pickSerialsLoading ? (
                         <View style={{ padding: 40, alignItems: 'center' }}>
