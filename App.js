@@ -403,6 +403,7 @@ export default function App() {
   const [fusionAllocSerials, setFusionAllocSerials] = useState([]); // all fetched serials
   const [fusionAllocSelected, setFusionAllocSelected] = useState([]); // auto-selected (qty)
   const [fusionAllocError, setFusionAllocError] = useState('');
+  const [lineAllocatedSerials, setLineAllocatedSerials] = useState({}); // { lineId: [serial, ...] }
 
   // Call Center state
   const [mobileContacts, setMobileContacts] = useState([]);
@@ -2812,108 +2813,103 @@ _Sent from MobileWMS_`;
     const locator = pickingLine?.locator || '';
     const lotNumber = pickingLine?.lot_number || '';
     const neededQty = pickingLine?.qty || 1;
+    const currentLineId = pickingLine?.lineId || '';
+
+    // Serials already allocated to OTHER lines in this session
+    const takenSerials = new Set(
+      Object.entries(lineAllocatedSerials)
+        .filter(([lid]) => lid !== currentLineId)
+        .flatMap(([, serials]) => serials)
+    );
 
     console.log('=== [FUSION ALLOCATE] START ===');
     console.log('[FUSION ALLOCATE] Org:', orgCode, '| Item:', itemNumber, '| Locator:', locator, '| Lot:', lotNumber, '| Qty:', neededQty);
+    console.log('[FUSION ALLOCATE] Already taken serials from other lines:', takenSerials.size);
+
+    // Helper: fetch a URL and parse JSON, with full console logging
+    const fetchJson = async (label, url) => {
+      console.log(`[${label}] GET`, url);
+      const res = await fetch(url, { headers });
+      const raw = await res.text();
+      console.log(`[${label}] HTTP STATUS:`, res.status);
+      console.log(`[${label}] RAW:`, raw.substring(0, 500));
+      let data;
+      try { data = JSON.parse(raw); } catch (e) {
+        throw new Error(`${label} parse error (HTTP ${res.status}): ${raw.substring(0, 200)}`);
+      }
+      logApiCall('GET', url, {}, data, res.status);
+      return data;
+    };
+
+    // Helper: paginate lotSerials — fetch pages of 500 until we have enough free serials
+    const fetchAllLotSerials = async (baseUrl) => {
+      const collected = [];
+      let offset = 0;
+      const limit = 500;
+      let page = 1;
+      while (true) {
+        const url = `${baseUrl}?limit=${limit}&offset=${offset}`;
+        const data = await fetchJson(`STEP 3 page ${page}`, url);
+        const items = (data.items || []).map(s => s.SerialNumber).filter(Boolean);
+        collected.push(...items);
+        console.log(`[STEP 3 page ${page}] fetched ${items.length}, total so far: ${collected.length}, hasMore: ${data.hasMore}`);
+        if (!data.hasMore) break;
+        // Stop paginating early if we already have enough free serials
+        const freeCount = collected.filter(s => !takenSerials.has(s)).length;
+        if (freeCount >= neededQty) {
+          console.log('[STEP 3] Enough free serials found, stopping pagination');
+          break;
+        }
+        offset += limit;
+        page++;
+      }
+      return collected;
+    };
 
     try {
       // Step 1: inventoryOnhandBalances
       const onhandUrl = `${FUSION_BASE}/fscmRestApi/resources/11.13.18.05/inventoryOnhandBalances?q=OrganizationCode=${encodeURIComponent(orgCode)};ItemNumber=${encodeURIComponent(itemNumber)};Locator=${encodeURIComponent(locator)}&limit=500`;
-      console.log('[STEP 1] GET', onhandUrl);
-      const onhandRes = await fetch(onhandUrl, { headers });
-      const onhandRaw = await onhandRes.text();
-      console.log('[STEP 1] HTTP STATUS:', onhandRes.status);
-      console.log('[STEP 1] RAW:', onhandRaw.substring(0, 500));
-      let onhandData;
-      try { onhandData = JSON.parse(onhandRaw); } catch (e) {
-        const msg = `Onhand API parse error (HTTP ${onhandRes.status}): ${onhandRaw.substring(0, 200)}`;
-        console.log('[STEP 1] PARSE ERROR:', msg);
-        setFusionAllocError(msg);
-        setFusionAllocLoading(false);
-        return;
-      }
-      logApiCall('GET', onhandUrl, { OrganizationCode: orgCode, ItemNumber: itemNumber, Locator: locator }, onhandData, onhandRes.status);
-
+      const onhandData = await fetchJson('STEP 1', onhandUrl);
       const onhandItems = onhandData.items || [];
       console.log('[STEP 1] Items count:', onhandItems.length);
       if (onhandItems.length === 0) {
-        setFusionAllocError('No onhand balance found for Org: ' + orgCode + ', Item: ' + itemNumber + ', Locator: ' + locator);
-        setFusionAllocLoading(false);
+        setFusionAllocError(`No onhand found — Org: ${orgCode}, Item: ${itemNumber}, Locator: ${locator}`);
         return;
       }
 
-      // Step 2: find lots link from first onhand item
+      // Step 2: lots child link
       const lotsLink = (onhandItems[0].links || []).find(l => l.name === 'lots');
       console.log('[STEP 2] Lots link:', lotsLink?.href);
-      if (!lotsLink) {
-        setFusionAllocError('No lots link found in onhand response.');
-        setFusionAllocLoading(false);
-        return;
-      }
+      if (!lotsLink) { setFusionAllocError('No lots link in onhand response.'); return; }
 
-      const lotsRes = await fetch(lotsLink.href, { headers });
-      const lotsRaw = await lotsRes.text();
-      console.log('[STEP 2] HTTP STATUS:', lotsRes.status);
-      console.log('[STEP 2] RAW:', lotsRaw.substring(0, 500));
-      let lotsData;
-      try { lotsData = JSON.parse(lotsRaw); } catch (e) {
-        const msg = `Lots API parse error (HTTP ${lotsRes.status}): ${lotsRaw.substring(0, 200)}`;
-        console.log('[STEP 2] PARSE ERROR:', msg);
-        setFusionAllocError(msg);
-        setFusionAllocLoading(false);
-        return;
-      }
-      logApiCall('GET', lotsLink.href, {}, lotsData, lotsRes.status);
-
+      const lotsData = await fetchJson('STEP 2', lotsLink.href);
       const lotsItems = lotsData.items || [];
-      console.log('[STEP 2] Lots count:', lotsItems.length, '| Lot numbers:', lotsItems.map(l => l.LotNumber).join(', '));
-      if (lotsItems.length === 0) {
-        setFusionAllocError('No lots found for this locator.');
-        setFusionAllocLoading(false);
-        return;
-      }
+      console.log('[STEP 2] Lots:', lotsItems.map(l => l.LotNumber).join(', '));
+      if (lotsItems.length === 0) { setFusionAllocError('No lots found for this locator.'); return; }
 
-      // Step 3: find matching lot (or use first if no match)
+      // Step 3: match lot → lotSerials with pagination
       const matchedLot = lotsItems.find(l => l.LotNumber === lotNumber) || lotsItems[0];
       console.log('[STEP 3] Using lot:', matchedLot.LotNumber);
       const lotSerialsLink = (matchedLot.links || []).find(l => l.name === 'lotSerials');
-      console.log('[STEP 3] LotSerials link:', lotSerialsLink?.href);
-      if (!lotSerialsLink) {
-        setFusionAllocError(`No lotSerials link for lot ${matchedLot.LotNumber}.`);
-        setFusionAllocLoading(false);
-        return;
-      }
+      console.log('[STEP 3] LotSerials base URL:', lotSerialsLink?.href);
+      if (!lotSerialsLink) { setFusionAllocError(`No lotSerials link for lot ${matchedLot.LotNumber}.`); return; }
 
-      const serialsRes = await fetch(lotSerialsLink.href, { headers });
-      const serialsRaw = await serialsRes.text();
-      console.log('[STEP 3] HTTP STATUS:', serialsRes.status);
-      console.log('[STEP 3] RAW:', serialsRaw.substring(0, 500));
-      let serialsData;
-      try { serialsData = JSON.parse(serialsRaw); } catch (e) {
-        const msg = `LotSerials API parse error (HTTP ${serialsRes.status}): ${serialsRaw.substring(0, 200)}`;
-        console.log('[STEP 3] PARSE ERROR:', msg);
-        setFusionAllocError(msg);
-        setFusionAllocLoading(false);
-        return;
-      }
-      logApiCall('GET', lotSerialsLink.href, {}, serialsData, serialsRes.status);
-
-      const allSerials = (serialsData.items || []).map(s => s.SerialNumber).filter(Boolean);
-      console.log('[STEP 3] Serials count:', allSerials.length, '| First 5:', allSerials.slice(0, 5).join(', '));
+      const allSerials = await fetchAllLotSerials(lotSerialsLink.href);
+      console.log('[STEP 3] Total serials fetched:', allSerials.length);
       console.log('=== [FUSION ALLOCATE] END ===');
 
-      if (allSerials.length === 0) {
-        setFusionAllocError('No serial numbers found for lot: ' + matchedLot.LotNumber);
-        setFusionAllocLoading(false);
-        return;
-      }
+      if (allSerials.length === 0) { setFusionAllocError('No serials found for lot: ' + matchedLot.LotNumber); return; }
 
-      const selected = allSerials.slice(0, neededQty);
+      // Auto-select first N that are NOT taken by other lines
+      const freeSerials = allSerials.filter(s => !takenSerials.has(s));
+      const selected = freeSerials.slice(0, neededQty);
+      console.log('[FUSION ALLOCATE] Free serials:', freeSerials.length, '| Auto-selected:', selected.length);
+
       setFusionAllocSerials(allSerials);
       setFusionAllocSelected(selected);
     } catch (err) {
       console.log('[FUSION ALLOCATE] EXCEPTION:', err.message);
-      setFusionAllocError('API error: ' + err.message);
+      setFusionAllocError(err.message);
     } finally {
       setFusionAllocLoading(false);
     }
@@ -8783,11 +8779,14 @@ _Sent from MobileWMS_`;
                           const lotNo = pickingLine?.lot_number || '';
                           setAllocatedLotsSummary([{ fromserialnumber: fromSerial, toserialnumber: toSerial, lotnumber: lotNo, qty: fusionAllocSelected.length }]);
                           setAllocatedLots(fusionAllocSelected.map(sn => ({ serial_number: sn, lot_number: lotNo })));
+                          // Record which serials are now taken by this line
+                          const lid = pickingLine?.lineId || '';
+                          setLineAllocatedSerials(prev => ({ ...prev, [lid]: fusionAllocSelected }));
                           // Write range back to the line card on the order lines page
                           setSelectedShipOrder(prev => ({
                             ...prev,
                             lines: prev.lines.map(l =>
-                              l.lineId === pickingLine?.lineId
+                              l.lineId === lid
                                 ? { ...l, first_serial: fromSerial, last_serial: toSerial }
                                 : l
                             ),
@@ -8813,14 +8812,20 @@ _Sent from MobileWMS_`;
                   </Text>
                   {fusionAllocSerials.map((sn, idx) => {
                     const isSelected = fusionAllocSelected.includes(sn);
+                    const takenByOther = Object.entries(lineAllocatedSerials)
+                      .some(([lid, serials]) => lid !== (pickingLine?.lineId || '') && serials.includes(sn));
                     return (
-                      <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 10, backgroundColor: isSelected ? '#f0fdf4' : idx % 2 === 0 ? '#f8fafc' : '#fff', borderBottomWidth: 1, borderBottomColor: '#f1f5f9', borderRadius: 4, marginBottom: 2 }}>
-                        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: isSelected ? '#16a34a' : '#e2e8f0', justifyContent: 'center', alignItems: 'center', marginRight: 10 }}>
-                          {isSelected && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>✓</Text>}
+                      <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 10, backgroundColor: takenByOther ? '#fef2f2' : isSelected ? '#f0fdf4' : idx % 2 === 0 ? '#f8fafc' : '#fff', borderBottomWidth: 1, borderBottomColor: '#f1f5f9', borderRadius: 4, marginBottom: 2, opacity: takenByOther ? 0.6 : 1 }}>
+                        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: takenByOther ? '#fca5a5' : isSelected ? '#16a34a' : '#e2e8f0', justifyContent: 'center', alignItems: 'center', marginRight: 10 }}>
+                          {isSelected && !takenByOther && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>✓</Text>}
+                          {takenByOther && <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>✕</Text>}
                         </View>
-                        <Text style={{ fontSize: 12, fontFamily: 'monospace', color: isSelected ? '#15803d' : '#64748b', fontWeight: isSelected ? '600' : '400' }}>{sn}</Text>
-                        {isSelected && <View style={{ marginLeft: 'auto', backgroundColor: '#dcfce7', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ fontSize: 12, fontFamily: 'monospace', color: takenByOther ? '#ef4444' : isSelected ? '#15803d' : '#64748b', fontWeight: isSelected ? '600' : '400', textDecorationLine: takenByOther ? 'line-through' : 'none' }}>{sn}</Text>
+                        {isSelected && !takenByOther && <View style={{ marginLeft: 'auto', backgroundColor: '#dcfce7', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
                           <Text style={{ fontSize: 9, color: '#166534', fontWeight: '700' }}>SELECTED</Text>
+                        </View>}
+                        {takenByOther && <View style={{ marginLeft: 'auto', backgroundColor: '#fee2e2', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                          <Text style={{ fontSize: 9, color: '#dc2626', fontWeight: '700' }}>ALLOCATED</Text>
                         </View>}
                       </View>
                     );
