@@ -1534,10 +1534,13 @@ _Sent from MobileWMS_`;
         const grouped = shipItems.reduce((acc, item) => {
           const key = `${item.source_order_number}-${item.organization_name}`;
           if (!acc[key]) {
-            acc[key] = { id: key, lines: [], totalQty: 0, ...item };
+            acc[key] = { id: key, lines: [], totalQty: 0, pickSlips: [], ...item };
           }
           acc[key].lines.push(item);
           acc[key].totalQty += item.qty || 0;
+          if (item.pick_slip_no && !acc[key].pickSlips.includes(item.pick_slip_no)) {
+            acc[key].pickSlips.push(item.pick_slip_no);
+          }
           return acc;
         }, {});
         setGroupedShipOrders(Object.values(grouped));
@@ -2810,6 +2813,7 @@ _Sent from MobileWMS_`;
             picker_name: item.picker_name,
             lines: [],
             totalQty: 0,
+            pickSlips: [],
           };
         }
         acc[key].lines.push({
@@ -2817,6 +2821,9 @@ _Sent from MobileWMS_`;
           lineId: `${key}-${item.id}-${item.delivery_detail_id}`,
         });
         acc[key].totalQty += item.qty || 0;
+        if (item.pick_slip_no && !acc[key].pickSlips.includes(item.pick_slip_no)) {
+          acc[key].pickSlips.push(item.pick_slip_no);
+        }
         return acc;
       }, {});
 
@@ -8029,6 +8036,16 @@ _Sent from MobileWMS_`;
                   </View>
                 </View>
 
+                {order.pickSlips && order.pickSlips.length > 0 && (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 6, gap: 4 }}>
+                    <Text style={{ fontSize: 11, color: '#64748b', marginRight: 4 }}>Pick Slip:</Text>
+                    {order.pickSlips.map((ps) => (
+                      <View key={ps} style={{ backgroundColor: '#eff6ff', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ fontSize: 11, color: '#1d4ed8', fontWeight: '600' }}>{ps}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
                 <View style={styles.shipOrderFooter}>
                   <View style={styles.shipLineCountBadge}>
                     <Text style={styles.shipLineCountText}>{order.lines.length} line{order.lines.length !== 1 ? 's' : ''}</Text>
@@ -8116,6 +8133,10 @@ _Sent from MobileWMS_`;
               </View>
 
               <View style={styles.shipLineDetails}>
+                <View style={styles.shipLineDetailItem}>
+                  <Text style={styles.shipLineDetailLabel}>Line ID</Text>
+                  <Text style={styles.shipLineDetailValue}>{line.id || 'N/A'}</Text>
+                </View>
                 <View style={styles.shipLineDetailItem}>
                   <Text style={styles.shipLineDetailLabel}>Pick Slip</Text>
                   <Text style={styles.shipLineDetailValue}>{line.pick_slip_no || 'N/A'}</Text>
