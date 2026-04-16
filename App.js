@@ -8121,7 +8121,14 @@ _Sent from MobileWMS_`;
             <View style={styles.shipLineCard}>
               <View style={styles.shipLineHeader}>
                 <View style={styles.shipLineInfo}>
-                  <Text style={styles.shipLineItemNumber}>{line.item_number}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                    <Text style={styles.shipLineItemNumber}>{line.item_number}</Text>
+                    {line.id && (
+                      <View style={{ marginLeft: 8, backgroundColor: '#e0f2fe', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#0369a1' }}>Line {line.id}</Text>
+                      </View>
+                    )}
+                  </View>
                   <Text style={styles.shipLineDescription} numberOfLines={2}>
                     {line.description}
                   </Text>
@@ -8132,22 +8139,27 @@ _Sent from MobileWMS_`;
                 </View>
               </View>
 
-              <View style={styles.shipLineDetails}>
-                <View style={styles.shipLineDetailItem}>
-                  <Text style={styles.shipLineDetailLabel}>Line ID</Text>
-                  <Text style={styles.shipLineDetailValue}>{line.id || 'N/A'}</Text>
+              {/* Details — 2 rows of 2 to avoid crowding */}
+              <View style={{ paddingTop: SPACING.xs, borderTopWidth: 1, borderTopColor: COLORS.neutral100, marginBottom: SPACING.sm }}>
+                <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={styles.shipLineDetailLabel}>Pick Slip</Text>
+                    <Text style={[styles.shipLineDetailValue, { fontSize: 11 }]} numberOfLines={1}>{line.pick_slip_no || 'N/A'}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.shipLineDetailLabel}>Lot</Text>
+                    <Text style={[styles.shipLineDetailValue, { fontSize: 11 }]} numberOfLines={1}>{line.lot_number || 'N/A'}</Text>
+                  </View>
                 </View>
-                <View style={styles.shipLineDetailItem}>
-                  <Text style={styles.shipLineDetailLabel}>Pick Slip</Text>
-                  <Text style={styles.shipLineDetailValue}>{line.pick_slip_no || 'N/A'}</Text>
-                </View>
-                <View style={styles.shipLineDetailItem}>
-                  <Text style={styles.shipLineDetailLabel}>Lot</Text>
-                  <Text style={styles.shipLineDetailValue}>{line.lot_number || 'N/A'}</Text>
-                </View>
-                <View style={styles.shipLineDetailItem}>
-                  <Text style={styles.shipLineDetailLabel}>Locator</Text>
-                  <Text style={styles.shipLineDetailValue}>{line.locator || 'N/A'}</Text>
+                <View style={{ flexDirection: 'row' }}>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={styles.shipLineDetailLabel}>Locator</Text>
+                    <Text style={[styles.shipLineDetailValue, { fontSize: 11 }]} numberOfLines={1}>{line.locator || 'N/A'}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.shipLineDetailLabel}>Line ID</Text>
+                    <Text style={[styles.shipLineDetailValue, { fontSize: 11 }]} numberOfLines={1}>{line.id || 'N/A'}</Text>
+                  </View>
                 </View>
               </View>
 
