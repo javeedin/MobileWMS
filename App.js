@@ -395,6 +395,8 @@ export default function App() {
   const [pickStep2Status, setPickStep2Status] = useState('idle'); // idle | loading | done | error
   const [showApiConsole, setShowApiConsole] = useState(false); // API Console visibility
   const [apiLogs, setApiLogs] = useState([]); // API Console log entries
+  const [pickConfirmJson, setPickConfirmJson] = useState(null); // Built JSON for Fusion pickTransactions
+  const [pickJsonCopied, setPickJsonCopied] = useState(false);
 
   // Fusion serial allocation state
   const [showAllocateChoice, setShowAllocateChoice] = useState(false);
@@ -2780,6 +2782,33 @@ _Sent from MobileWMS_`;
     }
   };
 
+  // Build Fusion pickTransactions JSON from pickingLine + allocatedLots
+  const buildPickConfirmJson = (line, lots) => {
+    const lotGroups = {};
+    lots.forEach(item => {
+      const k = item.lot_number || item.lotnumber || 'UNKNOWN';
+      if (!lotGroups[k]) lotGroups[k] = [];
+      lotGroups[k].push(item.serial_number);
+    });
+    return {
+      pickLines: [{
+        PickSlip: line.pick_slip_no || '',
+        PickSlipLine: String(line.line_number || line.id || '1'),
+        PickedQuantity: String(lots.length > 0 ? lots.length : line.qty || 0),
+        SubinventoryCode: line.subinventory || line.source_subinventory || '',
+        Locator: line.locator || '',
+        lotSerialItemLots: Object.entries(lotGroups).map(([lot, serials]) => ({
+          Lot: lot,
+          Quantity: String(serials.length),
+          lotSerialItemSerials: serials.map(sn => ({
+            FromSerialNumber: sn,
+            ToSerialNumber: sn,
+          })),
+        })),
+      }],
+    };
+  };
+
   // API Console helper — push a log entry
   const logApiCall = (method, url, params, response, status) => {
     setApiLogs(prev => [
@@ -3054,6 +3083,8 @@ _Sent from MobileWMS_`;
     setPickStep2Status('idle');
     setApiLogs([]);
     setShowApiConsole(false);
+    setPickConfirmJson(null);
+    setPickJsonCopied(false);
     setShowPickModal(true);
 
     // Fetch allocated lots summary for serial range display
@@ -3065,10 +3096,14 @@ _Sent from MobileWMS_`;
 
   // Handle confirm pick — shows a 2-step progress popup
   const handleConfirmPick = async () => {
-    if (allocatedLotsSummary.length === 0) {
-      Alert.alert('Cannot Pick', 'Serial range is not allocated. Please auto-allocate lots first.');
+    if (allocatedLots.length === 0 && allocatedLotsSummary.length === 0) {
+      Alert.alert('Cannot Pick', 'Serial range is not allocated. Use Allocate button first.');
       return;
     }
+
+    // Build JSON payload
+    const json = buildPickConfirmJson(pickingLine, allocatedLots);
+    setPickConfirmJson(json);
 
     // Reset and open progress popup
     setPickStep1Status('idle');
@@ -3077,23 +3112,22 @@ _Sent from MobileWMS_`;
     setPickJsonExpanded(false);
     setShowPickProgress(true);
 
-    const orderNo = selectedShipOrder?.source_order_number;
-    const pickSlipNo = pickingLine.pick_slip_no || '';
     const transactionId = pickingLine.id;
+    const jsonStr = JSON.stringify(json);
 
-    // ── STEP 1: sopickconfirm ──────────────────────────────────────────
+    // ── STEP 1: Fusion pickTransactions ───────────────────────────────
     setPickStep1Status('loading');
     let step1Data = null;
     try {
-      const url1 = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/sopickconfirm`;
-      const payload = { P_ORDER_NUMBER: orderNo, P_PICK_SLIP_NO: pickSlipNo };
+      const url1 = 'https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05/pickTransactions';
       console.log('=======================================================');
-      console.log('[STEP 1] POST', url1);
-      console.log('[STEP 1] PAYLOAD:', JSON.stringify(payload, null, 2));
+      console.log('[STEP 1] POST Fusion pickTransactions');
+      console.log('[STEP 1] URL    :', url1);
+      console.log('[STEP 1] PAYLOAD:', JSON.stringify(json, null, 2));
       const res1 = await fetch(url1, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${ORACLE_FUSION_AUTH}` },
+        body: jsonStr,
       });
       const raw1 = await res1.text();
       console.log('[STEP 1] HTTP STATUS:', res1.status);
@@ -3101,39 +3135,49 @@ _Sent from MobileWMS_`;
       try { step1Data = JSON.parse(raw1); } catch (_) { step1Data = { raw: raw1 }; }
       console.log('[STEP 1] PARSED     :', JSON.stringify(step1Data, null, 2));
       console.log('=======================================================');
-      logApiCall('POST', url1, payload, step1Data, res1.status);
+      logApiCall('POST', url1, json, step1Data, res1.status);
+
+      // Only run Step 2 if Fusion returned success
+      const fusionSuccess = res1.status >= 200 && res1.status < 300;
+      setPickStep1Status('done');
+
+      if (!fusionSuccess) {
+        setPickStep2Status('done');
+        setPickConfirmResult({ step1: step1Data, step2: null });
+        setProcessedPickSlips(prev => new Set([...prev, pickingLine.pick_slip_no]));
+        return;
+      }
     } catch (e) {
       console.log('[STEP 1] NETWORK ERROR:', e.message);
       step1Data = { error: e.message };
-      logApiCall('POST', `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/FUSIONCLIENTERP/inventory/sopickconfirm`, { P_ORDER_NUMBER: orderNo, P_PICK_SLIP_NO: pickSlipNo }, step1Data, 'ERR');
+      logApiCall('POST', 'https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05/pickTransactions', json, step1Data, 'ERR');
+      setPickStep1Status('done');
+      setPickStep2Status('done');
+      setPickConfirmResult({ step1: step1Data, step2: null });
+      return;
     }
-    setPickStep1Status('done'); // always mark done
 
-    // ── STEP 2: updatepickconfirmstatus ───────────────────────────────
+    // ── STEP 2: APEX updatepickconfirmstatus ──────────────────────────
     setPickStep2Status('loading');
     let step2Data = null;
     try {
       const url2 = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/updatepickconfirmstatus/${transactionId}`;
       console.log('=======================================================');
-      console.log('[STEP 2] METHOD       : PUT');
-      console.log('[STEP 2] FULL URL     :', url2);
-      console.log('[STEP 2] TRANSACTION  :', transactionId);
+      console.log('[STEP 2] PUT updatepickconfirmstatus');
+      console.log('[STEP 2] URL:', url2);
       const res2 = await fetch(url2, { method: 'PUT', headers: { 'Content-Type': 'application/json' } });
       const raw2 = await res2.text();
-      console.log('[STEP 2] HTTP STATUS  :', res2.status);
-      console.log('[STEP 2] RAW BODY     :', raw2.length > 500 ? raw2.substring(0, 500) + `... (${raw2.length} chars total)` : raw2);
+      console.log('[STEP 2] HTTP STATUS:', res2.status);
+      console.log('[STEP 2] RAW BODY   :', raw2.length > 500 ? raw2.substring(0, 500) + `...(${raw2.length} chars)` : raw2);
       try { step2Data = JSON.parse(raw2); } catch (_) { step2Data = { raw: raw2.substring(0, 200) }; }
-      console.log('[STEP 2] PARSED JSON  :', JSON.stringify(step2Data, null, 2));
+      console.log('[STEP 2] PARSED     :', JSON.stringify(step2Data, null, 2));
       console.log('=======================================================');
       logApiCall('PUT', url2, { transactionId }, step2Data, res2.status);
     } catch (e) {
       console.log('[STEP 2] NETWORK ERROR:', e.message);
       step2Data = { error: e.message };
-      logApiCall('PUT', `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/updatepickconfirmstatus/${transactionId}`, { transactionId }, step2Data, 'ERR');
     }
-    setPickStep2Status('done'); // always mark done
-
-    // Store combined result and mark pick slip as processed
+    setPickStep2Status('done');
     setPickConfirmResult({ step1: step1Data, step2: step2Data });
     setProcessedPickSlips(prev => new Set([...prev, pickingLine.pick_slip_no]));
   };
@@ -8342,8 +8386,8 @@ _Sent from MobileWMS_`;
                   {pickStep1Status === 'idle' && <Text style={{ fontSize: 14, color: '#94a3b8', fontWeight: '700' }}>1</Text>}
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#334155' }}>SO Pick Confirm</Text>
-                  <Text style={{ fontSize: 11, color: '#64748b' }}>inventory/sopickconfirm</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#334155' }}>Fusion Pick Confirm</Text>
+                  <Text style={{ fontSize: 11, color: '#64748b' }}>Fusion/pickTransactions</Text>
                 </View>
               </View>
 
@@ -8503,6 +8547,34 @@ _Sent from MobileWMS_`;
                           {pickAllocating ? 'Allocating...' : 'Auto Allocate Lots'}
                         </Text>
                       </TouchableOpacity>
+
+                      {/* Pick Confirm JSON Preview */}
+                      {allocatedLots.length > 0 && (() => {
+                        const previewJson = buildPickConfirmJson(pickingLine, allocatedLots);
+                        const jsonStr = JSON.stringify(previewJson, null, 2);
+                        return (
+                          <View style={{ marginTop: 12, borderWidth: 1, borderColor: '#334155', borderRadius: 8, overflow: 'hidden' }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1e293b', padding: 10 }}>
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: '#94a3b8' }}>📋 Pick Confirm JSON</Text>
+                              <TouchableOpacity
+                                style={{ backgroundColor: pickJsonCopied ? '#16a34a' : '#334155', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 }}
+                                onPress={() => {
+                                  Share.share({ message: jsonStr, title: 'Pick Confirm JSON' });
+                                  setPickJsonCopied(true);
+                                  setTimeout(() => setPickJsonCopied(false), 2000);
+                                }}
+                              >
+                                <Text style={{ fontSize: 11, color: '#fff', fontWeight: '700' }}>{pickJsonCopied ? '✓ Copied' : 'Copy / Share'}</Text>
+                              </TouchableOpacity>
+                            </View>
+                            <ScrollView horizontal style={{ backgroundColor: '#0f172a' }}>
+                              <Text style={{ fontSize: 10, color: '#7dd3fc', fontFamily: 'monospace', padding: 10 }}>
+                                {jsonStr}
+                              </Text>
+                            </ScrollView>
+                          </View>
+                        );
+                      })()}
 
                       {/* Pick Confirm Button — hidden once processed */}
                       {processedPickSlips.has(pickingLine?.pick_slip_no) ? (
