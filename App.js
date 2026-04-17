@@ -3205,25 +3205,40 @@ _Sent from MobileWMS_`;
       const res2 = await fetch(APEX_URL, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionId }),
       });
 
       const raw2 = await res2.text();
       console.log('[STEP 2] HTTP STATUS:', res2.status);
       console.log('[STEP 2] RAW BODY   :', raw2.length > 500 ? raw2.substring(0, 500) + `...(${raw2.length} chars)` : raw2);
 
-      try { step2Data = JSON.parse(raw2); } catch (_) { step2Data = { raw: raw2.substring(0, 300) }; }
+      step2Success = res2.status >= 200 && res2.status < 300;
+
+      // Try JSON first; if HTML, extract the error title for a human-readable message
+      let step2ErrorMsg = '';
+      try {
+        step2Data = JSON.parse(raw2);
+        step2ErrorMsg = step2Data?.message || step2Data?.error || step2Data?.errorMessage || '';
+      } catch (_) {
+        // HTML error response — extract <title> or <h1>
+        const titleMatch = raw2.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+        const h1Match    = raw2.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+        const htmlMsg    = (titleMatch?.[1] || h1Match?.[1] || '').replace(/<[^>]+>/g, '').trim();
+        step2ErrorMsg = htmlMsg || `HTTP ${res2.status} — server returned HTML`;
+        step2Data = { htmlError: htmlMsg, raw: raw2.substring(0, 200) };
+        console.log('[STEP 2] HTML ERROR MSG:', htmlMsg);
+      }
+
       console.log('[STEP 2] PARSED     :', JSON.stringify(step2Data, null, 2));
       console.log('=======================================================');
 
-      step2Success = res2.status >= 200 && res2.status < 300;
-      step2Data._meta = { httpStatus: res2.status, success: step2Success };
-
+      step2Data._meta = { httpStatus: res2.status, success: step2Success, errorMessage: step2ErrorMsg };
       logApiCall('PUT', APEX_URL, { transactionId }, step2Data, res2.status);
-      console.log('[STEP 2] SUCCESS:', step2Success);
+      console.log('[STEP 2] SUCCESS:', step2Success, step2ErrorMsg ? `| ERROR: ${step2ErrorMsg}` : '');
 
     } catch (e) {
       console.log('[STEP 2] NETWORK ERROR:', e.message);
-      step2Data = { error: e.message, _meta: { httpStatus: 0, success: false } };
+      step2Data = { error: e.message, _meta: { httpStatus: 0, success: false, errorMessage: e.message } };
       logApiCall('PUT', APEX_URL, { transactionId }, step2Data, 'ERR');
     }
 
@@ -8479,8 +8494,8 @@ _Sent from MobileWMS_`;
                     <Text style={{ fontSize: 11, color: '#ca8a04', marginTop: 2 }}>Skipped — Step 1 failed</Text>
                   )}
                   {pickStep2Status === 'error' && (
-                    <Text style={{ fontSize: 11, color: '#dc2626', marginTop: 2 }}>
-                      HTTP {pickConfirmResult?.step2?._meta?.httpStatus}
+                    <Text style={{ fontSize: 11, color: '#dc2626', marginTop: 2 }} numberOfLines={2}>
+                      {pickConfirmResult?.step2?._meta?.errorMessage || `HTTP ${pickConfirmResult?.step2?._meta?.httpStatus}`}
                     </Text>
                   )}
                 </View>
@@ -8519,7 +8534,9 @@ _Sent from MobileWMS_`;
                     <>
                       <Text style={{ fontSize: 15, fontWeight: '700', color: '#d97706', marginBottom: 4 }}>⚠ Partially Complete</Text>
                       <Text style={{ fontSize: 12, color: '#92400e' }}>Fusion confirmed but APEX status update failed.</Text>
-                      <Text style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>HTTP {pickConfirmResult?.step2?._meta?.httpStatus}</Text>
+                      <Text style={{ fontSize: 11, color: '#92400e', marginTop: 2 }} numberOfLines={2}>
+                        {pickConfirmResult?.step2?._meta?.errorMessage || `HTTP ${pickConfirmResult?.step2?._meta?.httpStatus}`}
+                      </Text>
                     </>
                   )}
                 </View>
