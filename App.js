@@ -8322,7 +8322,7 @@ _Sent from MobileWMS_`;
                 </View>
               </View>
 
-              {/* Details — 2 rows of 2 to avoid crowding */}
+              {/* Details — 3 rows */}
               <View style={{ paddingTop: SPACING.xs, borderTopWidth: 1, borderTopColor: COLORS.neutral100, marginBottom: SPACING.sm }}>
                 <View style={{ flexDirection: 'row', marginBottom: 8 }}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
@@ -8330,19 +8330,26 @@ _Sent from MobileWMS_`;
                     <Text style={[styles.shipLineDetailValue, { fontSize: 11 }]} numberOfLines={1}>{line.pick_slip_no || 'N/A'}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
+                    <Text style={styles.shipLineDetailLabel}>Subinventory</Text>
+                    <Text style={[styles.shipLineDetailValue, { fontSize: 11 }]} numberOfLines={1}>{line.subinventory || 'N/A'}</Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
                     <Text style={styles.shipLineDetailLabel}>Lot</Text>
                     <Text style={[styles.shipLineDetailValue, { fontSize: 11 }]} numberOfLines={1}>{line.lot_number || 'N/A'}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.shipLineDetailLabel}>Locator</Text>
+                    <Text style={[styles.shipLineDetailValue, { fontSize: 11 }]} numberOfLines={1}>{line.locator || 'N/A'}</Text>
                   </View>
                 </View>
                 <View style={{ flexDirection: 'row' }}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
-                    <Text style={styles.shipLineDetailLabel}>Locator</Text>
-                    <Text style={[styles.shipLineDetailValue, { fontSize: 11 }]} numberOfLines={1}>{line.locator || 'N/A'}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
                     <Text style={styles.shipLineDetailLabel}>Line ID</Text>
                     <Text style={[styles.shipLineDetailValue, { fontSize: 11 }]} numberOfLines={1}>{line.id || 'N/A'}</Text>
                   </View>
+                  <View style={{ flex: 1 }} />
                 </View>
               </View>
 
