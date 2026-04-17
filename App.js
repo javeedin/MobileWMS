@@ -8361,11 +8361,16 @@ _Sent from MobileWMS_`;
             <View style={styles.shipLineCard}>
               <View style={styles.shipLineHeader}>
                 <View style={styles.shipLineInfo}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 6 }}>
                     <Text style={styles.shipLineItemNumber}>{line.item_number}</Text>
                     {line.line_number && (
-                      <View style={{ marginLeft: 8, backgroundColor: '#e0f2fe', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <View style={{ backgroundColor: '#e0f2fe', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
                         <Text style={{ fontSize: 10, fontWeight: '700', color: '#0369a1' }}>Line {line.line_number}</Text>
+                      </View>
+                    )}
+                    {processedPickSlips.has(line.pick_slip_no) && (
+                      <View style={{ backgroundColor: '#dcfce7', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#15803d' }}>✓ Confirmed</Text>
                       </View>
                     )}
                   </View>
@@ -8424,20 +8429,26 @@ _Sent from MobileWMS_`;
                 </View>
               )}
 
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: '#7c3aed', borderRadius: 8, padding: 12, alignItems: 'center' }}
-                  onPress={() => { setPickingLine(line); setShowAllocateChoice(true); }}
-                >
-                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>🔢 Allocate</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.pickLineButton, { flex: 1 }]}
-                  onPress={() => handlePickLine(line)}
-                >
-                  <Text style={styles.pickLineButtonText}>📋 Pick</Text>
-                </TouchableOpacity>
-              </View>
+              {processedPickSlips.has(line.pick_slip_no) ? (
+                <View style={{ backgroundColor: '#f0fdf4', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#86efac' }}>
+                  <Text style={{ color: '#15803d', fontWeight: '700', fontSize: 13 }}>✓ Pick Confirmed</Text>
+                </View>
+              ) : (
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: '#7c3aed', borderRadius: 8, padding: 12, alignItems: 'center' }}
+                    onPress={() => { setPickingLine(line); setShowAllocateChoice(true); }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>🔢 Allocate</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.pickLineButton, { flex: 1 }]}
+                    onPress={() => handlePickLine(line)}
+                  >
+                    <Text style={styles.pickLineButtonText}>📋 Pick</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           )}
         />
@@ -8545,14 +8556,33 @@ _Sent from MobileWMS_`;
               {/* Done / Close button */}
               {(pickStep1Status === 'done' || pickStep1Status === 'error') &&
                (pickStep2Status === 'done' || pickStep2Status === 'error' || pickStep2Status === 'skipped') && (
-                <TouchableOpacity
-                  style={{ backgroundColor: pickStep1Status === 'done' && pickStep2Status === 'done' ? '#059669' : '#64748b', borderRadius: 10, padding: 14, alignItems: 'center' }}
-                  onPress={() => { setShowPickProgress(false); setPickJsonExpanded(false); }}
-                >
-                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>
-                    {pickStep1Status === 'done' && pickStep2Status === 'done' ? 'Done' : 'Close'}
-                  </Text>
-                </TouchableOpacity>
+                pickStep1Status === 'done' && pickStep2Status === 'done' ? (
+                  <View style={{ gap: 8 }}>
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#059669', borderRadius: 10, padding: 14, alignItems: 'center' }}
+                      onPress={() => {
+                        setShowPickProgress(false);
+                        setShowPickModal(false);
+                        setPickJsonExpanded(false);
+                      }}
+                    >
+                      <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Go to Items List</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ borderRadius: 10, padding: 12, alignItems: 'center' }}
+                      onPress={() => { setShowPickProgress(false); setPickJsonExpanded(false); }}
+                    >
+                      <Text style={{ color: '#64748b', fontWeight: '600', fontSize: 14 }}>Stay Here</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#64748b', borderRadius: 10, padding: 14, alignItems: 'center' }}
+                    onPress={() => { setShowPickProgress(false); setPickJsonExpanded(false); }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Close</Text>
+                  </TouchableOpacity>
+                )
               )}
             </View>
           </View>
@@ -8671,17 +8701,6 @@ _Sent from MobileWMS_`;
                           <Text style={{ fontSize: 12, color: '#9ca3af', fontStyle: 'italic' }}>No serial range allocated yet. Use "Auto Allocate" to assign serials.</Text>
                         )}
                       </View>
-
-                      {/* Auto Allocate Button */}
-                      <TouchableOpacity
-                        style={{ backgroundColor: '#2563eb', borderRadius: 8, padding: 14, alignItems: 'center', marginTop: 12, opacity: pickAllocating ? 0.6 : 1 }}
-                        onPress={handleAutoAllocateLots}
-                        disabled={pickAllocating}
-                      >
-                        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>
-                          {pickAllocating ? 'Allocating...' : 'Auto Allocate Lots'}
-                        </Text>
-                      </TouchableOpacity>
 
                       {/* Pick Confirm JSON Preview */}
                       {allocatedLots.length > 0 && (() => {
