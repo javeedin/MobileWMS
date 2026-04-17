@@ -3085,13 +3085,24 @@ _Sent from MobileWMS_`;
     setShowApiConsole(false);
     setPickConfirmJson(null);
     setPickJsonCopied(false);
-    setShowPickModal(true);
 
-    // Fetch allocated lots summary for serial range display
-    if (selectedShipOrder) {
-      const orderNo = selectedShipOrder.source_order_number;
-      fetchAllocatedLotsSummary(orderNo);
+    // Restore allocation from this line's previous Fusion allocation if available
+    const existingSerials = lineAllocatedSerials[line.lineId] || [];
+    if (existingSerials.length > 0) {
+      const lotNo = line.lot_number || '';
+      setAllocatedLots(existingSerials.map(sn => ({ serial_number: sn, lot_number: lotNo })));
+      setAllocatedLotsSummary([{
+        fromserialnumber: existingSerials[0],
+        toserialnumber: existingSerials[existingSerials.length - 1],
+        lotnumber: lotNo,
+        qty: existingSerials.length,
+      }]);
+    } else {
+      setAllocatedLots([]);
+      setAllocatedLotsSummary([]);
     }
+
+    setShowPickModal(true);
   };
 
   // Handle confirm pick — shows a 2-step progress popup
