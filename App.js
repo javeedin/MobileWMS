@@ -3244,7 +3244,7 @@ _Sent from MobileWMS_`;
 
     setPickStep2Status(step2Success ? 'done' : 'error');
     setPickConfirmResult({ step1: step1Data, step2: step2Data });
-    setProcessedPickSlips(prev => new Set([...prev, pickingLine.pick_slip_no]));
+    setProcessedPickSlips(prev => new Set([...prev, pickingLine.lineId]));
 
     console.log('[PICK CONFIRM] COMPLETE — Step1:', step1Success ? 'OK' : 'FAIL', '| Step2:', step2Success ? 'OK' : 'FAIL');
     console.log('=======================================================');
@@ -8368,7 +8368,7 @@ _Sent from MobileWMS_`;
                         <Text style={{ fontSize: 10, fontWeight: '700', color: '#0369a1' }}>Line {line.line_number}</Text>
                       </View>
                     )}
-                    {processedPickSlips.has(line.pick_slip_no) && (
+                    {processedPickSlips.has(line.lineId) && (
                       <View style={{ backgroundColor: '#dcfce7', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, flexDirection: 'row', alignItems: 'center' }}>
                         <Text style={{ fontSize: 10, fontWeight: '700', color: '#15803d' }}>✓ Confirmed</Text>
                       </View>
@@ -8429,7 +8429,7 @@ _Sent from MobileWMS_`;
                 </View>
               )}
 
-              {processedPickSlips.has(line.pick_slip_no) ? (
+              {processedPickSlips.has(line.lineId) ? (
                 <View style={{ backgroundColor: '#f0fdf4', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#86efac' }}>
                   <Text style={{ color: '#15803d', fontWeight: '700', fontSize: 13 }}>✓ Pick Confirmed</Text>
                 </View>
@@ -8739,7 +8739,7 @@ _Sent from MobileWMS_`;
                       })()}
 
                       {/* Pick Confirm Button — hidden once processed */}
-                      {processedPickSlips.has(pickingLine?.pick_slip_no) ? (
+                      {processedPickSlips.has(pickingLine?.lineId) ? (
                         <View style={{ backgroundColor: '#dcfce7', borderRadius: 8, padding: 14, alignItems: 'center', marginTop: 10, flexDirection: 'row', justifyContent: 'center' }}>
                           <Text style={{ color: '#166534', fontWeight: '700', fontSize: 14 }}>✓ Pick Confirmed</Text>
                         </View>
