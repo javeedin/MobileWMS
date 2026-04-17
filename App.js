@@ -8441,12 +8441,23 @@ _Sent from MobileWMS_`;
                   >
                     <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>🔢 Allocate</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.pickLineButton, { flex: 1 }]}
-                    onPress={() => handlePickLine(line)}
-                  >
-                    <Text style={styles.pickLineButtonText}>📋 Pick</Text>
-                  </TouchableOpacity>
+                  {(() => {
+                    const hasSerials = (lineAllocatedSerials[line.lineId] || []).length > 0;
+                    return (
+                      <TouchableOpacity
+                        style={[styles.pickLineButton, { flex: 1, opacity: hasSerials ? 1 : 0.45 }]}
+                        onPress={() => {
+                          if (!hasSerials) {
+                            Alert.alert('Allocate First', 'Please allocate serial numbers before picking this line.');
+                            return;
+                          }
+                          handlePickLine(line);
+                        }}
+                      >
+                        <Text style={styles.pickLineButtonText}>📋 Pick</Text>
+                      </TouchableOpacity>
+                    );
+                  })()}
                 </View>
               )}
             </View>
