@@ -8572,24 +8572,32 @@ _Sent from MobileWMS_`;
                         const jsonStr = JSON.stringify(previewJson, null, 2);
                         return (
                           <View style={{ marginTop: 12, borderWidth: 1, borderColor: '#334155', borderRadius: 8, overflow: 'hidden' }}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1e293b', padding: 10 }}>
+                            <TouchableOpacity
+                              style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1e293b', padding: 10 }}
+                              onPress={() => setPickJsonExpanded(prev => !prev)}
+                            >
                               <Text style={{ fontSize: 12, fontWeight: '700', color: '#94a3b8' }}>📋 Pick Confirm JSON</Text>
-                              <TouchableOpacity
-                                style={{ backgroundColor: pickJsonCopied ? '#16a34a' : '#334155', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 }}
-                                onPress={() => {
-                                  Share.share({ message: jsonStr, title: 'Pick Confirm JSON' });
-                                  setPickJsonCopied(true);
-                                  setTimeout(() => setPickJsonCopied(false), 2000);
-                                }}
-                              >
-                                <Text style={{ fontSize: 11, color: '#fff', fontWeight: '700' }}>{pickJsonCopied ? '✓ Copied' : 'Copy / Share'}</Text>
-                              </TouchableOpacity>
-                            </View>
-                            <ScrollView horizontal style={{ backgroundColor: '#0f172a' }}>
-                              <Text style={{ fontSize: 10, color: '#7dd3fc', fontFamily: 'monospace', padding: 10 }}>
-                                {jsonStr}
-                              </Text>
-                            </ScrollView>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <TouchableOpacity
+                                  style={{ backgroundColor: pickJsonCopied ? '#16a34a' : '#334155', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 }}
+                                  onPress={() => {
+                                    Share.share({ message: jsonStr, title: 'Pick Confirm JSON' });
+                                    setPickJsonCopied(true);
+                                    setTimeout(() => setPickJsonCopied(false), 2000);
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 11, color: '#fff', fontWeight: '700' }}>{pickJsonCopied ? '✓ Copied' : 'Copy'}</Text>
+                                </TouchableOpacity>
+                                <Text style={{ fontSize: 14, color: '#94a3b8' }}>{pickJsonExpanded ? '▲' : '▼'}</Text>
+                              </View>
+                            </TouchableOpacity>
+                            {pickJsonExpanded && (
+                              <ScrollView horizontal style={{ backgroundColor: '#0f172a' }}>
+                                <Text style={{ fontSize: 10, color: '#7dd3fc', fontFamily: 'monospace', padding: 10 }}>
+                                  {jsonStr}
+                                </Text>
+                              </ScrollView>
+                            )}
                           </View>
                         );
                       })()}
