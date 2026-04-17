@@ -3112,11 +3112,9 @@ _Sent from MobileWMS_`;
       return;
     }
 
-    // Build JSON payload
     const json = buildPickConfirmJson(pickingLine, allocatedLots);
     setPickConfirmJson(json);
 
-    // Reset and open progress popup
     setPickStep1Status('idle');
     setPickStep2Status('idle');
     setPickConfirmResult(null);
@@ -3125,72 +3123,116 @@ _Sent from MobileWMS_`;
 
     const transactionId = pickingLine.id;
     const jsonStr = JSON.stringify(json);
+    const FUSION_URL = 'https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05/pickTransactions';
+    const APEX_URL = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/updatepickconfirmstatus/${transactionId}`;
 
-    // ── STEP 1: Fusion pickTransactions ───────────────────────────────
+    // ── STEP 1: Fusion pickTransactions ──────────────────────────────
     setPickStep1Status('loading');
     let step1Data = null;
+    let step1Success = false;
+
     try {
-      const url1 = 'https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05/pickTransactions';
       console.log('=======================================================');
-      console.log('[STEP 1] POST Fusion pickTransactions');
-      console.log('[STEP 1] URL    :', url1);
-      console.log('[STEP 1] PAYLOAD:', JSON.stringify(json, null, 2));
-      const res1 = await fetch(url1, {
+      console.log('[PICK CONFIRM] STEP 1 — POST Fusion pickTransactions');
+      console.log('[STEP 1] URL     :', FUSION_URL);
+      console.log('[STEP 1] PAYLOAD :', JSON.stringify(json, null, 2));
+
+      const res1 = await fetch(FUSION_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${ORACLE_FUSION_AUTH}` },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${ORACLE_FUSION_AUTH}`,
+        },
         body: jsonStr,
       });
+
       const raw1 = await res1.text();
-      console.log('[STEP 1] HTTP STATUS:', res1.status);
-      console.log('[STEP 1] RAW BODY   :', raw1);
+      console.log('[STEP 1] HTTP STATUS :', res1.status);
+      console.log('[STEP 1] RAW BODY    :', raw1);
+
       try { step1Data = JSON.parse(raw1); } catch (_) { step1Data = { raw: raw1 }; }
-      console.log('[STEP 1] PARSED     :', JSON.stringify(step1Data, null, 2));
+      console.log('[STEP 1] PARSED      :', JSON.stringify(step1Data, null, 2));
       console.log('=======================================================');
-      logApiCall('POST', url1, json, step1Data, res1.status);
 
-      // Only run Step 2 if Fusion returned success
-      const fusionSuccess = res1.status >= 200 && res1.status < 300;
-      setPickStep1Status('done');
+      logApiCall('POST', FUSION_URL, json, step1Data, res1.status);
 
-      if (!fusionSuccess) {
-        setPickStep2Status('done');
+      // Fusion success = HTTP 2xx AND ReturnStatus !== error
+      const httpOk = res1.status >= 200 && res1.status < 300;
+      const returnStatus = step1Data?.ReturnStatus || step1Data?.returnStatus || '';
+      const fusionError = step1Data?.ErrorExplanation || step1Data?.errorExplanation || step1Data?.ErrorCode || '';
+      step1Success = httpOk && returnStatus.toUpperCase() !== 'E' && returnStatus.toUpperCase() !== 'ERROR';
+
+      step1Data._meta = {
+        httpStatus: res1.status,
+        success: step1Success,
+        returnStatus,
+        errorMessage: fusionError,
+        transactionId: step1Data?.TransactionHeaderId || step1Data?.transactionHeaderId || null,
+      };
+
+      console.log('[STEP 1] SUCCESS:', step1Success, '| ReturnStatus:', returnStatus, '| TxnID:', step1Data._meta.transactionId);
+
+      setPickStep1Status(step1Success ? 'done' : 'error');
+
+      if (!step1Success) {
+        setPickStep2Status('skipped');
         setPickConfirmResult({ step1: step1Data, step2: null });
-        setProcessedPickSlips(prev => new Set([...prev, pickingLine.pick_slip_no]));
+        console.log('[PICK CONFIRM] Step 1 failed — skipping Step 2');
         return;
       }
+
     } catch (e) {
       console.log('[STEP 1] NETWORK ERROR:', e.message);
-      step1Data = { error: e.message };
-      logApiCall('POST', 'https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05/pickTransactions', json, step1Data, 'ERR');
-      setPickStep1Status('done');
-      setPickStep2Status('done');
+      step1Data = { error: e.message, _meta: { httpStatus: 0, success: false, errorMessage: e.message } };
+      logApiCall('POST', FUSION_URL, json, step1Data, 'ERR');
+      setPickStep1Status('error');
+      setPickStep2Status('skipped');
       setPickConfirmResult({ step1: step1Data, step2: null });
       return;
     }
 
-    // ── STEP 2: APEX updatepickconfirmstatus ──────────────────────────
+    // ── STEP 2: APEX updatepickconfirmstatus ─────────────────────────
     setPickStep2Status('loading');
     let step2Data = null;
+    let step2Success = false;
+
     try {
-      const url2 = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/updatepickconfirmstatus/${transactionId}`;
       console.log('=======================================================');
-      console.log('[STEP 2] PUT updatepickconfirmstatus');
-      console.log('[STEP 2] URL:', url2);
-      const res2 = await fetch(url2, { method: 'PUT', headers: { 'Content-Type': 'application/json' } });
+      console.log('[PICK CONFIRM] STEP 2 — PUT updatepickconfirmstatus');
+      console.log('[STEP 2] URL           :', APEX_URL);
+      console.log('[STEP 2] TRANSACTION ID:', transactionId);
+
+      const res2 = await fetch(APEX_URL, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
       const raw2 = await res2.text();
       console.log('[STEP 2] HTTP STATUS:', res2.status);
       console.log('[STEP 2] RAW BODY   :', raw2.length > 500 ? raw2.substring(0, 500) + `...(${raw2.length} chars)` : raw2);
-      try { step2Data = JSON.parse(raw2); } catch (_) { step2Data = { raw: raw2.substring(0, 200) }; }
+
+      try { step2Data = JSON.parse(raw2); } catch (_) { step2Data = { raw: raw2.substring(0, 300) }; }
       console.log('[STEP 2] PARSED     :', JSON.stringify(step2Data, null, 2));
       console.log('=======================================================');
-      logApiCall('PUT', url2, { transactionId }, step2Data, res2.status);
+
+      step2Success = res2.status >= 200 && res2.status < 300;
+      step2Data._meta = { httpStatus: res2.status, success: step2Success };
+
+      logApiCall('PUT', APEX_URL, { transactionId }, step2Data, res2.status);
+      console.log('[STEP 2] SUCCESS:', step2Success);
+
     } catch (e) {
       console.log('[STEP 2] NETWORK ERROR:', e.message);
-      step2Data = { error: e.message };
+      step2Data = { error: e.message, _meta: { httpStatus: 0, success: false } };
+      logApiCall('PUT', APEX_URL, { transactionId }, step2Data, 'ERR');
     }
-    setPickStep2Status('done');
+
+    setPickStep2Status(step2Success ? 'done' : 'error');
     setPickConfirmResult({ step1: step1Data, step2: step2Data });
     setProcessedPickSlips(prev => new Set([...prev, pickingLine.pick_slip_no]));
+
+    console.log('[PICK CONFIRM] COMPLETE — Step1:', step1Success ? 'OK' : 'FAIL', '| Step2:', step2Success ? 'OK' : 'FAIL');
+    console.log('=======================================================');
   };
 
   // Handle scan serial for pick
@@ -8393,19 +8435,28 @@ _Sent from MobileWMS_`;
           onRequestClose={() => {}}
         >
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-            <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 360 }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 380 }}>
               <Text style={{ fontSize: 17, fontWeight: '700', color: '#1e293b', marginBottom: 20, textAlign: 'center' }}>Pick Confirm</Text>
 
               {/* Step 1 */}
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: pickStep1Status === 'done' ? '#dcfce7' : '#f1f5f9', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: pickStep1Status === 'done' ? '#dcfce7' : pickStep1Status === 'error' ? '#fee2e2' : '#f1f5f9', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
                   {pickStep1Status === 'loading' && <ActivityIndicator size="small" color={COLORS.primary} />}
-                  {pickStep1Status === 'done' && <Text style={{ fontSize: 18, color: '#16a34a' }}>✓</Text>}
-                  {pickStep1Status === 'idle' && <Text style={{ fontSize: 14, color: '#94a3b8', fontWeight: '700' }}>1</Text>}
+                  {pickStep1Status === 'done'    && <Text style={{ fontSize: 16, color: '#16a34a' }}>✓</Text>}
+                  {pickStep1Status === 'error'   && <Text style={{ fontSize: 16, color: '#dc2626' }}>✕</Text>}
+                  {pickStep1Status === 'idle'    && <Text style={{ fontSize: 14, color: '#94a3b8', fontWeight: '700' }}>1</Text>}
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 14, fontWeight: '600', color: '#334155' }}>Fusion Pick Confirm</Text>
-                  <Text style={{ fontSize: 11, color: '#64748b' }}>Fusion/pickTransactions</Text>
+                  <Text style={{ fontSize: 11, color: '#64748b' }}>POST pickTransactions</Text>
+                  {pickStep1Status === 'done' && pickConfirmResult?.step1?._meta?.transactionId && (
+                    <Text style={{ fontSize: 11, color: '#16a34a', marginTop: 2 }}>TxnID: {pickConfirmResult.step1._meta.transactionId}</Text>
+                  )}
+                  {pickStep1Status === 'error' && (
+                    <Text style={{ fontSize: 11, color: '#dc2626', marginTop: 2 }} numberOfLines={2}>
+                      {pickConfirmResult?.step1?._meta?.errorMessage || `HTTP ${pickConfirmResult?.step1?._meta?.httpStatus}`}
+                    </Text>
+                  )}
                 </View>
               </View>
 
@@ -8413,28 +8464,77 @@ _Sent from MobileWMS_`;
               <View style={{ width: 2, height: 12, backgroundColor: '#e2e8f0', marginLeft: 15, marginBottom: 4, marginTop: -8 }} />
 
               {/* Step 2 */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}>
-                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: pickStep2Status === 'done' ? '#dcfce7' : '#f1f5f9', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
+                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: pickStep2Status === 'done' ? '#dcfce7' : pickStep2Status === 'error' ? '#fee2e2' : pickStep2Status === 'skipped' ? '#fef9c3' : '#f1f5f9', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
                   {pickStep2Status === 'loading' && <ActivityIndicator size="small" color={COLORS.primary} />}
-                  {pickStep2Status === 'done' && <Text style={{ fontSize: 18, color: '#16a34a' }}>✓</Text>}
-                  {pickStep2Status === 'idle' && <Text style={{ fontSize: 14, color: '#94a3b8', fontWeight: '700' }}>2</Text>}
+                  {pickStep2Status === 'done'    && <Text style={{ fontSize: 16, color: '#16a34a' }}>✓</Text>}
+                  {pickStep2Status === 'error'   && <Text style={{ fontSize: 16, color: '#dc2626' }}>✕</Text>}
+                  {pickStep2Status === 'skipped' && <Text style={{ fontSize: 14, color: '#ca8a04' }}>–</Text>}
+                  {pickStep2Status === 'idle'    && <Text style={{ fontSize: 14, color: '#94a3b8', fontWeight: '700' }}>2</Text>}
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 14, fontWeight: '600', color: '#334155' }}>Update Pick Status</Text>
-                  <Text style={{ fontSize: 11, color: '#64748b' }}>inventory/updatepickconfirmstatus</Text>
+                  <Text style={{ fontSize: 11, color: '#64748b' }}>PUT updatepickconfirmstatus</Text>
+                  {pickStep2Status === 'skipped' && (
+                    <Text style={{ fontSize: 11, color: '#ca8a04', marginTop: 2 }}>Skipped — Step 1 failed</Text>
+                  )}
+                  {pickStep2Status === 'error' && (
+                    <Text style={{ fontSize: 11, color: '#dc2626', marginTop: 2 }}>
+                      HTTP {pickConfirmResult?.step2?._meta?.httpStatus}
+                    </Text>
+                  )}
                 </View>
               </View>
 
-              {/* Done button — only shown when both steps are complete */}
-              {pickStep1Status === 'done' && pickStep2Status === 'done' && (
+              {/* Result summary — shown when both steps settled */}
+              {(pickStep1Status === 'done' || pickStep1Status === 'error') &&
+               (pickStep2Status === 'done' || pickStep2Status === 'error' || pickStep2Status === 'skipped') && (
+                <View style={{
+                  borderRadius: 10, padding: 14, marginBottom: 16,
+                  backgroundColor: pickStep1Status === 'done' && pickStep2Status === 'done' ? '#f0fdf4' : '#fef2f2',
+                  borderWidth: 1,
+                  borderColor: pickStep1Status === 'done' && pickStep2Status === 'done' ? '#86efac' : '#fca5a5',
+                }}>
+                  {pickStep1Status === 'done' && pickStep2Status === 'done' ? (
+                    <>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#15803d', marginBottom: 4 }}>✓ Pick Confirmed Successfully</Text>
+                      <Text style={{ fontSize: 12, color: '#166534' }}>Order: {selectedShipOrder?.source_order_number}</Text>
+                      <Text style={{ fontSize: 12, color: '#166534' }}>Pick Slip: {pickingLine?.pick_slip_no}</Text>
+                      <Text style={{ fontSize: 12, color: '#166534' }}>Serials: {allocatedLots.length} allocated</Text>
+                      {pickConfirmResult?.step1?._meta?.transactionId && (
+                        <Text style={{ fontSize: 12, color: '#166534', fontWeight: '600', marginTop: 4 }}>
+                          Fusion TxnID: {pickConfirmResult.step1._meta.transactionId}
+                        </Text>
+                      )}
+                    </>
+                  ) : pickStep1Status === 'error' ? (
+                    <>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#dc2626', marginBottom: 4 }}>✕ Fusion Pick Confirm Failed</Text>
+                      <Text style={{ fontSize: 12, color: '#b91c1c' }}>
+                        {pickConfirmResult?.step1?._meta?.errorMessage || 'Check console logs for details'}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>HTTP {pickConfirmResult?.step1?._meta?.httpStatus} — APEX status not updated</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#d97706', marginBottom: 4 }}>⚠ Partially Complete</Text>
+                      <Text style={{ fontSize: 12, color: '#92400e' }}>Fusion confirmed but APEX status update failed.</Text>
+                      <Text style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>HTTP {pickConfirmResult?.step2?._meta?.httpStatus}</Text>
+                    </>
+                  )}
+                </View>
+              )}
+
+              {/* Done / Close button */}
+              {(pickStep1Status === 'done' || pickStep1Status === 'error') &&
+               (pickStep2Status === 'done' || pickStep2Status === 'error' || pickStep2Status === 'skipped') && (
                 <TouchableOpacity
-                  style={{ backgroundColor: '#059669', borderRadius: 10, padding: 14, alignItems: 'center' }}
-                  onPress={() => {
-                    setShowPickProgress(false);
-                    setPickJsonExpanded(false);
-                  }}
+                  style={{ backgroundColor: pickStep1Status === 'done' && pickStep2Status === 'done' ? '#059669' : '#64748b', borderRadius: 10, padding: 14, alignItems: 'center' }}
+                  onPress={() => { setShowPickProgress(false); setPickJsonExpanded(false); }}
                 >
-                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Done</Text>
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>
+                    {pickStep1Status === 'done' && pickStep2Status === 'done' ? 'Done' : 'Close'}
+                  </Text>
                 </TouchableOpacity>
               )}
             </View>
