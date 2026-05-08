@@ -3010,32 +3010,41 @@ _Sent from MobileWMS_`;
       const itemNumber = line.item_number || '';
       const headers = { 'Authorization': `Basic ${ORACLE_FUSION_AUTH}`, 'Content-Type': 'application/json' };
 
-      // Step 1: get onhand balances for this org + item
+      // Step 1: get all onhand balance records for this org + item
       const onhandUrl = `${ORACLE_FUSION_BASE}/inventoryOnhandBalances?q=OrganizationCode=${encodeURIComponent(orgCode)};ItemNumber=${encodeURIComponent(itemNumber)}&limit=500`;
-      console.log('[Change Lot] Step 1 URL:', onhandUrl);
+      console.log('[Change Lot] Onhand URL:', onhandUrl);
       const onhandRes = await fetch(onhandUrl, { headers });
       const onhandData = await onhandRes.json();
       const onhandItems = onhandData.items || [];
-      console.log('[Change Lot] Onhand items:', onhandItems.length);
+      console.log('[Change Lot] Onhand records:', onhandItems.length);
 
-      if (onhandItems.length === 0) {
-        setLotModalData([]);
-        return;
+      // Step 2: for each onhand record, follow its lots link and pair LotNumber + Qty
+      const allLotRows = [];
+      for (const onhand of onhandItems) {
+        const qty = onhand.PrimaryQuantity ?? onhand.PrimaryAvailableQuantity ?? 0;
+        const lotsLink = (onhand.links || []).find(l => l.name === 'lots');
+        if (!lotsLink) continue;
+        console.log('[Change Lot] Fetching lots:', lotsLink.href);
+        try {
+          const lotsRes = await fetch(lotsLink.href, { headers });
+          const lotsData = await lotsRes.json();
+          const lotItems = lotsData.items || [];
+          for (const lot of lotItems) {
+            allLotRows.push({
+              lotnumber: lot.LotNumber || '',
+              primaryquantity: qty,
+              expirationdate: lot.ExpirationDate || '',
+              subinventory: onhand.SubinventoryCode || '',
+              locator: onhand.Locator || '',
+            });
+          }
+        } catch (e) {
+          console.log('[Change Lot] Failed to fetch lot for onhand record:', e.message);
+        }
       }
 
-      // Step 2: follow lots child link from the first onhand record
-      const lotsLink = (onhandItems[0].links || []).find(l => l.name === 'lots');
-      console.log('[Change Lot] Step 2 lots link:', lotsLink?.href);
-      if (!lotsLink) {
-        setLotModalData([]);
-        return;
-      }
-
-      const lotsRes = await fetch(lotsLink.href, { headers });
-      const lotsData = await lotsRes.json();
-      const lots = lotsData.items || [];
-      console.log('[Change Lot] Lots found:', lots.length);
-      setLotModalData(lots);
+      console.log('[Change Lot] Total lot rows:', allLotRows.length);
+      setLotModalData(allLotRows);
     } catch (error) {
       Alert.alert('Error', 'Failed to fetch lots: ' + error.message);
       setShowLotModal(false);
@@ -8576,11 +8585,11 @@ _Sent from MobileWMS_`;
               ) : (
                 <ScrollView showsVerticalScrollIndicator={false}>
                   {lotModalData.map((lot, idx) => {
-                    const lotNum = lot.LotNumber || lot.lotnumber || '';
-                    const lotQty = lot.PrimaryAvailableQuantity ?? lot.primaryquantity ?? '';
-                    const expiry = lot.ExpirationDate || lot.expirationdate || '';
-                    const subinv = lot.SubinventoryCode || lot.sub_inventory_code || '';
-                    const locator = lot.Locator || lot.locator || '';
+                    const lotNum = lot.lotnumber || '';
+                    const lotQty = lot.primaryquantity ?? '';
+                    const expiry = lot.expirationdate || '';
+                    const subinv = lot.subinventory || '';
+                    const locator = lot.locator || '';
                     const isSelected = selectedLineLots[lotModalLine?.lineId]?.lotnumber === lotNum;
                     return (
                       <TouchableOpacity
