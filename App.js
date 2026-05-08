@@ -2848,8 +2848,10 @@ _Sent from MobileWMS_`;
     const orgCode = selectedShipOrder?.organization_name || '';
     const itemNumber = pickingLine?.item_number || '';
     const locator = pickingLine?.locator || '';
-    const lotNumber = pickingLine?.lot_number || '';
+    const selectedLot = selectedLineLots[pickingLine?.lineId];
+    const lotNumber = selectedLot?.lotnumber || pickingLine?.lot_number || '';
     const neededQty = pickingLine?.qty || 1;
+    console.log('[FUSION ALLOCATE] Using lot:', lotNumber, selectedLot ? '(user-selected)' : '(original from line)');
     const currentLineId = pickingLine?.lineId || '';
 
     // Serials already allocated to OTHER lines in this session
@@ -9136,7 +9138,11 @@ _Sent from MobileWMS_`;
             <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 360 }}>
               <Text style={{ fontSize: 17, fontWeight: '700', color: '#1e293b', marginBottom: 6 }}>Select Allocation Source</Text>
               <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 20 }}>
-                Item: {pickingLine?.item_number}  •  Qty: {pickingLine?.qty}  •  Lot: {pickingLine?.lot_number || 'N/A'}
+                Item: {pickingLine?.item_number}  •  Qty: {pickingLine?.qty}{'\n'}
+                Lot: {selectedLineLots[pickingLine?.lineId]?.lotnumber || pickingLine?.lot_number || 'N/A'}
+                {selectedLineLots[pickingLine?.lineId] ? (
+                  `  •  Lot Qty: ${selectedLineLots[pickingLine?.lineId].primaryquantity}`
+                ) : ''}
               </Text>
 
               <TouchableOpacity
