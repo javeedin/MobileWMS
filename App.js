@@ -407,6 +407,13 @@ export default function App() {
   const [fusionAllocError, setFusionAllocError] = useState('');
   const [lineAllocatedSerials, setLineAllocatedSerials] = useState({}); // { lineId: [serial, ...] }
 
+  // Lot selection modal state (ShipOrderLines)
+  const [showLotModal, setShowLotModal] = useState(false);
+  const [lotModalLine, setLotModalLine] = useState(null);
+  const [lotModalData, setLotModalData] = useState([]);
+  const [lotModalLoading, setLotModalLoading] = useState(false);
+  const [selectedLineLots, setSelectedLineLots] = useState({}); // { lineId: { lotnumber, primaryquantity } }
+
   // Call Center state
   const [mobileContacts, setMobileContacts] = useState([]);
   const [contactsLoading, setContactsLoading] = useState(false);
@@ -2989,6 +2996,28 @@ _Sent from MobileWMS_`;
     } catch (error) {
       Alert.alert('Error', 'Failed to fetch ship orders: ' + error.message);
       setShipOrdersLoading(false);
+    }
+  };
+
+  // Fetch lots for a specific item + org (used in ShipOrderLines lot picker)
+  const fetchLotsForLine = async (line) => {
+    setLotModalLine(line);
+    setLotModalData([]);
+    setLotModalLoading(true);
+    setShowLotModal(true);
+    try {
+      const orgCode = line.organization_name || selectedShipOrder?.organization_name || '';
+      const itemNumber = line.item_number || '';
+      const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandbylots?organization_code=${encodeURIComponent(orgCode)}&item_number=${encodeURIComponent(itemNumber)}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      const items = (data.items || []).filter(i => i.item_number === itemNumber);
+      setLotModalData(items);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to fetch lots: ' + error.message);
+      setShowLotModal(false);
+    } finally {
+      setLotModalLoading(false);
     }
   };
 
@@ -8408,7 +8437,24 @@ _Sent from MobileWMS_`;
                 <View style={{ flexDirection: 'row', marginBottom: 8 }}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
                     <Text style={styles.shipLineDetailLabel}>Lot</Text>
-                    <Text style={[styles.shipLineDetailValue, { fontSize: 11 }]} numberOfLines={1}>{line.lot_number || 'N/A'}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <Text style={[styles.shipLineDetailValue, { fontSize: 11 }]} numberOfLines={1}>
+                        {selectedLineLots[line.lineId]?.lotnumber || line.lot_number || 'N/A'}
+                      </Text>
+                      {selectedLineLots[line.lineId] && (
+                        <View style={{ backgroundColor: '#fef9c3', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                          <Text style={{ fontSize: 10, color: '#854d0e', fontWeight: '600' }}>
+                            Qty: {selectedLineLots[line.lineId].primaryquantity}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => fetchLotsForLine(line)}
+                      style={{ marginTop: 4, backgroundColor: '#eff6ff', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, alignSelf: 'flex-start' }}
+                    >
+                      <Text style={{ fontSize: 10, color: '#1d4ed8', fontWeight: '600' }}>⟳ Change Lot</Text>
+                    </TouchableOpacity>
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.shipLineDetailLabel}>Locator</Text>
@@ -8472,6 +8518,91 @@ _Sent from MobileWMS_`;
             </View>
           )}
         />
+
+        {/* Lot Picker Modal */}
+        <Modal
+          visible={showLotModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowLotModal(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '75%' }}>
+              {/* Modal Header */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: '#1e293b' }}>Select Lot</Text>
+                <TouchableOpacity onPress={() => setShowLotModal(false)}>
+                  <Text style={{ fontSize: 22, color: '#64748b' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              {lotModalLine && (
+                <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 14 }}>
+                  Item: {lotModalLine.item_number}  •  Original Qty: {lotModalLine.qty} {lotModalLine.ordered_uom || ''}
+                </Text>
+              )}
+
+              {lotModalLoading ? (
+                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                  <ActivityIndicator size="large" color={COLORS.primary} />
+                  <Text style={{ marginTop: 12, color: '#64748b', fontSize: 13 }}>Loading lots...</Text>
+                </View>
+              ) : lotModalData.length === 0 ? (
+                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                  <Text style={{ fontSize: 14, color: '#94a3b8' }}>No lots found for this item.</Text>
+                </View>
+              ) : (
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  {lotModalData.map((lot, idx) => {
+                    const isSelected = selectedLineLots[lotModalLine?.lineId]?.lotnumber === lot.lotnumber;
+                    return (
+                      <TouchableOpacity
+                        key={`${lot.lotnumber}-${idx}`}
+                        onPress={() => {
+                          setSelectedLineLots(prev => ({ ...prev, [lotModalLine.lineId]: { lotnumber: lot.lotnumber, primaryquantity: lot.primaryquantity } }));
+                          setShowLotModal(false);
+                        }}
+                        style={{
+                          flexDirection: 'row',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: 14,
+                          marginBottom: 8,
+                          borderRadius: 10,
+                          borderWidth: 1.5,
+                          borderColor: isSelected ? COLORS.primary : '#e2e8f0',
+                          backgroundColor: isSelected ? '#eff6ff' : '#f8fafc',
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 14, fontWeight: '700', color: '#1e293b' }}>{lot.lotnumber}</Text>
+                          {lot.expirationdate ? (
+                            <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                              Expires: {new Date(lot.expirationdate).toLocaleDateString()}
+                            </Text>
+                          ) : null}
+                          {lot.sub_inventory_code ? (
+                            <Text style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>
+                              {lot.sub_inventory_code}{lot.locator ? ` / ${lot.locator}` : ''}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <View style={{ alignItems: 'flex-end', marginLeft: 12 }}>
+                          <Text style={{ fontSize: 18, fontWeight: '800', color: isSelected ? COLORS.primary : '#334155' }}>
+                            {lot.primaryquantity}
+                          </Text>
+                          <Text style={{ fontSize: 10, color: '#94a3b8' }}>On Hand</Text>
+                          {isSelected && (
+                            <Text style={{ fontSize: 11, color: COLORS.primary, fontWeight: '700', marginTop: 4 }}>✓ Selected</Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              )}
+            </View>
+          </View>
+        </Modal>
 
         {/* Pick Confirm Progress Popup */}
         <Modal
