@@ -4212,7 +4212,7 @@ _Sent from MobileWMS_`;
         ) : (
           <FlatList
             data={poList}
-            keyExtractor={(item) => item.documentnumber}
+            keyExtractor={(item) => `${item.documentnumber}-${item.asn_number}`}
             contentContainerStyle={styles.poList}
             renderItem={({ item }) => {
               // Calculate receiving status
