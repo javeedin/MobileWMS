@@ -4912,7 +4912,7 @@ _Sent from MobileWMS_`;
                     alignItems: 'center'
                   }}
                   disabled={!isAlreadyReceived && isDisabled}
-                  onPress={isAlreadyReceived ? goBack : validateAndConfirm}
+                  onPress={isAlreadyReceived ? () => { navigateTo('ReceiveGoods'); fetchPOData(); } : validateAndConfirm}
                 >
                   {receivingLoading ? (
                     <ActivityIndicator color={COLORS.white} size="small" />
@@ -5364,7 +5364,13 @@ _Sent from MobileWMS_`;
                     borderRadius: 8,
                     alignItems: 'center',
                   }}
-                  onPress={() => setShowProcessingModal(false)}
+                  onPress={() => {
+                    setShowProcessingModal(false);
+                    if (processingItems.every(i => i.status === 'success')) {
+                      navigateTo('ReceiveGoods');
+                      fetchPOData();
+                    }
+                  }}
                 >
                   <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>
                     {processingItems.every(i => i.status === 'success') ? '✓ Done' : 'Close'}
