@@ -3398,26 +3398,29 @@ _Sent from MobileWMS_`;
     return matchesItemCode || matchesDescription;
   });
 
-  // Group PO data by document number
+  // Group PO data by document number + ASN number (distinct PO + ASN combinations)
   const groupedPOs = poData.reduce((acc, item) => {
     const docNum = item.documentnumber || 'Unknown';
-    if (!acc[docNum]) {
-      acc[docNum] = {
+    const asnNum = item.asn_number || '';
+    const key = `${docNum}|||${asnNum}`;
+    if (!acc[key]) {
+      acc[key] = {
+        documentnumber: docNum,
+        asn_number: asnNum,
         items: [],
         vendorname: item.vendorname || 'Unknown Vendor',
-        asn_number: item.asn_number || '',
       };
     }
-    acc[docNum].items.push(item);
+    acc[key].items.push(item);
     return acc;
   }, {});
 
-  const poList = Object.keys(groupedPOs).map(docNum => ({
-    documentnumber: docNum,
-    items: groupedPOs[docNum].items,
-    itemCount: groupedPOs[docNum].items.length,
-    vendorname: groupedPOs[docNum].vendorname,
-    asn_number: groupedPOs[docNum].asn_number,
+  const poList = Object.values(groupedPOs).map(group => ({
+    documentnumber: group.documentnumber,
+    items: group.items,
+    itemCount: group.items.length,
+    vendorname: group.vendorname,
+    asn_number: group.asn_number,
   }));
 
   // Handle barcode scan - navigate to scanner
