@@ -3007,12 +3007,16 @@ _Sent from MobileWMS_`;
     setShowLotModal(true);
     try {
       const orgCode = line.organization_name || selectedShipOrder?.organization_name || '';
-      const itemNumber = line.item_number || '';
-      const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandbylots?organization_code=${encodeURIComponent(orgCode)}&item_number=${encodeURIComponent(itemNumber)}`;
+      const itemNumber = (line.item_number || '').trim().toUpperCase();
+      const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandbylots?organization_code=${encodeURIComponent(orgCode)}`;
+      console.log('[Change Lot] URL:', url);
+      console.log('[Change Lot] Filtering for item_number:', itemNumber);
       const response = await fetch(url);
       const data = await response.json();
-      const items = (data.items || []).filter(i => i.item_number === itemNumber);
-      setLotModalData(items);
+      const allItems = data.items || [];
+      const filtered = allItems.filter(i => (i.item_number || '').trim().toUpperCase() === itemNumber);
+      console.log('[Change Lot] Total items from API:', allItems.length, '| Filtered for item:', filtered.length);
+      setLotModalData(filtered);
     } catch (error) {
       Alert.alert('Error', 'Failed to fetch lots: ' + error.message);
       setShowLotModal(false);
@@ -8451,9 +8455,9 @@ _Sent from MobileWMS_`;
                     </View>
                     <TouchableOpacity
                       onPress={() => fetchLotsForLine(line)}
-                      style={{ marginTop: 4, backgroundColor: '#eff6ff', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, alignSelf: 'flex-start' }}
+                      style={{ marginTop: 6, backgroundColor: '#1d4ed8', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7, alignSelf: 'flex-start' }}
                     >
-                      <Text style={{ fontSize: 10, color: '#1d4ed8', fontWeight: '600' }}>⟳ Change Lot</Text>
+                      <Text style={{ fontSize: 12, color: '#fff', fontWeight: '700' }}>⟳ Change Lot</Text>
                     </TouchableOpacity>
                   </View>
                   <View style={{ flex: 1 }}>
