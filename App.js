@@ -3007,16 +3007,35 @@ _Sent from MobileWMS_`;
     setShowLotModal(true);
     try {
       const orgCode = line.organization_name || selectedShipOrder?.organization_name || '';
-      const itemNumber = (line.item_number || '').trim().toUpperCase();
-      const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandbylots?organization_code=${encodeURIComponent(orgCode)}`;
-      console.log('[Change Lot] URL:', url);
-      console.log('[Change Lot] Filtering for item_number:', itemNumber);
-      const response = await fetch(url);
-      const data = await response.json();
-      const allItems = data.items || [];
-      const filtered = allItems.filter(i => (i.item_number || '').trim().toUpperCase() === itemNumber);
-      console.log('[Change Lot] Total items from API:', allItems.length, '| Filtered for item:', filtered.length);
-      setLotModalData(filtered);
+      const itemNumber = line.item_number || '';
+      const headers = { 'Authorization': `Basic ${ORACLE_FUSION_AUTH}`, 'Content-Type': 'application/json' };
+
+      // Step 1: get onhand balances for this org + item
+      const onhandUrl = `${ORACLE_FUSION_BASE}/inventoryOnhandBalances?q=OrganizationCode=${encodeURIComponent(orgCode)};ItemNumber=${encodeURIComponent(itemNumber)}&limit=500`;
+      console.log('[Change Lot] Step 1 URL:', onhandUrl);
+      const onhandRes = await fetch(onhandUrl, { headers });
+      const onhandData = await onhandRes.json();
+      const onhandItems = onhandData.items || [];
+      console.log('[Change Lot] Onhand items:', onhandItems.length);
+
+      if (onhandItems.length === 0) {
+        setLotModalData([]);
+        return;
+      }
+
+      // Step 2: follow lots child link from the first onhand record
+      const lotsLink = (onhandItems[0].links || []).find(l => l.name === 'lots');
+      console.log('[Change Lot] Step 2 lots link:', lotsLink?.href);
+      if (!lotsLink) {
+        setLotModalData([]);
+        return;
+      }
+
+      const lotsRes = await fetch(lotsLink.href, { headers });
+      const lotsData = await lotsRes.json();
+      const lots = lotsData.items || [];
+      console.log('[Change Lot] Lots found:', lots.length);
+      setLotModalData(lots);
     } catch (error) {
       Alert.alert('Error', 'Failed to fetch lots: ' + error.message);
       setShowLotModal(false);
@@ -8557,12 +8576,17 @@ _Sent from MobileWMS_`;
               ) : (
                 <ScrollView showsVerticalScrollIndicator={false}>
                   {lotModalData.map((lot, idx) => {
-                    const isSelected = selectedLineLots[lotModalLine?.lineId]?.lotnumber === lot.lotnumber;
+                    const lotNum = lot.LotNumber || lot.lotnumber || '';
+                    const lotQty = lot.PrimaryAvailableQuantity ?? lot.primaryquantity ?? '';
+                    const expiry = lot.ExpirationDate || lot.expirationdate || '';
+                    const subinv = lot.SubinventoryCode || lot.sub_inventory_code || '';
+                    const locator = lot.Locator || lot.locator || '';
+                    const isSelected = selectedLineLots[lotModalLine?.lineId]?.lotnumber === lotNum;
                     return (
                       <TouchableOpacity
-                        key={`${lot.lotnumber}-${idx}`}
+                        key={`${lotNum}-${idx}`}
                         onPress={() => {
-                          setSelectedLineLots(prev => ({ ...prev, [lotModalLine.lineId]: { lotnumber: lot.lotnumber, primaryquantity: lot.primaryquantity } }));
+                          setSelectedLineLots(prev => ({ ...prev, [lotModalLine.lineId]: { lotnumber: lotNum, primaryquantity: lotQty } }));
                           setShowLotModal(false);
                         }}
                         style={{
@@ -8578,21 +8602,21 @@ _Sent from MobileWMS_`;
                         }}
                       >
                         <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 14, fontWeight: '700', color: '#1e293b' }}>{lot.lotnumber}</Text>
-                          {lot.expirationdate ? (
+                          <Text style={{ fontSize: 14, fontWeight: '700', color: '#1e293b' }}>{lotNum}</Text>
+                          {expiry ? (
                             <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
-                              Expires: {new Date(lot.expirationdate).toLocaleDateString()}
+                              Expires: {new Date(expiry).toLocaleDateString()}
                             </Text>
                           ) : null}
-                          {lot.sub_inventory_code ? (
+                          {subinv ? (
                             <Text style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>
-                              {lot.sub_inventory_code}{lot.locator ? ` / ${lot.locator}` : ''}
+                              {subinv}{locator ? ` / ${locator}` : ''}
                             </Text>
                           ) : null}
                         </View>
                         <View style={{ alignItems: 'flex-end', marginLeft: 12 }}>
                           <Text style={{ fontSize: 18, fontWeight: '800', color: isSelected ? COLORS.primary : '#334155' }}>
-                            {lot.primaryquantity}
+                            {lotQty}
                           </Text>
                           <Text style={{ fontSize: 10, color: '#94a3b8' }}>On Hand</Text>
                           {isSelected && (
