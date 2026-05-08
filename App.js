@@ -3154,7 +3154,7 @@ _Sent from MobileWMS_`;
     // Restore allocation from this line's previous Fusion allocation if available
     const existingSerials = lineAllocatedSerials[line.lineId] || [];
     if (existingSerials.length > 0) {
-      const lotNo = line.lot_number || '';
+      const lotNo = selectedLineLots[line.lineId]?.lotnumber || line.lot_number || '';
       setAllocatedLots(existingSerials.map(sn => ({ serial_number: sn, lot_number: lotNo })));
       setAllocatedLotsSummary([{
         fromserialnumber: existingSerials[0],
@@ -3177,7 +3177,9 @@ _Sent from MobileWMS_`;
       return;
     }
 
-    const json = buildPickConfirmJson(pickingLine, allocatedLots);
+    const effectiveLot = selectedLineLots[pickingLine?.lineId]?.lotnumber || pickingLine?.lot_number || '';
+    const lotsWithCorrectLot = allocatedLots.map(l => ({ ...l, lot_number: effectiveLot }));
+    const json = buildPickConfirmJson(pickingLine, lotsWithCorrectLot);
     setPickConfirmJson(json);
 
     setPickStep1Status('idle');
