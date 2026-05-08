@@ -413,6 +413,7 @@ export default function App() {
   const [lotModalData, setLotModalData] = useState([]);
   const [lotModalLoading, setLotModalLoading] = useState(false);
   const [selectedLineLots, setSelectedLineLots] = useState({}); // { lineId: { lotnumber, primaryquantity } }
+  const [lotModalSearch, setLotModalSearch] = useState('');
 
   // Call Center state
   const [mobileContacts, setMobileContacts] = useState([]);
@@ -3004,6 +3005,7 @@ _Sent from MobileWMS_`;
     setLotModalLine(line);
     setLotModalData([]);
     setLotModalLoading(true);
+    setLotModalSearch('');
     setShowLotModal(true);
     try {
       const orgCode = line.organization_name || selectedShipOrder?.organization_name || '';
@@ -8568,10 +8570,29 @@ _Sent from MobileWMS_`;
                 </TouchableOpacity>
               </View>
               {lotModalLine && (
-                <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 14 }}>
+                <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
                   Item: {lotModalLine.item_number}  •  Original Qty: {lotModalLine.qty} {lotModalLine.ordered_uom || ''}
                 </Text>
               )}
+
+              {/* Search box */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f1f5f9', borderRadius: 10, paddingHorizontal: 12, marginBottom: 12 }}>
+                <Text style={{ fontSize: 15, color: '#94a3b8', marginRight: 8 }}>🔍</Text>
+                <TextInput
+                  value={lotModalSearch}
+                  onChangeText={setLotModalSearch}
+                  placeholder="Search lot number..."
+                  placeholderTextColor="#94a3b8"
+                  style={{ flex: 1, fontSize: 14, color: '#1e293b', paddingVertical: 10 }}
+                  autoCorrect={false}
+                  autoCapitalize="characters"
+                />
+                {lotModalSearch.length > 0 && (
+                  <TouchableOpacity onPress={() => setLotModalSearch('')}>
+                    <Text style={{ fontSize: 16, color: '#94a3b8', paddingLeft: 8 }}>✕</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
 
               {lotModalLoading ? (
                 <View style={{ alignItems: 'center', paddingVertical: 40 }}>
@@ -8584,7 +8605,7 @@ _Sent from MobileWMS_`;
                 </View>
               ) : (
                 <ScrollView showsVerticalScrollIndicator={false}>
-                  {lotModalData.map((lot, idx) => {
+                  {lotModalData.filter(lot => !lotModalSearch || (lot.lotnumber || '').toUpperCase().includes(lotModalSearch.toUpperCase())).map((lot, idx) => {
                     const lotNum = lot.lotnumber || '';
                     const lotQty = lot.primaryquantity ?? '';
                     const expiry = lot.expirationdate || '';
