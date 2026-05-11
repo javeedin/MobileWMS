@@ -4028,6 +4028,9 @@ _Sent from MobileWMS_`;
             </TouchableOpacity>
           </View>
 
+          <View style={{ alignItems: 'center', paddingVertical: 12 }}>
+            <Text style={{ fontSize: 11, color: '#aaa', fontWeight: '500' }}>MobileWMS {APP_VERSION}</Text>
+          </View>
           <View style={{ height: 80 }} />
         </ScrollView>
 
