@@ -2847,11 +2847,13 @@ _Sent from MobileWMS_`;
 
     const orgCode = selectedShipOrder?.organization_name || '';
     const itemNumber = pickingLine?.item_number || '';
-    const locator = pickingLine?.locator || '';
     const selectedLot = selectedLineLots[pickingLine?.lineId];
     const lotNumber = selectedLot?.lotnumber || pickingLine?.lot_number || '';
+    // Use the locator from the user-selected lot if stored, otherwise fall back to line's locator
+    const locator = selectedLot?.locator || pickingLine?.locator || '';
     const neededQty = pickingLine?.qty || 1;
     console.log('[FUSION ALLOCATE] Using lot:', lotNumber, selectedLot ? '(user-selected)' : '(original from line)');
+    console.log('[FUSION ALLOCATE] Using locator:', locator, selectedLot?.locator ? '(from selected lot)' : '(from line)');
     const currentLineId = pickingLine?.lineId || '';
 
     // Serials already allocated to OTHER lines in this session
@@ -2916,18 +2918,23 @@ _Sent from MobileWMS_`;
         return;
       }
 
-      // Step 2: lots child link
-      const lotsLink = (onhandItems[0].links || []).find(l => l.name === 'lots');
-      console.log('[STEP 2] Lots link:', lotsLink?.href);
-      if (!lotsLink) { setFusionAllocError('No lots link in onhand response.'); return; }
-
-      const lotsData = await fetchJson('STEP 2', lotsLink.href);
-      const lotsItems = lotsData.items || [];
-      console.log('[STEP 2] Lots:', lotsItems.map(l => l.LotNumber).join(', '));
-      if (lotsItems.length === 0) { setFusionAllocError('No lots found for this locator.'); return; }
+      // Step 2: search all onhand records for the selected lot
+      let matchedLot = null;
+      let firstAvailableLot = null;
+      for (let i = 0; i < onhandItems.length; i++) {
+        const lotsLink = (onhandItems[i].links || []).find(l => l.name === 'lots');
+        if (!lotsLink) continue;
+        const lotsData = await fetchJson(`STEP 2 (onhand ${i + 1})`, lotsLink.href);
+        const lotsItems = lotsData.items || [];
+        console.log(`[STEP 2 onhand ${i + 1}] Lots:`, lotsItems.map(l => l.LotNumber).join(', '));
+        if (!firstAvailableLot && lotsItems.length > 0) firstAvailableLot = lotsItems[0];
+        const found = lotsItems.find(l => l.LotNumber === lotNumber);
+        if (found) { matchedLot = found; break; }
+      }
+      if (!matchedLot) matchedLot = firstAvailableLot;
+      if (!matchedLot) { setFusionAllocError('No lots found for this item.'); return; }
 
       // Step 3: match lot → lotSerials with pagination
-      const matchedLot = lotsItems.find(l => l.LotNumber === lotNumber) || lotsItems[0];
       console.log('[STEP 3] Using lot:', matchedLot.LotNumber);
       const lotSerialsLink = (matchedLot.links || []).find(l => l.name === 'lotSerials');
       console.log('[STEP 3] LotSerials base URL:', lotSerialsLink?.href);
@@ -8476,7 +8483,7 @@ _Sent from MobileWMS_`;
                   <View style={{ flex: 1, paddingRight: 8 }}>
                     <Text style={styles.shipLineDetailLabel}>Lot</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <Text style={[styles.shipLineDetailValue, { fontSize: 11 }]} numberOfLines={1}>
+                      <Text style={[styles.shipLineDetailValue, { fontSize: 11 }]}>
                         {selectedLineLots[line.lineId]?.lotnumber || line.lot_number || 'N/A'}
                       </Text>
                       {selectedLineLots[line.lineId] && (
@@ -8620,7 +8627,7 @@ _Sent from MobileWMS_`;
                       <TouchableOpacity
                         key={`${lotNum}-${idx}`}
                         onPress={() => {
-                          setSelectedLineLots(prev => ({ ...prev, [lotModalLine.lineId]: { lotnumber: lotNum, primaryquantity: lotQty } }));
+                          setSelectedLineLots(prev => ({ ...prev, [lotModalLine.lineId]: { lotnumber: lotNum, primaryquantity: lotQty, subinventory: subinv, locator: locator } }));
                           setShowLotModal(false);
                         }}
                         style={{
