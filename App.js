@@ -2992,8 +2992,7 @@ _Sent from MobileWMS_`;
             salesrep_name: item.salesrep_name,
             picker_name: item.picker_name,
             shipment: item.shipment || '',
-            shipped_status: item.shipped_status || '',
-            lines: [],
+            shipped_status: item.shipped_status || '',            lines: [],
             totalQty: 0,
             pickSlips: [],
           };
@@ -3003,6 +3002,9 @@ _Sent from MobileWMS_`;
           lineId: `${key}-${item.id}-${item.delivery_detail_id}`,
         });
         acc[key].totalQty += item.qty || 0;
+        if ((item.shipped_status || '').toUpperCase() === 'YES') {
+          acc[key].shipped_status = 'YES';
+        }
         if (item.pick_slip_no && !acc[key].pickSlips.includes(item.pick_slip_no)) {
           acc[key].pickSlips.push(item.pick_slip_no);
         }
@@ -8415,6 +8417,15 @@ _Sent from MobileWMS_`;
                       <View style={styles.orgBadgeSmall}>
                         <Text style={styles.orgBadgeSmallText}>{order.organization_name}</Text>
                       </View>
+                      {(order.shipped_status || '').toUpperCase() === 'YES' ? (
+                        <View style={{ backgroundColor: '#dcfce7', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#15803d' }}>✓ Shipped</Text>
+                        </View>
+                      ) : (
+                        <View style={{ backgroundColor: '#fef9c3', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#854d0e' }}>Pending Ship</Text>
+                        </View>
+                      )}
                     </View>
                   </View>
                   <View style={styles.shipQtyContainer}>
