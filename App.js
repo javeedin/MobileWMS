@@ -3016,7 +3016,7 @@ _Sent from MobileWMS_`;
     }
   };
 
-  // Ship Confirm — POST to Fusion shippingTransactions
+  // Ship Confirm — Step 1: Fusion shippingTransactions, Step 2: APEX shipconfirm per pickslip
   const handleShipConfirm = async () => {
     if (!shipConfirmShipmentName.trim()) {
       Alert.alert('Required', 'Please enter the Shipment Name.');
@@ -3026,43 +3026,63 @@ _Sent from MobileWMS_`;
     setShipConfirmResult(null);
     const orderNumber = selectedShipOrder?.source_order_number || '';
     const orgCode = selectedShipOrder?.organization_name || '';
-    const url = `${ORACLE_FUSION_BASE}/shippingTransactions`;
-    const body = {
+    const pickSlips = selectedShipOrder?.pickSlips || [];
+    const steps = [];
+
+    // ── STEP 1: Fusion shippingTransactions ──────────────────────────
+    const fusionUrl = `${ORACLE_FUSION_BASE}/shippingTransactions`;
+    const fusionBody = {
       ShipmentName: shipConfirmShipmentName.trim(),
       Action: 'CONFIRM',
       Organization: orgCode,
     };
     console.log('==========================================');
-    console.log('[SHIP CONFIRM] POST URL:', url);
-    console.log('[SHIP CONFIRM] JSON Body:', JSON.stringify(body, null, 2));
-    console.log('[SHIP CONFIRM] Order:', orderNumber, '| Org:', orgCode);
+    console.log('[SHIP CONFIRM] STEP 1 — Fusion shippingTransactions');
+    console.log('[SHIP CONFIRM] POST URL:', fusionUrl);
+    console.log('[SHIP CONFIRM] JSON Body:', JSON.stringify(fusionBody, null, 2));
     console.log('==========================================');
     try {
-      const response = await fetch(url, {
+      const res = await fetch(fusionUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Basic ${ORACLE_FUSION_AUTH}`,
-        },
-        body: JSON.stringify(body),
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${ORACLE_FUSION_AUTH}` },
+        body: JSON.stringify(fusionBody),
       });
-      const text = await response.text();
-      console.log('[SHIP CONFIRM] HTTP Status:', response.status);
-      console.log('[SHIP CONFIRM] Response:', text);
-      console.log('==========================================');
+      const text = await res.text();
+      console.log('[SHIP CONFIRM] STEP 1 HTTP Status:', res.status);
+      console.log('[SHIP CONFIRM] STEP 1 Response:', text);
       let data;
-      try { data = JSON.parse(text); } catch (e) { data = { Result: text }; }
-      const success = (data.Result || data.result || '').toUpperCase() === 'SUCCESS' || response.status === 200;
-      setShipConfirmResult({
-        success,
-        message: success ? 'Ship Confirmed Successfully!' : (data.Result || data.message || data.detail || text.substring(0, 300)),
-        raw: text,
-      });
-    } catch (error) {
-      setShipConfirmResult({ success: false, message: error.message, raw: '' });
-    } finally {
-      setShipConfirmLoading(false);
+      try { data = JSON.parse(text); } catch (e) { data = {}; }
+      const success = res.status === 200 || (data.Result || data.result || '').toUpperCase() === 'SUCCESS';
+      steps.push({ label: 'Fusion Ship Confirm', url: fusionUrl, success, message: success ? 'Success' : (data.Result || data.message || data.detail || text.substring(0, 200)) });
+    } catch (e) {
+      console.log('[SHIP CONFIRM] STEP 1 Error:', e.message);
+      steps.push({ label: 'Fusion Ship Confirm', url: fusionUrl, success: false, message: e.message });
     }
+
+    // ── STEP 2: APEX shipconfirm for each pick slip ───────────────────
+    for (const ps of pickSlips) {
+      const apexUrl = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/shipconfirm/${encodeURIComponent(ps)}`;
+      console.log('==========================================');
+      console.log('[SHIP CONFIRM] STEP 2 — APEX shipconfirm');
+      console.log('[SHIP CONFIRM] POST URL:', apexUrl);
+      console.log('[SHIP CONFIRM] Pick Slip:', ps, '(no body)');
+      console.log('==========================================');
+      try {
+        const res = await fetch(apexUrl, { method: 'POST' });
+        const text = await res.text();
+        console.log('[SHIP CONFIRM] STEP 2 HTTP Status:', res.status);
+        console.log('[SHIP CONFIRM] STEP 2 Response:', text);
+        const success = res.status === 200;
+        steps.push({ label: `APEX Ship Confirm — Pick Slip ${ps}`, url: apexUrl, success, message: success ? 'Success' : text.substring(0, 200) });
+      } catch (e) {
+        console.log('[SHIP CONFIRM] STEP 2 Error:', e.message);
+        steps.push({ label: `APEX Ship Confirm — Pick Slip ${ps}`, url: apexUrl, success: false, message: e.message });
+      }
+    }
+
+    console.log('[SHIP CONFIRM] All steps done:', steps.map(s => `${s.label}: ${s.success ? 'OK' : 'FAIL'}`).join(', '));
+    setShipConfirmResult({ steps });
+    setShipConfirmLoading(false);
   };
 
   // Fetch lots for a specific item + org (used in ShipOrderLines lot picker)
@@ -8711,24 +8731,30 @@ _Sent from MobileWMS_`;
                 </>
               ) : (
                 <>
-                  <View style={{
-                    backgroundColor: shipConfirmResult.success ? '#f0fdf4' : '#fef2f2',
-                    borderRadius: 12,
-                    padding: 16,
-                    marginBottom: 16,
-                    borderWidth: 1,
-                    borderColor: shipConfirmResult.success ? '#86efac' : '#fca5a5',
-                  }}>
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: shipConfirmResult.success ? '#15803d' : '#dc2626', marginBottom: 6 }}>
-                      {shipConfirmResult.success ? '✅ Success' : '❌ Failed'}
-                    </Text>
-                    <Text style={{ fontSize: 13, color: shipConfirmResult.success ? '#166534' : '#991b1b' }}>
-                      {shipConfirmResult.message}
-                    </Text>
-                  </View>
+                  {(shipConfirmResult.steps || []).map((step, idx) => (
+                    <View key={idx} style={{
+                      flexDirection: 'row',
+                      alignItems: 'flex-start',
+                      backgroundColor: step.success ? '#f0fdf4' : '#fef2f2',
+                      borderRadius: 10,
+                      padding: 12,
+                      marginBottom: 10,
+                      borderWidth: 1,
+                      borderColor: step.success ? '#86efac' : '#fca5a5',
+                    }}>
+                      <Text style={{ fontSize: 18, marginRight: 10, marginTop: 1 }}>{step.success ? '✅' : '❌'}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: step.success ? '#15803d' : '#dc2626' }}>{step.label}</Text>
+                        <Text style={{ fontSize: 10, color: '#64748b', marginTop: 2 }} numberOfLines={2}>{step.url}</Text>
+                        {!step.success && (
+                          <Text style={{ fontSize: 11, color: '#991b1b', marginTop: 4 }}>{step.message}</Text>
+                        )}
+                      </View>
+                    </View>
+                  ))}
                   <TouchableOpacity
                     onPress={() => setShowShipConfirmModal(false)}
-                    style={{ backgroundColor: COLORS.primary, borderRadius: 12, padding: 14, alignItems: 'center' }}
+                    style={{ backgroundColor: COLORS.primary, borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 4 }}
                   >
                     <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Close</Text>
                   </TouchableOpacity>
