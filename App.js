@@ -2992,6 +2992,7 @@ _Sent from MobileWMS_`;
             salesrep_name: item.salesrep_name,
             picker_name: item.picker_name,
             shipment: item.shipment || '',
+            shipped_status: item.shipped_status || '',
             lines: [],
             totalQty: 0,
             pickSlips: [],
@@ -8513,6 +8514,7 @@ _Sent from MobileWMS_`;
 
         {/* Lines List Header + Ship Confirm Button */}
         {(() => {
+          const alreadyShipped = (selectedShipOrder.shipped_status || '').toUpperCase() === 'YES';
           const allConfirmed = selectedShipOrder.lines.length > 0 &&
             selectedShipOrder.lines.every(l =>
               processedPickSlips.has(l.lineId) || (l.pick_confirm_status || '').toUpperCase() === 'YES'
@@ -8520,23 +8522,29 @@ _Sent from MobileWMS_`;
           return (
             <View style={[styles.linesListHeader, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
               <Text style={styles.linesListTitle}>Lines ({selectedShipOrder.lines.length})</Text>
-              <TouchableOpacity
-                disabled={!allConfirmed}
-                onPress={() => { setShipConfirmShipmentName(selectedShipOrder.shipment || ''); setShipConfirmResult(null); setShowShipConfirmModal(true); }}
-                style={{
-                  backgroundColor: allConfirmed ? '#16a34a' : '#cbd5e1',
-                  borderRadius: 8,
-                  paddingHorizontal: 14,
-                  paddingVertical: 8,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
-              >
-                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
-                  {allConfirmed ? '🚚 Ship Confirm' : '🔒 Ship Confirm'}
-                </Text>
-              </TouchableOpacity>
+              {alreadyShipped ? (
+                <View style={{ backgroundColor: '#dcfce7', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 }}>
+                  <Text style={{ color: '#15803d', fontWeight: '700', fontSize: 13 }}>✓ Shipped</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  disabled={!allConfirmed}
+                  onPress={() => { setShipConfirmShipmentName(selectedShipOrder.shipment || ''); setShipConfirmResult(null); setShowShipConfirmModal(true); }}
+                  style={{
+                    backgroundColor: allConfirmed ? '#16a34a' : '#cbd5e1',
+                    borderRadius: 8,
+                    paddingHorizontal: 14,
+                    paddingVertical: 8,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
+                    {allConfirmed ? '🚚 Ship Confirm' : '🔒 Ship Confirm'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           );
         })()}
