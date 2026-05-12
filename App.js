@@ -3052,8 +3052,10 @@ _Sent from MobileWMS_`;
       console.log('[SHIP CONFIRM] STEP 1 Response:', text);
       let data;
       try { data = JSON.parse(text); } catch (e) { data = {}; }
-      const success = res.status === 200 || (data.Result || data.result || '').toUpperCase() === 'SUCCESS';
-      steps.push({ label: 'Fusion Ship Confirm', url: fusionUrl, success, message: success ? 'Success' : (data.Result || data.message || data.detail || text.substring(0, 200)) });
+      const result = (data.Result || data.result || '').toUpperCase();
+      const success = res.status === 200 || result === 'SUCCESS' || result === 'WARNING';
+      const label = result === 'WARNING' ? 'Success (Warning)' : result === 'SUCCESS' ? 'Success' : result || `HTTP ${res.status}`;
+      steps.push({ label: 'Fusion Ship Confirm', url: fusionUrl, success, message: label });
     } catch (e) {
       console.log('[SHIP CONFIRM] STEP 1 Error:', e.message);
       steps.push({ label: 'Fusion Ship Confirm', url: fusionUrl, success: false, message: e.message });
