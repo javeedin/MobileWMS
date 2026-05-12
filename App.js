@@ -407,6 +407,12 @@ export default function App() {
   const [fusionAllocError, setFusionAllocError] = useState('');
   const [lineAllocatedSerials, setLineAllocatedSerials] = useState({}); // { lineId: [serial, ...] }
 
+  // Ship Confirm state
+  const [showShipConfirmModal, setShowShipConfirmModal] = useState(false);
+  const [shipConfirmShipmentName, setShipConfirmShipmentName] = useState('');
+  const [shipConfirmLoading, setShipConfirmLoading] = useState(false);
+  const [shipConfirmResult, setShipConfirmResult] = useState(null); // { success, message }
+
   // Lot selection modal state (ShipOrderLines)
   const [showLotModal, setShowLotModal] = useState(false);
   const [lotModalLine, setLotModalLine] = useState(null);
@@ -3006,6 +3012,50 @@ _Sent from MobileWMS_`;
     } catch (error) {
       Alert.alert('Error', 'Failed to fetch ship orders: ' + error.message);
       setShipOrdersLoading(false);
+    }
+  };
+
+  // Ship Confirm — POST to Fusion shippingTransactions
+  const handleShipConfirm = async () => {
+    if (!shipConfirmShipmentName.trim()) {
+      Alert.alert('Required', 'Please enter the Shipment Name.');
+      return;
+    }
+    setShipConfirmLoading(true);
+    setShipConfirmResult(null);
+    const orderNumber = selectedShipOrder?.source_order_number || '';
+    const orgCode = selectedShipOrder?.organization_name || '';
+    const url = `${ORACLE_FUSION_BASE}/shippingTransactions`;
+    const body = {
+      ShipmentName: shipConfirmShipmentName.trim(),
+      Action: 'CONFIRM',
+      Organization: orgCode,
+    };
+    console.log('[SHIP CONFIRM] POST', url);
+    console.log('[SHIP CONFIRM] Body:', JSON.stringify(body));
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${ORACLE_FUSION_AUTH}`,
+        },
+        body: JSON.stringify(body),
+      });
+      const text = await response.text();
+      console.log('[SHIP CONFIRM] Response:', text);
+      let data;
+      try { data = JSON.parse(text); } catch (e) { data = { Result: text }; }
+      const success = (data.Result || data.result || '').toUpperCase() === 'SUCCESS' || response.status === 200;
+      setShipConfirmResult({
+        success,
+        message: success ? 'Ship Confirmed Successfully!' : (data.Result || data.message || data.detail || text.substring(0, 300)),
+        raw: text,
+      });
+    } catch (error) {
+      setShipConfirmResult({ success: false, message: error.message, raw: '' });
+    } finally {
+      setShipConfirmLoading(false);
     }
   };
 
@@ -8433,10 +8483,33 @@ _Sent from MobileWMS_`;
           </View>
         </View>
 
-        {/* Lines List Header */}
-        <View style={styles.linesListHeader}>
-          <Text style={styles.linesListTitle}>Lines ({selectedShipOrder.lines.length})</Text>
-        </View>
+        {/* Lines List Header + Ship Confirm Button */}
+        {(() => {
+          const allConfirmed = selectedShipOrder.lines.length > 0 &&
+            selectedShipOrder.lines.every(l => processedPickSlips.has(l.lineId));
+          return (
+            <View style={[styles.linesListHeader, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+              <Text style={styles.linesListTitle}>Lines ({selectedShipOrder.lines.length})</Text>
+              <TouchableOpacity
+                disabled={!allConfirmed}
+                onPress={() => { setShipConfirmShipmentName(''); setShipConfirmResult(null); setShowShipConfirmModal(true); }}
+                style={{
+                  backgroundColor: allConfirmed ? '#16a34a' : '#cbd5e1',
+                  borderRadius: 8,
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
+                  {allConfirmed ? '🚚 Ship Confirm' : '🔒 Ship Confirm'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          );
+        })()}
 
         {/* Lines List */}
         <FlatList
@@ -8566,6 +8639,93 @@ _Sent from MobileWMS_`;
             </View>
           )}
         />
+
+        {/* Ship Confirm Modal */}
+        <Modal
+          visible={showShipConfirmModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => !shipConfirmLoading && setShowShipConfirmModal(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 }}>
+              {/* Header */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <Text style={{ fontSize: 17, fontWeight: '700', color: '#1e293b' }}>🚚 Ship Confirm</Text>
+                {!shipConfirmLoading && (
+                  <TouchableOpacity onPress={() => setShowShipConfirmModal(false)}>
+                    <Text style={{ fontSize: 22, color: '#64748b' }}>✕</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Order info */}
+              <View style={{ backgroundColor: '#f8fafc', borderRadius: 10, padding: 12, marginBottom: 16 }}>
+                <Text style={{ fontSize: 12, color: '#64748b' }}>Order</Text>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1e293b' }}>{selectedShipOrder?.source_order_number}</Text>
+                <Text style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Organization: {selectedShipOrder?.organization_name}</Text>
+              </View>
+
+              {!shipConfirmResult ? (
+                <>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#334155', marginBottom: 6 }}>Shipment Name <Text style={{ color: '#dc2626' }}>*</Text></Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f1f5f9', borderRadius: 10, paddingHorizontal: 12, marginBottom: 20 }}>
+                    <TextInput
+                      value={shipConfirmShipmentName}
+                      onChangeText={setShipConfirmShipmentName}
+                      placeholder="Enter Fusion shipment / delivery name"
+                      placeholderTextColor="#94a3b8"
+                      style={{ flex: 1, fontSize: 14, color: '#1e293b', paddingVertical: 12 }}
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                      editable={!shipConfirmLoading}
+                    />
+                  </View>
+                  <TouchableOpacity
+                    onPress={handleShipConfirm}
+                    disabled={shipConfirmLoading || !shipConfirmShipmentName.trim()}
+                    style={{
+                      backgroundColor: (!shipConfirmLoading && shipConfirmShipmentName.trim()) ? '#16a34a' : '#cbd5e1',
+                      borderRadius: 12,
+                      padding: 16,
+                      alignItems: 'center',
+                    }}
+                  >
+                    {shipConfirmLoading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Confirm Shipment</Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <View style={{
+                    backgroundColor: shipConfirmResult.success ? '#f0fdf4' : '#fef2f2',
+                    borderRadius: 12,
+                    padding: 16,
+                    marginBottom: 16,
+                    borderWidth: 1,
+                    borderColor: shipConfirmResult.success ? '#86efac' : '#fca5a5',
+                  }}>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: shipConfirmResult.success ? '#15803d' : '#dc2626', marginBottom: 6 }}>
+                      {shipConfirmResult.success ? '✅ Success' : '❌ Failed'}
+                    </Text>
+                    <Text style={{ fontSize: 13, color: shipConfirmResult.success ? '#166534' : '#991b1b' }}>
+                      {shipConfirmResult.message}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setShowShipConfirmModal(false)}
+                    style={{ backgroundColor: COLORS.primary, borderRadius: 12, padding: 14, alignItems: 'center' }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Close</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </View>
+        </Modal>
 
         {/* Lot Picker Modal */}
         <Modal
