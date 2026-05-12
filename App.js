@@ -3031,8 +3031,11 @@ _Sent from MobileWMS_`;
       Action: 'CONFIRM',
       Organization: orgCode,
     };
-    console.log('[SHIP CONFIRM] POST', url);
-    console.log('[SHIP CONFIRM] Body:', JSON.stringify(body));
+    console.log('==========================================');
+    console.log('[SHIP CONFIRM] POST URL:', url);
+    console.log('[SHIP CONFIRM] JSON Body:', JSON.stringify(body, null, 2));
+    console.log('[SHIP CONFIRM] Order:', orderNumber, '| Org:', orgCode);
+    console.log('==========================================');
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -3043,7 +3046,9 @@ _Sent from MobileWMS_`;
         body: JSON.stringify(body),
       });
       const text = await response.text();
+      console.log('[SHIP CONFIRM] HTTP Status:', response.status);
       console.log('[SHIP CONFIRM] Response:', text);
+      console.log('==========================================');
       let data;
       try { data = JSON.parse(text); } catch (e) { data = { Result: text }; }
       const success = (data.Result || data.result || '').toUpperCase() === 'SUCCESS' || response.status === 200;
