@@ -2991,6 +2991,7 @@ _Sent from MobileWMS_`;
             organization_name: item.organization_name,
             salesrep_name: item.salesrep_name,
             picker_name: item.picker_name,
+            shipment: item.shipment || '',
             lines: [],
             totalQty: 0,
             pickSlips: [],
@@ -8497,7 +8498,7 @@ _Sent from MobileWMS_`;
               <Text style={styles.linesListTitle}>Lines ({selectedShipOrder.lines.length})</Text>
               <TouchableOpacity
                 disabled={!allConfirmed}
-                onPress={() => { setShipConfirmShipmentName(''); setShipConfirmResult(null); setShowShipConfirmModal(true); }}
+                onPress={() => { setShipConfirmShipmentName(selectedShipOrder.shipment || ''); setShipConfirmResult(null); setShowShipConfirmModal(true); }}
                 style={{
                   backgroundColor: allConfirmed ? '#16a34a' : '#cbd5e1',
                   borderRadius: 8,
@@ -8669,6 +8670,9 @@ _Sent from MobileWMS_`;
                 <Text style={{ fontSize: 12, color: '#64748b' }}>Order</Text>
                 <Text style={{ fontSize: 15, fontWeight: '700', color: '#1e293b' }}>{selectedShipOrder?.source_order_number}</Text>
                 <Text style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Organization: {selectedShipOrder?.organization_name}</Text>
+                {selectedShipOrder?.shipment ? (
+                  <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Shipment: {selectedShipOrder.shipment}</Text>
+                ) : null}
               </View>
 
               {!shipConfirmResult ? (
