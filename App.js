@@ -8492,7 +8492,9 @@ _Sent from MobileWMS_`;
         {/* Lines List Header + Ship Confirm Button */}
         {(() => {
           const allConfirmed = selectedShipOrder.lines.length > 0 &&
-            selectedShipOrder.lines.every(l => processedPickSlips.has(l.lineId));
+            selectedShipOrder.lines.every(l =>
+              processedPickSlips.has(l.lineId) || (l.pick_confirm_status || '').toUpperCase() === 'YES'
+            );
           return (
             <View style={[styles.linesListHeader, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
               <Text style={styles.linesListTitle}>Lines ({selectedShipOrder.lines.length})</Text>
@@ -8533,7 +8535,7 @@ _Sent from MobileWMS_`;
                         <Text style={{ fontSize: 10, fontWeight: '700', color: '#0369a1' }}>Line {line.line_number}</Text>
                       </View>
                     )}
-                    {processedPickSlips.has(line.lineId) && (
+                    {(processedPickSlips.has(line.lineId) || (line.pick_confirm_status || '').toUpperCase() === 'YES') && (
                       <View style={{ backgroundColor: '#dcfce7', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, flexDirection: 'row', alignItems: 'center' }}>
                         <Text style={{ fontSize: 10, fontWeight: '700', color: '#15803d' }}>✓ Confirmed</Text>
                       </View>
@@ -8611,7 +8613,7 @@ _Sent from MobileWMS_`;
                 </View>
               )}
 
-              {processedPickSlips.has(line.lineId) ? (
+              {(processedPickSlips.has(line.lineId) || (line.pick_confirm_status || '').toUpperCase() === 'YES') ? (
                 <View style={{ backgroundColor: '#f0fdf4', borderRadius: 8, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#86efac' }}>
                   <Text style={{ color: '#15803d', fontWeight: '700', fontSize: 13 }}>✓ Pick Confirmed</Text>
                 </View>
