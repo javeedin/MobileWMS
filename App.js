@@ -391,7 +391,7 @@ export default function App() {
           const data = await response.json();
           console.log('Full API Response:', JSON.stringify(data, null, 2));
 
-          // Group by warehouse/organization to get unique warehouses with their subinventories
+          // Group by warehouse to get unique warehouses with their subinventories
           const warehouseMap = {};
           if (data.items && Array.isArray(data.items)) {
             console.log(`Processing ${data.items.length} items from API`);
@@ -401,16 +401,17 @@ export default function App() {
             }
 
             data.items.forEach((item, index) => {
-              // Try different field name variations
-              const whCode = item.organizationcode || item.OrganizationCode || item.ORG_CODE;
-              const whName = item.organizationname || item.OrganizationName || item.warehouse || item.Warehouse || whCode;
-              const subCode = item.subinventorycode || item.SubinventoryCode || item.SUB_CODE;
-              const subName = item.subinventoryname || item.SubinventoryName || subCode;
+              // Use correct field names from API response
+              const whCode = item.warehouse_code;
+              const whName = item.warehouse_code; // Use warehouse_code as name too
+              const subCode = item.subinventory_code;
+              const subName = item.subinventory_name || subCode;
 
               if (index === 0) {
                 console.log(`Debug - Item ${index}:`, { whCode, whName, subCode, subName });
               }
 
+              // Create warehouse if not exists
               if (whCode && !warehouseMap[whCode]) {
                 warehouseMap[whCode] = {
                   id: whCode,
@@ -418,16 +419,19 @@ export default function App() {
                   name: whName,
                   subinventories: []
                 };
+                console.log(`Created warehouse: ${whCode}`);
               }
 
               // Add subinventory if not already added
-              if (whCode && subCode) {
-                if (!warehouseMap[whCode].subinventories.find(s => s.code === subCode)) {
+              if (whCode && subCode && warehouseMap[whCode]) {
+                const exists = warehouseMap[whCode].subinventories.find(s => s.code === subCode);
+                if (!exists) {
                   warehouseMap[whCode].subinventories.push({
                     id: subCode,
                     code: subCode,
                     name: subName
                   });
+                  console.log(`Added subinventory: ${subCode} to warehouse: ${whCode}`);
                 }
               }
             });
@@ -6708,44 +6712,55 @@ _Sent from MobileWMS_`;
       setLocatorTransfer_error('');
       setLocatorTransfer_status('Loading items...');
       try {
-        // Fetch on-hand data from Oracle Fusion API
-        const fusionUrl = `https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05/inventoryOnhandBalances?q=OrganizationCode=${locatorTransfer_selectedWarehouse.code};SubinventoryCode=${sub.code}`;
-        const response = await fetch(fusionUrl);
+        // Fetch on-hand data from APEX API using warehouse_code and subinventory_code
+        const apexUrl = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getorgnizationslist`;
+        const response = await fetch(apexUrl);
         const data = await response.json();
 
-        // Parse Fusion response - each item includes locator information
+        // Filter items by selected warehouse and subinventory
         const itemsArray = [];
+        const itemsMap = {}; // Group by item number to avoid duplicates
+
         if (data.items && Array.isArray(data.items)) {
           data.items.forEach(item => {
-            const itemNumber = item.ItemNumber;
-            const itemDesc = item.ItemDescription || 'N/A';
-            const quantity = parseFloat(item.PrimaryQuantity || 0);
-            const uom = item.PrimaryUOMCode || 'PCS';
-            const locatorId = item.LocatorId ? item.LocatorId.toString() : 'NO_LOCATOR';
+            // Match warehouse and subinventory
+            if (item.warehouse_code === locatorTransfer_selectedWarehouse.code &&
+                item.subinventory_code === sub.code) {
 
-            // Create entry for each locator (don't group by item)
-            itemsArray.push({
-              id: `${itemNumber}-${locatorId}-${Math.random()}`, // unique per locator
-              itemNumber: itemNumber,
-              itemDescription: itemDesc,
-              quantity: quantity,
-              uomCode: uom,
-              locatorId: locatorId,
-              organizationCode: item.OrganizationCode,
-              subinventoryCode: item.SubinventoryCode,
-              inventoryItemId: item.InventoryItemId,
-              organizationId: item.OrganizationId
-            });
+              const itemNumber = item.item_number;
+              const itemDesc = item.item_description || 'N/A';
+              const quantity = parseFloat(item.quantity || 0);
+              const uom = item.uom_code || 'EA';
+              const locatorId = item.locator_id ? item.locator_id.toString() : 'NO_LOCATOR';
+
+              // Create entry for each unique item (first occurrence)
+              if (itemNumber && !itemsMap[itemNumber]) {
+                itemsMap[itemNumber] = {
+                  id: itemNumber,
+                  itemNumber: itemNumber,
+                  itemDescription: itemDesc,
+                  quantity: quantity,
+                  uomCode: uom,
+                  locatorId: locatorId,
+                  warehouse_code: item.warehouse_code,
+                  subinventory_code: item.subinventory_code
+                };
+              }
+            }
           });
         }
 
+        // Convert map to array
+        Object.values(itemsMap).forEach(item => itemsArray.push(item));
+
+        console.log(`Loaded ${itemsArray.length} items for warehouse: ${locatorTransfer_selectedWarehouse.code}, subinventory: ${sub.code}`);
         setLocatorTransfer_items(itemsArray);
         setLocatorTransfer_status(`Loaded ${itemsArray.length} items`);
         setTimeout(() => setLocatorTransfer_status(''), 2000);
       } catch (error) {
         setLocatorTransfer_error(`Error loading items: ${error.message}`);
         setLocatorTransfer_status('');
-        console.error('Fusion API Error:', error);
+        console.error('Error loading items:', error);
       } finally {
         setLocatorTransfer_loading(false);
       }
@@ -6753,7 +6768,12 @@ _Sent from MobileWMS_`;
 
     const handleItemSelect = async (item) => {
       setLocatorTransfer_selectedItem(item);
-      setLocatorTransfer_selectedSourceLocator(item); // Source locator is the current item's locator
+      // Create source locator object from item's current locator
+      setLocatorTransfer_selectedSourceLocator({
+        id: item.locatorId,
+        code: item.locatorId,
+        description: item.locatorId
+      });
       setLocatorTransfer_selectedDestLocator(null); // Reset destination
       setLocatorTransfer_transferQuantity(item.quantity.toString());
       setLocatorTransfer_loading(true);
@@ -6762,16 +6782,19 @@ _Sent from MobileWMS_`;
 
       try {
         // Fetch all locators for this item in the same subinventory (for destination selection)
-        const fusionUrl = `https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05/inventoryOnhandBalances?q=OrganizationCode=${locatorTransfer_selectedWarehouse.code};SubinventoryCode=${locatorTransfer_selectedSubinventory.code}`;
-        const response = await fetch(fusionUrl);
+        const apexUrl = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getorgnizationslist`;
+        const response = await fetch(apexUrl);
         const data = await response.json();
 
-        // Extract unique locators for this item
+        // Extract unique locators for this item in the selected subinventory
         const locatorsMap = {};
         if (data.items && Array.isArray(data.items)) {
           data.items.forEach(row => {
-            if (row.ItemNumber === item.itemNumber) {
-              const locId = row.LocatorId ? row.LocatorId.toString() : 'NO_LOCATOR';
+            if (row.warehouse_code === locatorTransfer_selectedWarehouse.code &&
+                row.subinventory_code === locatorTransfer_selectedSubinventory.code &&
+                row.item_number === item.itemNumber) {
+
+              const locId = row.locator_id ? row.locator_id.toString() : 'NO_LOCATOR';
               if (!locatorsMap[locId]) {
                 locatorsMap[locId] = {
                   id: locId,
@@ -6785,6 +6808,7 @@ _Sent from MobileWMS_`;
 
         const locators = Object.values(locatorsMap);
         setLocatorTransfer_locators(locators);
+        console.log(`Loaded ${locators.length} destination locators for item: ${item.itemNumber}`);
         setLocatorTransfer_status(`Loaded ${locators.length} destination locators`);
         setTimeout(() => setLocatorTransfer_status(''), 2000);
         navigateTo('LocatorTransferDetail');
@@ -6967,42 +6991,39 @@ _Sent from MobileWMS_`;
       setLocatorTransfer_status('Submitting transfer to Oracle Fusion...');
 
       try {
-        // Call Oracle Fusion Subinventory Transfer API
-        const fusionTransferUrl = 'https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05/subinventoryTransfers';
+        // Call APEX Subinventory Transfer API
+        const transferUrl = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/submitSubinventoryTransfer';
 
         const transferPayload = {
-          TransferFromOrganizationCode: locatorTransfer_selectedWarehouse.code,
-          TransferFromSubinventoryCode: locatorTransfer_selectedSubinventory.code,
-          TransferFromLocatorId: locatorTransfer_selectedSourceLocator.code,
-          TransferToOrganizationCode: locatorTransfer_selectedWarehouse.code,
-          TransferToSubinventoryCode: locatorTransfer_selectedSubinventory.code, // Same subinventory for now
-          TransferToLocatorId: locatorTransfer_selectedDestLocator.code,
-          ItemNumber: locatorTransfer_selectedItem.itemNumber,
-          TransferQuantity: qty,
-          InventoryItemId: locatorTransfer_selectedItem.inventoryItemId,
-          OrganizationId: locatorTransfer_selectedItem.organizationId
+          warehouse_code: locatorTransfer_selectedWarehouse.code,
+          from_subinventory_code: locatorTransfer_selectedSubinventory.code,
+          from_locator_id: locatorTransfer_selectedSourceLocator.code,
+          to_subinventory_code: locatorTransfer_selectedSubinventory.code, // Same subinventory for now
+          to_locator_id: locatorTransfer_selectedDestLocator.code,
+          item_number: locatorTransfer_selectedItem.itemNumber,
+          transfer_quantity: qty,
+          uom_code: locatorTransfer_selectedItem.uomCode
         };
 
-        console.log('Fusion Transfer Payload:', JSON.stringify(transferPayload, null, 2));
+        console.log('Transfer Payload:', JSON.stringify(transferPayload, null, 2));
 
-        const response = await fetch(fusionTransferUrl, {
+        const response = await fetch(transferUrl, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Basic ' + btoa('username:password') // Update with actual credentials
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify(transferPayload)
         });
 
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`Fusion API Error: ${response.status} - ${errorText}`);
+          throw new Error(`API Error: ${response.status} - ${errorText}`);
         }
 
         const result = await response.json();
-        console.log('Fusion Response:', JSON.stringify(result, null, 2));
+        console.log('Transfer Response:', JSON.stringify(result, null, 2));
 
-        const refNum = result.TransferId || result.ReferenceNumber || `TRN-${Date.now()}`;
+        const refNum = result.transfer_id || result.reference_number || `TRN-${Date.now()}`;
         setLocatorTransfer_success(`✓ Transfer successful!\nReference: ${refNum}\nQuantity: ${qty} ${locatorTransfer_selectedItem.uomCode}\nFrom: ${locatorTransfer_selectedSourceLocator.code}\nTo: ${locatorTransfer_selectedDestLocator.code}`);
         setLocatorTransfer_status('');
 
