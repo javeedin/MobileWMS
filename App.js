@@ -372,6 +372,24 @@ export default function App() {
     }
   }, [isAnimating, flowStep, currentScreen]);
   const [selectedShipOrder, setSelectedShipOrder] = useState(null);
+
+  // ============= LOCATOR TRANSFERS STATE =============
+  const [locatorTransfer_warehouses, setLocatorTransfer_warehouses] = useState([]);
+  const [locatorTransfer_selectedWarehouse, setLocatorTransfer_selectedWarehouse] = useState(null);
+  const [locatorTransfer_subinventories, setLocatorTransfer_subinventories] = useState([]);
+  const [locatorTransfer_selectedSubinventory, setLocatorTransfer_selectedSubinventory] = useState(null);
+  const [locatorTransfer_items, setLocatorTransfer_items] = useState([]);
+  const [locatorTransfer_selectedItem, setLocatorTransfer_selectedItem] = useState(null);
+  const [locatorTransfer_locators, setLocatorTransfer_locators] = useState([]);
+  const [locatorTransfer_selectedSourceLocator, setLocatorTransfer_selectedSourceLocator] = useState(null);
+  const [locatorTransfer_selectedDestLocator, setLocatorTransfer_selectedDestLocator] = useState(null);
+  const [locatorTransfer_transferQuantity, setLocatorTransfer_transferQuantity] = useState('');
+  const [locatorTransfer_loading, setLocatorTransfer_loading] = useState(false);
+  const [locatorTransfer_submitting, setLocatorTransfer_submitting] = useState(false);
+  const [locatorTransfer_error, setLocatorTransfer_error] = useState('');
+  const [locatorTransfer_status, setLocatorTransfer_status] = useState('');
+  const [locatorTransfer_success, setLocatorTransfer_success] = useState('');
+  const [locatorTransfer_searchQuery, setLocatorTransfer_searchQuery] = useState('');
   const [shipSearchQuery, setShipSearchQuery] = useState('');
   const [shippingLine, setShippingLine] = useState(null);
 
@@ -6582,8 +6600,112 @@ _Sent from MobileWMS_`;
 
   // ============= LOCATOR TRANSFERS SCREEN =============
   if (currentScreen === 'LocatorTransfers') {
+    const loadWarehouses = async () => {
+      setLocatorTransfer_loading(true);
+      setLocatorTransfer_error('');
+      setLocatorTransfer_status('Loading warehouses...');
+      try {
+        const warehouses = organizationsList.length > 0 ? organizationsList : [
+          { id: '1', name: 'Main Warehouse', code: 'MW' },
+          { id: '2', name: 'Secondary Warehouse', code: 'SW' },
+        ];
+        setLocatorTransfer_warehouses(warehouses);
+        setLocatorTransfer_status('');
+      } catch (error) {
+        setLocatorTransfer_error(`Error loading warehouses: ${error.message}`);
+        setLocatorTransfer_status('');
+      } finally {
+        setLocatorTransfer_loading(false);
+      }
+    };
+
+    const handleWarehouseSelect = async (warehouse) => {
+      setLocatorTransfer_selectedWarehouse(warehouse);
+      setLocatorTransfer_selectedSubinventory(null);
+      setLocatorTransfer_items([]);
+      setLocatorTransfer_loading(true);
+      setLocatorTransfer_error('');
+      setLocatorTransfer_status('Loading subinventories...');
+      try {
+        // Mock subinventories
+        const subs = [
+          { id: '1', name: 'Main Subinventory', code: 'MAIN' },
+          { id: '2', name: 'Returns', code: 'RET' },
+          { id: '3', name: 'Damaged Goods', code: 'DMG' },
+        ];
+        setLocatorTransfer_subinventories(subs);
+        setLocatorTransfer_status('');
+      } catch (error) {
+        setLocatorTransfer_error(`Error loading subinventories: ${error.message}`);
+      } finally {
+        setLocatorTransfer_loading(false);
+      }
+    };
+
+    const handleSubinventorySelect = async (sub) => {
+      setLocatorTransfer_selectedSubinventory(sub);
+      setLocatorTransfer_loading(true);
+      setLocatorTransfer_error('');
+      setLocatorTransfer_status('Loading items...');
+      try {
+        // Mock items with on-hand quantities
+        const items = [
+          { id: '1', itemNumber: 'ITEM-001', itemDescription: 'Widget A', onHandQuantity: 150, uomCode: 'EA' },
+          { id: '2', itemNumber: 'ITEM-002', itemDescription: 'Widget B', onHandQuantity: 75, uomCode: 'EA' },
+          { id: '3', itemNumber: 'ITEM-003', itemDescription: 'Gadget X', onHandQuantity: 200, uomCode: 'EA' },
+          { id: '4', itemNumber: 'ITEM-004', itemDescription: 'Gadget Y', onHandQuantity: 50, uomCode: 'EA' },
+        ];
+        setLocatorTransfer_items(items);
+        setLocatorTransfer_status(`Loaded ${items.length} items`);
+        setTimeout(() => setLocatorTransfer_status(''), 2000);
+      } catch (error) {
+        setLocatorTransfer_error(`Error loading items: ${error.message}`);
+      } finally {
+        setLocatorTransfer_loading(false);
+      }
+    };
+
+    const handleItemSelect = async (item) => {
+      setLocatorTransfer_selectedItem(item);
+      setLocatorTransfer_loading(true);
+      setLocatorTransfer_error('');
+      setLocatorTransfer_status('Loading locators...');
+      try {
+        // Mock locators
+        const locators = [
+          { id: '1', code: 'A-01-01', description: 'Aisle A, Bin 01, Level 01' },
+          { id: '2', code: 'A-01-02', description: 'Aisle A, Bin 01, Level 02' },
+          { id: '3', code: 'B-02-01', description: 'Aisle B, Bin 02, Level 01' },
+          { id: '4', code: 'B-02-02', description: 'Aisle B, Bin 02, Level 02' },
+          { id: '5', code: 'C-03-01', description: 'Aisle C, Bin 03, Level 01' },
+        ];
+        setLocatorTransfer_locators(locators);
+        setLocatorTransfer_selectedSourceLocator(locators[0]);
+        setLocatorTransfer_transferQuantity(item.onHandQuantity.toString());
+        setLocatorTransfer_status(`Loaded ${locators.length} locators`);
+        setTimeout(() => setLocatorTransfer_status(''), 2000);
+        navigateTo('LocatorTransferDetail');
+      } catch (error) {
+        setLocatorTransfer_error(`Error loading locators: ${error.message}`);
+      } finally {
+        setLocatorTransfer_loading(false);
+      }
+    };
+
+    useEffect(() => {
+      if (currentScreen === 'LocatorTransfers' && locatorTransfer_warehouses.length === 0) {
+        loadWarehouses();
+      }
+    }, [currentScreen]);
+
+    const filteredItems = locatorTransfer_items.filter(item =>
+      item.itemNumber.toLowerCase().includes(locatorTransfer_searchQuery.toLowerCase()) ||
+      item.itemDescription.toLowerCase().includes(locatorTransfer_searchQuery.toLowerCase())
+    );
+
     return (
       <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+        {/* Header */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: COLORS.primary }}>
           <TouchableOpacity onPress={goBack}>
             <Text style={{ fontSize: 24, color: '#fff' }}>←</Text>
@@ -6591,13 +6713,351 @@ _Sent from MobileWMS_`;
           <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>Locator Transfers</Text>
           <Text style={{ fontSize: 18, color: '#fff' }}>🔄</Text>
         </View>
+
+        {/* Error Banner */}
+        {locatorTransfer_error && (
+          <View style={{ backgroundColor: '#FEF1EF', borderLeftWidth: 4, borderLeftColor: COLORS.danger, padding: 12, margin: 8 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ color: COLORS.danger, fontWeight: '600', flex: 1 }}>⚠️ {locatorTransfer_error}</Text>
+              <TouchableOpacity onPress={() => setLocatorTransfer_error('')}>
+                <Text style={{ color: COLORS.danger, fontSize: 18 }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Status Banner */}
+        {locatorTransfer_status && (
+          <View style={{ backgroundColor: COLORS.primary, padding: 12, margin: 8, borderRadius: 6, flexDirection: 'row', alignItems: 'center' }}>
+            <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />
+            <Text style={{ color: '#fff', fontWeight: '500', flex: 1 }}>{locatorTransfer_status}</Text>
+          </View>
+        )}
+
         <ScrollView style={{ flex: 1, padding: 16 }}>
-          <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.primary, marginBottom: 16 }}>Coming Soon</Text>
-          <Text style={{ fontSize: 14, color: COLORS.textSecondary, lineHeight: 22 }}>
-            This feature will allow you to transfer inventory items from one locator to another within your warehouse.
-            {'\n\n'}
-            Select warehouse and subinventory, then choose items to transfer with source and destination locators.
+          {/* Warehouse Selector */}
+          <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.primary, marginBottom: 8, textTransform: 'uppercase' }}>Select Warehouse</Text>
+          <TouchableOpacity
+            style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 12, marginBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+            onPress={() => setLocatorTransfer_selectedWarehouse(locatorTransfer_selectedWarehouse ? null : locatorTransfer_warehouses[0])}
+          >
+            <Text style={{ fontSize: 14, color: locatorTransfer_selectedWarehouse ? COLORS.text : COLORS.textSecondary, fontWeight: '500' }}>
+              {locatorTransfer_selectedWarehouse?.name || 'Choose Warehouse'}
+            </Text>
+            <Text style={{ fontSize: 14 }}>▼</Text>
+          </TouchableOpacity>
+
+          {/* Warehouse Dropdown */}
+          {!locatorTransfer_selectedWarehouse && (
+            <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, marginBottom: 16, overflow: 'hidden' }}>
+              {locatorTransfer_warehouses.map((wh) => (
+                <TouchableOpacity key={wh.id} style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border }} onPress={() => handleWarehouseSelect(wh)}>
+                  <Text style={{ fontSize: 14, color: COLORS.text }}>{wh.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {/* Subinventory Selector */}
+          {locatorTransfer_selectedWarehouse && (
+            <>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.primary, marginBottom: 8, textTransform: 'uppercase' }}>Select Subinventory</Text>
+              <TouchableOpacity
+                style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 12, marginBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+                onPress={() => setLocatorTransfer_selectedSubinventory(locatorTransfer_selectedSubinventory ? null : locatorTransfer_subinventories[0])}
+              >
+                <Text style={{ fontSize: 14, color: locatorTransfer_selectedSubinventory ? COLORS.text : COLORS.textSecondary, fontWeight: '500' }}>
+                  {locatorTransfer_selectedSubinventory?.name || 'Choose Subinventory'}
+                </Text>
+                <Text style={{ fontSize: 14 }}>▼</Text>
+              </TouchableOpacity>
+
+              {/* Subinventory Dropdown */}
+              {!locatorTransfer_selectedSubinventory && (
+                <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, marginBottom: 16, overflow: 'hidden' }}>
+                  {locatorTransfer_subinventories.map((sub) => (
+                    <TouchableOpacity key={sub.id} style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border }} onPress={() => handleSubinventorySelect(sub)}>
+                      <Text style={{ fontSize: 14, color: COLORS.text }}>{sub.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </>
+          )}
+
+          {/* Items List */}
+          {locatorTransfer_selectedSubinventory && (
+            <>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.primary, marginBottom: 8, textTransform: 'uppercase' }}>Items in Subinventory</Text>
+              <TextInput
+                style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 12, marginBottom: 12, fontSize: 14 }}
+                placeholder="Search items..."
+                value={locatorTransfer_searchQuery}
+                onChangeText={setLocatorTransfer_searchQuery}
+              />
+
+              {locatorTransfer_loading ? (
+                <View style={{ padding: 20, alignItems: 'center' }}>
+                  <ActivityIndicator size="large" color={COLORS.primary} />
+                </View>
+              ) : filteredItems.length > 0 ? (
+                <View>
+                  {filteredItems.map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 12, marginBottom: 8 }}
+                      onPress={() => handleItemSelect(item)}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }}>{item.itemNumber}</Text>
+                        <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.success }}>{item.onHandQuantity}</Text>
+                      </View>
+                      <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 2 }}>{item.itemDescription}</Text>
+                      <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>UOM: {item.uomCode}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : (
+                <View style={{ padding: 20, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 14, color: COLORS.textSecondary }}>No items found</Text>
+                </View>
+              )}
+            </>
+          )}
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // ============= LOCATOR TRANSFER DETAIL SCREEN =============
+  if (currentScreen === 'LocatorTransferDetail' && locatorTransfer_selectedItem) {
+    const handleTransfer = async () => {
+      const qty = parseFloat(locatorTransfer_transferQuantity);
+
+      if (!locatorTransfer_selectedSourceLocator) {
+        setLocatorTransfer_error('Please select a source locator');
+        return;
+      }
+
+      if (!locatorTransfer_selectedDestLocator) {
+        setLocatorTransfer_error('Please select a destination locator');
+        return;
+      }
+
+      if (locatorTransfer_selectedSourceLocator.id === locatorTransfer_selectedDestLocator.id) {
+        setLocatorTransfer_error('Source and destination locators must be different');
+        return;
+      }
+
+      if (isNaN(qty) || qty <= 0) {
+        setLocatorTransfer_error('Please enter a valid quantity');
+        return;
+      }
+
+      if (qty > (locatorTransfer_selectedItem.onHandQuantity || 0)) {
+        setLocatorTransfer_error(`Cannot transfer more than available quantity (${locatorTransfer_selectedItem.onHandQuantity})`);
+        return;
+      }
+
+      setLocatorTransfer_submitting(true);
+      setLocatorTransfer_error('');
+      setLocatorTransfer_status('Submitting transfer...');
+
+      try {
+        const transferData = {
+          warehouseId: locatorTransfer_selectedWarehouse.id,
+          fromSubinventory: locatorTransfer_selectedSubinventory.code,
+          toSubinventory: locatorTransfer_selectedSubinventory.code,
+          itemId: locatorTransfer_selectedItem.id,
+          itemNumber: locatorTransfer_selectedItem.itemNumber,
+          quantity: qty,
+          fromLocator: locatorTransfer_selectedSourceLocator.code,
+          toLocator: locatorTransfer_selectedDestLocator.code,
+        };
+
+        console.log('Transfer Data:', JSON.stringify(transferData, null, 2));
+
+        // Simulate API call (replace with real API)
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        // Mock success response
+        const refNum = `TRN-${Date.now()}`;
+        setLocatorTransfer_success(`✓ Transfer successful!\nReference: ${refNum}\nQuantity: ${qty} ${locatorTransfer_selectedItem.uomCode}\nFrom: ${locatorTransfer_selectedSourceLocator.code}\nTo: ${locatorTransfer_selectedDestLocator.code}`);
+        setLocatorTransfer_status('');
+
+        setTimeout(() => {
+          setLocatorTransfer_success('');
+          setLocatorTransfer_selectedItem(null);
+          setLocatorTransfer_selectedSourceLocator(null);
+          setLocatorTransfer_selectedDestLocator(null);
+          setLocatorTransfer_transferQuantity('');
+          navigateTo('Home');
+        }, 3000);
+      } catch (error) {
+        setLocatorTransfer_error(`Transfer failed: ${error.message}`);
+        setLocatorTransfer_status('');
+      } finally {
+        setLocatorTransfer_submitting(false);
+      }
+    };
+
+    return (
+      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+        {/* Header */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: COLORS.primary }}>
+          <TouchableOpacity onPress={() => setLocatorTransfer_selectedItem(null)}>
+            <Text style={{ fontSize: 24, color: '#fff' }}>←</Text>
+          </TouchableOpacity>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>Transfer Item</Text>
+          <Text style={{ fontSize: 18, color: '#fff' }}>📦</Text>
+        </View>
+
+        {/* Error Banner */}
+        {locatorTransfer_error && (
+          <View style={{ backgroundColor: '#FEF1EF', borderLeftWidth: 4, borderLeftColor: COLORS.danger, padding: 12, margin: 8 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ color: COLORS.danger, fontWeight: '600', flex: 1 }}>⚠️ {locatorTransfer_error}</Text>
+              <TouchableOpacity onPress={() => setLocatorTransfer_error('')}>
+                <Text style={{ color: COLORS.danger, fontSize: 18 }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Status Banner */}
+        {locatorTransfer_status && (
+          <View style={{ backgroundColor: COLORS.primary, padding: 12, margin: 8, borderRadius: 6, flexDirection: 'row', alignItems: 'center' }}>
+            <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />
+            <Text style={{ color: '#fff', fontWeight: '500', flex: 1 }}>{locatorTransfer_status}</Text>
+          </View>
+        )}
+
+        {/* Success Banner */}
+        {locatorTransfer_success && (
+          <View style={{ backgroundColor: COLORS.successLight, borderLeftWidth: 4, borderLeftColor: COLORS.success, padding: 12, margin: 8 }}>
+            <Text style={{ color: COLORS.success, fontWeight: '600', lineHeight: 20 }}>{locatorTransfer_success}</Text>
+          </View>
+        )}
+
+        <ScrollView style={{ flex: 1, padding: 16 }}>
+          {/* Item Details Card */}
+          <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.primary, marginBottom: 8, textTransform: 'uppercase' }}>Item Details</Text>
+          <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 12, marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+              <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>Item Number:</Text>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.text }}>{locatorTransfer_selectedItem.itemNumber}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+              <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>Description:</Text>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.text, flex: 1, textAlign: 'right' }}>{locatorTransfer_selectedItem.itemDescription}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+              <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>On Hand:</Text>
+              <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.success }}>{locatorTransfer_selectedItem.onHandQuantity} {locatorTransfer_selectedItem.uomCode}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
+              <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>Warehouse:</Text>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.text }}>{locatorTransfer_selectedWarehouse?.name}</Text>
+            </View>
+          </View>
+
+          {/* Source Locator */}
+          <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.primary, marginBottom: 8, textTransform: 'uppercase' }}>Source Locator</Text>
+          <TouchableOpacity
+            style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 12, marginBottom: 8 }}
+            onPress={() => {}}
+          >
+            <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.text }}>{locatorTransfer_selectedSourceLocator?.code || 'Select Source'}</Text>
+            <Text style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 2 }}>{locatorTransfer_selectedSourceLocator?.description}</Text>
+          </TouchableOpacity>
+
+          {/* Source Locator Dropdown */}
+          {locatorTransfer_locators.length > 0 && (
+            <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, marginBottom: 16, overflow: 'hidden', maxHeight: 200 }}>
+              <ScrollView nestedScrollEnabled={true}>
+                {locatorTransfer_locators.map((loc) => (
+                  <TouchableOpacity
+                    key={loc.id}
+                    style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: locatorTransfer_selectedSourceLocator?.id === loc.id ? '#E8F4FC' : '#fff' }}
+                    onPress={() => setLocatorTransfer_selectedSourceLocator(loc)}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.text }}>{loc.code}</Text>
+                    <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>{loc.description}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Destination Locator */}
+          <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.primary, marginBottom: 8, textTransform: 'uppercase' }}>Destination Locator</Text>
+          <TouchableOpacity
+            style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 12, marginBottom: 8 }}
+            onPress={() => {}}
+          >
+            <Text style={{ fontSize: 13, fontWeight: '600', color: locatorTransfer_selectedDestLocator ? COLORS.text : COLORS.textSecondary }}>
+              {locatorTransfer_selectedDestLocator?.code || 'Select Destination'}
+            </Text>
+            <Text style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 2 }}>{locatorTransfer_selectedDestLocator?.description}</Text>
+          </TouchableOpacity>
+
+          {/* Destination Locator Dropdown */}
+          {locatorTransfer_locators.length > 0 && (
+            <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, marginBottom: 16, overflow: 'hidden', maxHeight: 200 }}>
+              <ScrollView nestedScrollEnabled={true}>
+                {locatorTransfer_locators.map((loc) => (
+                  <TouchableOpacity
+                    key={loc.id}
+                    style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: locatorTransfer_selectedDestLocator?.id === loc.id ? '#E8F4FC' : '#fff' }}
+                    onPress={() => setLocatorTransfer_selectedDestLocator(loc)}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.text }}>{loc.code}</Text>
+                    <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>{loc.description}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Transfer Quantity */}
+          <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.primary, marginBottom: 8, textTransform: 'uppercase' }}>Transfer Quantity</Text>
+          <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, flexDirection: 'row', alignItems: 'center', marginBottom: 16, paddingHorizontal: 12 }}>
+            <TextInput
+              style={{ flex: 1, padding: 12, fontSize: 14, color: COLORS.text }}
+              placeholder="Enter quantity"
+              value={locatorTransfer_transferQuantity}
+              onChangeText={setLocatorTransfer_transferQuantity}
+              keyboardType="decimal-pad"
+              editable={!locatorTransfer_submitting}
+            />
+            <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginLeft: 8 }}>
+              {locatorTransfer_selectedItem.uomCode}
+            </Text>
+          </View>
+          <Text style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 16 }}>
+            Max available: {locatorTransfer_selectedItem.onHandQuantity} {locatorTransfer_selectedItem.uomCode}
           </Text>
+
+          {/* Buttons */}
+          <TouchableOpacity
+            style={{ backgroundColor: COLORS.primary, borderRadius: 8, padding: 14, alignItems: 'center', marginBottom: 8, opacity: locatorTransfer_submitting ? 0.6 : 1 }}
+            onPress={handleTransfer}
+            disabled={locatorTransfer_submitting}
+          >
+            {locatorTransfer_submitting ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>Transfer</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 14, alignItems: 'center', marginBottom: 20 }}
+            onPress={() => setLocatorTransfer_selectedItem(null)}
+            disabled={locatorTransfer_submitting}
+          >
+            <Text style={{ color: COLORS.text, fontSize: 16, fontWeight: 'bold' }}>Cancel</Text>
+          </TouchableOpacity>
         </ScrollView>
       </View>
     );
