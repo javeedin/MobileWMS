@@ -24,6 +24,9 @@ export default function ItemTransferDetailScreen({ route, navigation }) {
   );
   const [showSourceDropdown, setShowSourceDropdown] = useState(false);
   const [showDestDropdown, setShowDestDropdown] = useState(false);
+  const [error, setError] = useState('');
+  const [status, setStatus] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
     loadLocators();
@@ -31,14 +34,19 @@ export default function ItemTransferDetailScreen({ route, navigation }) {
 
   const loadLocators = async () => {
     setLoading(true);
+    setError('');
+    setStatus('Loading locators...');
     try {
       const locatorList = await fetchLocators(warehouse.id, subinventory.code);
       setLocators(locatorList);
       if (locatorList.length > 0) {
         setSelectedSourceLocator(locatorList[0]);
       }
+      setStatus(`Loaded ${locatorList.length} locators`);
+      setTimeout(() => setStatus(''), 2000);
     } catch (error) {
-      Alert.alert('Error', 'Failed to load locators');
+      const errorMsg = `Failed to load locators: ${error.message}`;
+      setError(errorMsg);
       console.error(error);
     } finally {
       setLoading(false);
@@ -49,27 +57,27 @@ export default function ItemTransferDetailScreen({ route, navigation }) {
     const qty = parseFloat(transferQuantity);
 
     if (!selectedSourceLocator) {
-      Alert.alert('Error', 'Please select a source locator');
+      setError('Please select a source locator');
       return false;
     }
 
     if (!selectedDestLocator) {
-      Alert.alert('Error', 'Please select a destination locator');
+      setError('Please select a destination locator');
       return false;
     }
 
     if (selectedSourceLocator.id === selectedDestLocator.id) {
-      Alert.alert('Error', 'Source and destination locators must be different');
+      setError('Source and destination locators must be different');
       return false;
     }
 
     if (isNaN(qty) || qty <= 0) {
-      Alert.alert('Error', 'Please enter a valid quantity');
+      setError('Please enter a valid quantity');
       return false;
     }
 
     if (qty > (item.onHandQuantity || 0)) {
-      Alert.alert('Error', `Cannot transfer more than available quantity (${item.onHandQuantity})`);
+      setError(`Cannot transfer more than available quantity (${item.onHandQuantity})`);
       return false;
     }
 
@@ -77,11 +85,13 @@ export default function ItemTransferDetailScreen({ route, navigation }) {
   };
 
   const handleTransfer = async () => {
+    setError('');
     if (!validateTransfer()) {
       return;
     }
 
     setSubmitting(true);
+    setStatus('Submitting transfer...');
     try {
       const transferData = {
         warehouseId: warehouse.id,
@@ -94,27 +104,28 @@ export default function ItemTransferDetailScreen({ route, navigation }) {
         toLocator: selectedDestLocator.id,
       };
 
+      console.log('Transfer Data:', JSON.stringify(transferData, null, 2));
       const response = await submitSubinventoryTransfer(transferData);
 
+      console.log('Transfer Response:', JSON.stringify(response, null, 2));
+
       if (response.success || response.status === 'SUCCESS') {
-        Alert.alert(
-          'Success',
-          'Transfer submitted successfully. Reference: ' + (response.referenceNumber || 'N/A'),
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                navigation.goBack();
-              },
-            },
-          ]
-        );
+        const refNum = response.referenceNumber || response.transactionId || 'N/A';
+        setSuccessMessage(`✓ Transfer successful!\nReference: ${refNum}`);
+        setStatus('');
+        setTimeout(() => {
+          navigation.goBack();
+        }, 2000);
       } else {
-        Alert.alert('Error', response.message || 'Failed to submit transfer');
+        const errorMsg = response.message || 'Failed to submit transfer';
+        setError(`Transfer failed: ${errorMsg}`);
+        setStatus('');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to submit transfer: ' + error.message);
-      console.error(error);
+      const errorMsg = `Failed to submit transfer: ${error.message}`;
+      setError(errorMsg);
+      setStatus('');
+      console.error('Transfer Error:', error);
     } finally {
       setSubmitting(false);
     }
@@ -125,13 +136,37 @@ export default function ItemTransferDetailScreen({ route, navigation }) {
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>{status || 'Loading locators...'}</Text>
         </View>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
+      {error && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>⚠️ {error}</Text>
+          <TouchableOpacity onPress={() => setError('')}>
+            <Text style={styles.errorClose}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {status && (
+        <View style={styles.statusBanner}>
+          <ActivityIndicator size="small" color={COLORS.white} style={{ marginRight: SPACING.sm }} />
+          <Text style={styles.statusText}>{status}</Text>
+        </View>
+      )}
+
+      {successMessage && (
+        <View style={styles.successBanner}>
+          <Text style={styles.successText}>{successMessage}</Text>
+        </View>
+      )}
+
+      <ScrollView style={styles.scrollContent}>
       <View style={styles.content}>
         {/* Item Details Section */}
         <View style={styles.section}>
@@ -278,7 +313,8 @@ export default function ItemTransferDetailScreen({ route, navigation }) {
           </TouchableOpacity>
         </View>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -287,6 +323,54 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.backgroundSecondary,
   },
+  errorBanner: {
+    backgroundColor: COLORS.danger,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  errorText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    flex: 1,
+  },
+  errorClose: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.lg,
+    marginLeft: SPACING.md,
+    fontWeight: 'bold',
+  },
+  statusBanner: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    flex: 1,
+  },
+  successBanner: {
+    backgroundColor: COLORS.success,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    alignItems: 'center',
+  },
+  successText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  scrollContent: {
+    flex: 1,
+  },
   content: {
     padding: SPACING.md,
   },
@@ -294,6 +378,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: SPACING.md,
+    fontSize: FONT_SIZES.md,
+    color: COLORS.text,
   },
   section: {
     marginBottom: SPACING.lg,
