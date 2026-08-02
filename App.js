@@ -6676,40 +6676,44 @@ _Sent from MobileWMS_`;
       setLocatorTransfer_error('');
       setLocatorTransfer_status('Loading items...');
       try {
-        // Fetch on-hand data from API
-        const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandsbylocator?P_ORGANIZATIONCODE=${locatorTransfer_selectedWarehouse.code}`;
-        const response = await fetch(url);
+        // Fetch on-hand data from Oracle Fusion API
+        const fusionUrl = `https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05/inventoryOnhandBalances?q=OrganizationCode=${locatorTransfer_selectedWarehouse.code};SubinventoryCode=${sub.code}`;
+        const response = await fetch(fusionUrl);
         const data = await response.json();
 
-        // Filter items by selected subinventory and group by item
-        const itemsMap = {};
+        // Parse Fusion response - each item includes locator information
+        const itemsArray = [];
         if (data.items && Array.isArray(data.items)) {
           data.items.forEach(item => {
-            const itemSubCode = item.subinventorycode || item.sub_inventory_code;
-            if (itemSubCode === sub.code) {
-              const itemKey = item.itemnumber || item.ITEMNUMBER;
-              if (itemKey && !itemsMap[itemKey]) {
-                itemsMap[itemKey] = {
-                  id: itemKey,
-                  itemNumber: itemKey,
-                  itemDescription: item.itemdescription || item.ITEMDESCRIPTION || 'N/A',
-                  onHandQuantity: parseFloat(item.primaryquantity || item.PRIMARYQUANTITY || 0),
-                  uomCode: item.uom || 'EA',
-                  organizationCode: item.organizationcode || item.ORGANIZATIONCODE,
-                  subinventoryCode: itemSubCode
-                };
-              }
-            }
+            const itemNumber = item.ItemNumber;
+            const itemDesc = item.ItemDescription || 'N/A';
+            const quantity = parseFloat(item.PrimaryQuantity || 0);
+            const uom = item.PrimaryUOMCode || 'PCS';
+            const locatorId = item.LocatorId ? item.LocatorId.toString() : 'NO_LOCATOR';
+
+            // Create entry for each locator (don't group by item)
+            itemsArray.push({
+              id: `${itemNumber}-${locatorId}-${Math.random()}`, // unique per locator
+              itemNumber: itemNumber,
+              itemDescription: itemDesc,
+              quantity: quantity,
+              uomCode: uom,
+              locatorId: locatorId,
+              organizationCode: item.OrganizationCode,
+              subinventoryCode: item.SubinventoryCode,
+              inventoryItemId: item.InventoryItemId,
+              organizationId: item.OrganizationId
+            });
           });
         }
 
-        const items = Object.values(itemsMap);
-        setLocatorTransfer_items(items);
-        setLocatorTransfer_status(`Loaded ${items.length} items`);
+        setLocatorTransfer_items(itemsArray);
+        setLocatorTransfer_status(`Loaded ${itemsArray.length} items`);
         setTimeout(() => setLocatorTransfer_status(''), 2000);
       } catch (error) {
         setLocatorTransfer_error(`Error loading items: ${error.message}`);
         setLocatorTransfer_status('');
+        console.error('Fusion API Error:', error);
       } finally {
         setLocatorTransfer_loading(false);
       }
@@ -6717,29 +6721,30 @@ _Sent from MobileWMS_`;
 
     const handleItemSelect = async (item) => {
       setLocatorTransfer_selectedItem(item);
+      setLocatorTransfer_selectedSourceLocator(item); // Source locator is the current item's locator
+      setLocatorTransfer_selectedDestLocator(null); // Reset destination
+      setLocatorTransfer_transferQuantity(item.quantity.toString());
       setLocatorTransfer_loading(true);
       setLocatorTransfer_error('');
-      setLocatorTransfer_status('Loading locators...');
+      setLocatorTransfer_status('Loading destination locators...');
+
       try {
-        // Fetch on-hand data to get locators for this item
-        const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandsbylocator?P_ORGANIZATIONCODE=${locatorTransfer_selectedWarehouse.code}`;
-        const response = await fetch(url);
+        // Fetch all locators for this item in the same subinventory (for destination selection)
+        const fusionUrl = `https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05/inventoryOnhandBalances?q=OrganizationCode=${locatorTransfer_selectedWarehouse.code};SubinventoryCode=${locatorTransfer_selectedSubinventory.code}`;
+        const response = await fetch(fusionUrl);
         const data = await response.json();
 
-        // Filter locators for this specific item and subinventory
+        // Extract unique locators for this item
         const locatorsMap = {};
         if (data.items && Array.isArray(data.items)) {
           data.items.forEach(row => {
-            const rowItemNumber = row.itemnumber || row.ITEMNUMBER;
-            const rowSubCode = row.subinventorycode || row.sub_inventory_code;
-            const rowLocatorId = row.locator_id || row.Locator || row.LOCATOR || 'NO_LOCATOR';
-
-            if (rowItemNumber === item.itemNumber && rowSubCode === locatorTransfer_selectedSubinventory.code) {
-              if (!locatorsMap[rowLocatorId]) {
-                locatorsMap[rowLocatorId] = {
-                  id: rowLocatorId,
-                  code: rowLocatorId,
-                  description: rowLocatorId // In real API, you could have a locator_description field
+            if (row.ItemNumber === item.itemNumber) {
+              const locId = row.LocatorId ? row.LocatorId.toString() : 'NO_LOCATOR';
+              if (!locatorsMap[locId]) {
+                locatorsMap[locId] = {
+                  id: locId,
+                  code: locId,
+                  description: locId
                 };
               }
             }
@@ -6748,16 +6753,13 @@ _Sent from MobileWMS_`;
 
         const locators = Object.values(locatorsMap);
         setLocatorTransfer_locators(locators);
-        if (locators.length > 0) {
-          setLocatorTransfer_selectedSourceLocator(locators[0]);
-        }
-        setLocatorTransfer_transferQuantity(item.onHandQuantity.toString());
-        setLocatorTransfer_status(`Loaded ${locators.length} locators`);
+        setLocatorTransfer_status(`Loaded ${locators.length} destination locators`);
         setTimeout(() => setLocatorTransfer_status(''), 2000);
         navigateTo('LocatorTransferDetail');
       } catch (error) {
         setLocatorTransfer_error(`Error loading locators: ${error.message}`);
         setLocatorTransfer_status('');
+        console.error('Error:', error);
       } finally {
         setLocatorTransfer_loading(false);
       }
@@ -6868,18 +6870,27 @@ _Sent from MobileWMS_`;
               ) : filteredItems.length > 0 ? (
                 <View>
                   {filteredItems.map((item) => (
-                    <TouchableOpacity
+                    <View
                       key={item.id}
                       style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 12, marginBottom: 8 }}
-                      onPress={() => handleItemSelect(item)}
                     >
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }}>{item.itemNumber}</Text>
-                        <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.success }}>{item.onHandQuantity}</Text>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 2 }}>{item.itemNumber}</Text>
+                          <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 4 }}>{item.itemDescription}</Text>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>Qty: {item.quantity} {item.uomCode}</Text>
+                            <Text style={{ fontSize: 11, color: '#2563eb', fontWeight: '600' }}>📍 {item.locatorId}</Text>
+                          </View>
+                        </View>
                       </View>
-                      <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 2 }}>{item.itemDescription}</Text>
-                      <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>UOM: {item.uomCode}</Text>
-                    </TouchableOpacity>
+                      <TouchableOpacity
+                        style={{ backgroundColor: COLORS.primary, borderRadius: 6, padding: 10, alignItems: 'center' }}
+                        onPress={() => handleItemSelect(item)}
+                      >
+                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>Transfer Locator →</Text>
+                      </TouchableOpacity>
+                    </View>
                   ))}
                 </View>
               ) : (
@@ -6899,17 +6910,12 @@ _Sent from MobileWMS_`;
     const handleTransfer = async () => {
       const qty = parseFloat(locatorTransfer_transferQuantity);
 
-      if (!locatorTransfer_selectedSourceLocator) {
-        setLocatorTransfer_error('Please select a source locator');
-        return;
-      }
-
       if (!locatorTransfer_selectedDestLocator) {
         setLocatorTransfer_error('Please select a destination locator');
         return;
       }
 
-      if (locatorTransfer_selectedSourceLocator.id === locatorTransfer_selectedDestLocator.id) {
+      if (locatorTransfer_selectedSourceLocator.code === locatorTransfer_selectedDestLocator.code) {
         setLocatorTransfer_error('Source and destination locators must be different');
         return;
       }
@@ -6919,34 +6925,52 @@ _Sent from MobileWMS_`;
         return;
       }
 
-      if (qty > (locatorTransfer_selectedItem.onHandQuantity || 0)) {
-        setLocatorTransfer_error(`Cannot transfer more than available quantity (${locatorTransfer_selectedItem.onHandQuantity})`);
+      if (qty > (locatorTransfer_selectedItem.quantity || 0)) {
+        setLocatorTransfer_error(`Cannot transfer more than available quantity (${locatorTransfer_selectedItem.quantity})`);
         return;
       }
 
       setLocatorTransfer_submitting(true);
       setLocatorTransfer_error('');
-      setLocatorTransfer_status('Submitting transfer...');
+      setLocatorTransfer_status('Submitting transfer to Oracle Fusion...');
 
       try {
-        const transferData = {
-          warehouseId: locatorTransfer_selectedWarehouse.id,
-          fromSubinventory: locatorTransfer_selectedSubinventory.code,
-          toSubinventory: locatorTransfer_selectedSubinventory.code,
-          itemId: locatorTransfer_selectedItem.id,
-          itemNumber: locatorTransfer_selectedItem.itemNumber,
-          quantity: qty,
-          fromLocator: locatorTransfer_selectedSourceLocator.code,
-          toLocator: locatorTransfer_selectedDestLocator.code,
+        // Call Oracle Fusion Subinventory Transfer API
+        const fusionTransferUrl = 'https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05/subinventoryTransfers';
+
+        const transferPayload = {
+          TransferFromOrganizationCode: locatorTransfer_selectedWarehouse.code,
+          TransferFromSubinventoryCode: locatorTransfer_selectedSubinventory.code,
+          TransferFromLocatorId: locatorTransfer_selectedSourceLocator.code,
+          TransferToOrganizationCode: locatorTransfer_selectedWarehouse.code,
+          TransferToSubinventoryCode: locatorTransfer_selectedSubinventory.code, // Same subinventory for now
+          TransferToLocatorId: locatorTransfer_selectedDestLocator.code,
+          ItemNumber: locatorTransfer_selectedItem.itemNumber,
+          TransferQuantity: qty,
+          InventoryItemId: locatorTransfer_selectedItem.inventoryItemId,
+          OrganizationId: locatorTransfer_selectedItem.organizationId
         };
 
-        console.log('Transfer Data:', JSON.stringify(transferData, null, 2));
+        console.log('Fusion Transfer Payload:', JSON.stringify(transferPayload, null, 2));
 
-        // Simulate API call (replace with real API)
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        const response = await fetch(fusionTransferUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Basic ' + btoa('username:password') // Update with actual credentials
+          },
+          body: JSON.stringify(transferPayload)
+        });
 
-        // Mock success response
-        const refNum = `TRN-${Date.now()}`;
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Fusion API Error: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log('Fusion Response:', JSON.stringify(result, null, 2));
+
+        const refNum = result.TransferId || result.ReferenceNumber || `TRN-${Date.now()}`;
         setLocatorTransfer_success(`✓ Transfer successful!\nReference: ${refNum}\nQuantity: ${qty} ${locatorTransfer_selectedItem.uomCode}\nFrom: ${locatorTransfer_selectedSourceLocator.code}\nTo: ${locatorTransfer_selectedDestLocator.code}`);
         setLocatorTransfer_status('');
 
@@ -6956,11 +6980,12 @@ _Sent from MobileWMS_`;
           setLocatorTransfer_selectedSourceLocator(null);
           setLocatorTransfer_selectedDestLocator(null);
           setLocatorTransfer_transferQuantity('');
-          navigateTo('Home');
+          navigateTo('LocatorTransfers');
         }, 3000);
       } catch (error) {
         setLocatorTransfer_error(`Transfer failed: ${error.message}`);
         setLocatorTransfer_status('');
+        console.error('Transfer Error:', error);
       } finally {
         setLocatorTransfer_submitting(false);
       }
@@ -7017,8 +7042,8 @@ _Sent from MobileWMS_`;
               <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.text, flex: 1, textAlign: 'right' }}>{locatorTransfer_selectedItem.itemDescription}</Text>
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
-              <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>On Hand:</Text>
-              <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.success }}>{locatorTransfer_selectedItem.onHandQuantity} {locatorTransfer_selectedItem.uomCode}</Text>
+              <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>Available Quantity:</Text>
+              <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.success }}>{locatorTransfer_selectedItem.quantity} {locatorTransfer_selectedItem.uomCode}</Text>
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
               <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>Warehouse:</Text>
@@ -7026,61 +7051,54 @@ _Sent from MobileWMS_`;
             </View>
           </View>
 
-          {/* Source Locator */}
+          {/* Source Locator (Read-only) */}
           <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.primary, marginBottom: 8, textTransform: 'uppercase' }}>Source Locator</Text>
-          <TouchableOpacity
-            style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 12, marginBottom: 8 }}
-            onPress={() => {}}
-          >
-            <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.text }}>{locatorTransfer_selectedSourceLocator?.code || 'Select Source'}</Text>
-            <Text style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 2 }}>{locatorTransfer_selectedSourceLocator?.description}</Text>
-          </TouchableOpacity>
+          <View style={{ backgroundColor: '#F0F9FF', borderLeftWidth: 4, borderLeftColor: COLORS.primary, borderRadius: 8, padding: 12, marginBottom: 16 }}>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.text }}>{locatorTransfer_selectedSourceLocator?.code || 'N/A'}</Text>
+            <Text style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 2 }}>Current location of this item</Text>
+          </View>
 
-          {/* Source Locator Dropdown */}
-          {locatorTransfer_locators.length > 0 && (
-            <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, marginBottom: 16, overflow: 'hidden', maxHeight: 200 }}>
+          {/* Destination Subinventory */}
+          <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.primary, marginBottom: 8, textTransform: 'uppercase' }}>Destination Subinventory</Text>
+          <View style={{ backgroundColor: '#FFF3E0', borderLeftWidth: 4, borderLeftColor: COLORS.warning, borderRadius: 8, padding: 12, marginBottom: 16 }}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.text }}>{locatorTransfer_selectedSubinventory?.name || 'Same Subinventory'}</Text>
+            <Text style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 2 }}>Items will be transferred within the same subinventory</Text>
+          </View>
+
+          {/* Destination Locator */}
+          <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.primary, marginBottom: 8, textTransform: 'uppercase' }}>Select Destination Locator</Text>
+          {locatorTransfer_locators.length > 0 ? (
+            <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, marginBottom: 16, overflow: 'hidden', maxHeight: 250 }}>
               <ScrollView nestedScrollEnabled={true}>
                 {locatorTransfer_locators.map((loc) => (
                   <TouchableOpacity
                     key={loc.id}
-                    style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: locatorTransfer_selectedSourceLocator?.id === loc.id ? '#E8F4FC' : '#fff' }}
-                    onPress={() => setLocatorTransfer_selectedSourceLocator(loc)}
+                    style={{
+                      padding: 12,
+                      borderBottomWidth: 1,
+                      borderBottomColor: COLORS.border,
+                      backgroundColor: locatorTransfer_selectedDestLocator?.id === loc.id ? '#E8F4FC' : '#fff',
+                      borderLeftWidth: locatorTransfer_selectedDestLocator?.id === loc.id ? 4 : 0,
+                      borderLeftColor: COLORS.primary
+                    }}
+                    onPress={() => setLocatorTransfer_selectedDestLocator(loc)}
                   >
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.text }}>{loc.code}</Text>
-                    <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>{loc.description}</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.text }}>{loc.code}</Text>
+                        <Text style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 2 }}>{loc.description}</Text>
+                      </View>
+                      {locatorTransfer_selectedDestLocator?.id === loc.id && (
+                        <Text style={{ fontSize: 16, color: COLORS.primary }}>✓</Text>
+                      )}
+                    </View>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
             </View>
-          )}
-
-          {/* Destination Locator */}
-          <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.primary, marginBottom: 8, textTransform: 'uppercase' }}>Destination Locator</Text>
-          <TouchableOpacity
-            style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 12, marginBottom: 8 }}
-            onPress={() => {}}
-          >
-            <Text style={{ fontSize: 13, fontWeight: '600', color: locatorTransfer_selectedDestLocator ? COLORS.text : COLORS.textSecondary }}>
-              {locatorTransfer_selectedDestLocator?.code || 'Select Destination'}
-            </Text>
-            <Text style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 2 }}>{locatorTransfer_selectedDestLocator?.description}</Text>
-          </TouchableOpacity>
-
-          {/* Destination Locator Dropdown */}
-          {locatorTransfer_locators.length > 0 && (
-            <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, marginBottom: 16, overflow: 'hidden', maxHeight: 200 }}>
-              <ScrollView nestedScrollEnabled={true}>
-                {locatorTransfer_locators.map((loc) => (
-                  <TouchableOpacity
-                    key={loc.id}
-                    style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: locatorTransfer_selectedDestLocator?.id === loc.id ? '#E8F4FC' : '#fff' }}
-                    onPress={() => setLocatorTransfer_selectedDestLocator(loc)}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.text }}>{loc.code}</Text>
-                    <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>{loc.description}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+          ) : (
+            <View style={{ backgroundColor: '#FEF1EF', borderRadius: 8, padding: 12, marginBottom: 16 }}>
+              <Text style={{ color: COLORS.danger, fontSize: 12 }}>No destination locators available</Text>
             </View>
           )}
 
@@ -7100,7 +7118,7 @@ _Sent from MobileWMS_`;
             </Text>
           </View>
           <Text style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 16 }}>
-            Max available: {locatorTransfer_selectedItem.onHandQuantity} {locatorTransfer_selectedItem.uomCode}
+            Max available: {locatorTransfer_selectedItem.quantity} {locatorTransfer_selectedItem.uomCode}
           </Text>
 
           {/* Buttons */}
