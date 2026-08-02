@@ -11,6 +11,9 @@ import ScannerScreen from '../screens/ScannerScreen';
 import ItemDetailScreen from '../screens/ItemDetailScreen';
 import ReceiveScreen from '../screens/ReceiveScreen';
 import ShipScreen from '../screens/ShipScreen';
+import LocatorTransfersScreen from '../screens/LocatorTransfersScreen';
+import ItemTransferDetailScreen from '../screens/ItemTransferDetailScreen';
+import StockAdjustmentsScreen from '../screens/StockAdjustmentsScreen';
 
 import { COLORS } from '../constants/colors';
 
@@ -72,6 +75,21 @@ export default function AppNavigator() {
             name="Ship"
             component={ShipScreen}
             options={{ title: 'Ship Orders' }}
+          />
+          <Stack.Screen
+            name="LocatorTransfers"
+            component={LocatorTransfersScreen}
+            options={{ title: 'Locator Transfers' }}
+          />
+          <Stack.Screen
+            name="ItemTransferDetail"
+            component={ItemTransferDetailScreen}
+            options={{ title: 'Transfer Item' }}
+          />
+          <Stack.Screen
+            name="StockAdjustments"
+            component={StockAdjustmentsScreen}
+            options={{ title: 'Stock Adjustments' }}
           />
         </Stack.Navigator>
       )}
