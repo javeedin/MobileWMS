@@ -381,12 +381,20 @@ export default function App() {
         setLocatorTransfer_status('Loading warehouses...');
         try {
           const url = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getorgnizationslist';
+          console.log('Fetching warehouses from:', url);
           const response = await fetch(url);
+
+          if (!response.ok) {
+            throw new Error(`API returned status ${response.status}`);
+          }
+
           const data = await response.json();
+          console.log('API Response:', JSON.stringify(data, null, 2));
 
           // Group by warehouse/organization to get unique warehouses with their subinventories
           const warehouseMap = {};
           if (data.items && Array.isArray(data.items)) {
+            console.log(`Processing ${data.items.length} items from API`);
             data.items.forEach(item => {
               const whCode = item.organizationcode;
               const whName = item.organizationname || item.warehouse || whCode;
@@ -410,12 +418,22 @@ export default function App() {
                 });
               }
             });
+          } else {
+            console.warn('No items in API response. Response structure:', Object.keys(data));
           }
 
           const warehouses = Object.values(warehouseMap);
+          console.log('Processed warehouses:', JSON.stringify(warehouses, null, 2));
           setLocatorTransfer_warehouses(warehouses);
-          setLocatorTransfer_status('');
+
+          if (warehouses.length === 0) {
+            setLocatorTransfer_error('No warehouses found. Check API response.');
+          } else {
+            setLocatorTransfer_status(`Loaded ${warehouses.length} warehouses`);
+            setTimeout(() => setLocatorTransfer_status(''), 2000);
+          }
         } catch (error) {
+          console.error('Warehouse loading error:', error);
           setLocatorTransfer_error(`Error loading warehouses: ${error.message}`);
           setLocatorTransfer_status('');
         } finally {
