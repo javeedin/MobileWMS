@@ -380,10 +380,39 @@ export default function App() {
         setLocatorTransfer_error('');
         setLocatorTransfer_status('Loading warehouses...');
         try {
-          const warehouses = organizationsList.length > 0 ? organizationsList : [
-            { id: '1', name: 'Main Warehouse', code: 'MW' },
-            { id: '2', name: 'Secondary Warehouse', code: 'SW' },
-          ];
+          const url = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getorgnizationslist';
+          const response = await fetch(url);
+          const data = await response.json();
+
+          // Group by warehouse/organization to get unique warehouses with their subinventories
+          const warehouseMap = {};
+          if (data.items && Array.isArray(data.items)) {
+            data.items.forEach(item => {
+              const whCode = item.organizationcode;
+              const whName = item.organizationname || item.warehouse || whCode;
+              const subCode = item.subinventorycode;
+
+              if (!warehouseMap[whCode]) {
+                warehouseMap[whCode] = {
+                  id: whCode,
+                  code: whCode,
+                  name: whName,
+                  subinventories: []
+                };
+              }
+
+              // Add subinventory if not already added
+              if (subCode && !warehouseMap[whCode].subinventories.find(s => s.code === subCode)) {
+                warehouseMap[whCode].subinventories.push({
+                  id: subCode,
+                  code: subCode,
+                  name: item.subinventoryname || subCode
+                });
+              }
+            });
+          }
+
+          const warehouses = Object.values(warehouseMap);
           setLocatorTransfer_warehouses(warehouses);
           setLocatorTransfer_status('');
         } catch (error) {
@@ -6630,43 +6659,57 @@ _Sent from MobileWMS_`;
       setLocatorTransfer_selectedWarehouse(warehouse);
       setLocatorTransfer_selectedSubinventory(null);
       setLocatorTransfer_items([]);
-      setLocatorTransfer_loading(true);
+      setLocatorTransfer_loading(false);
       setLocatorTransfer_error('');
-      setLocatorTransfer_status('Loading subinventories...');
-      try {
-        // Mock subinventories
-        const subs = [
-          { id: '1', name: 'Main Subinventory', code: 'MAIN' },
-          { id: '2', name: 'Returns', code: 'RET' },
-          { id: '3', name: 'Damaged Goods', code: 'DMG' },
-        ];
-        setLocatorTransfer_subinventories(subs);
-        setLocatorTransfer_status('');
-      } catch (error) {
-        setLocatorTransfer_error(`Error loading subinventories: ${error.message}`);
-      } finally {
-        setLocatorTransfer_loading(false);
+      setLocatorTransfer_status('');
+
+      // Set subinventories from the warehouse object we already loaded
+      if (warehouse.subinventories && warehouse.subinventories.length > 0) {
+        setLocatorTransfer_subinventories(warehouse.subinventories);
       }
     };
 
     const handleSubinventorySelect = async (sub) => {
       setLocatorTransfer_selectedSubinventory(sub);
+      setLocatorTransfer_items([]);
       setLocatorTransfer_loading(true);
       setLocatorTransfer_error('');
       setLocatorTransfer_status('Loading items...');
       try {
-        // Mock items with on-hand quantities
-        const items = [
-          { id: '1', itemNumber: 'ITEM-001', itemDescription: 'Widget A', onHandQuantity: 150, uomCode: 'EA' },
-          { id: '2', itemNumber: 'ITEM-002', itemDescription: 'Widget B', onHandQuantity: 75, uomCode: 'EA' },
-          { id: '3', itemNumber: 'ITEM-003', itemDescription: 'Gadget X', onHandQuantity: 200, uomCode: 'EA' },
-          { id: '4', itemNumber: 'ITEM-004', itemDescription: 'Gadget Y', onHandQuantity: 50, uomCode: 'EA' },
-        ];
+        // Fetch on-hand data from API
+        const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandsbylocator?P_ORGANIZATIONCODE=${locatorTransfer_selectedWarehouse.code}`;
+        const response = await fetch(url);
+        const data = await response.json();
+
+        // Filter items by selected subinventory and group by item
+        const itemsMap = {};
+        if (data.items && Array.isArray(data.items)) {
+          data.items.forEach(item => {
+            const itemSubCode = item.subinventorycode || item.sub_inventory_code;
+            if (itemSubCode === sub.code) {
+              const itemKey = item.itemnumber || item.ITEMNUMBER;
+              if (itemKey && !itemsMap[itemKey]) {
+                itemsMap[itemKey] = {
+                  id: itemKey,
+                  itemNumber: itemKey,
+                  itemDescription: item.itemdescription || item.ITEMDESCRIPTION || 'N/A',
+                  onHandQuantity: parseFloat(item.primaryquantity || item.PRIMARYQUANTITY || 0),
+                  uomCode: item.uom || 'EA',
+                  organizationCode: item.organizationcode || item.ORGANIZATIONCODE,
+                  subinventoryCode: itemSubCode
+                };
+              }
+            }
+          });
+        }
+
+        const items = Object.values(itemsMap);
         setLocatorTransfer_items(items);
         setLocatorTransfer_status(`Loaded ${items.length} items`);
         setTimeout(() => setLocatorTransfer_status(''), 2000);
       } catch (error) {
         setLocatorTransfer_error(`Error loading items: ${error.message}`);
+        setLocatorTransfer_status('');
       } finally {
         setLocatorTransfer_loading(false);
       }
@@ -6678,22 +6721,43 @@ _Sent from MobileWMS_`;
       setLocatorTransfer_error('');
       setLocatorTransfer_status('Loading locators...');
       try {
-        // Mock locators
-        const locators = [
-          { id: '1', code: 'A-01-01', description: 'Aisle A, Bin 01, Level 01' },
-          { id: '2', code: 'A-01-02', description: 'Aisle A, Bin 01, Level 02' },
-          { id: '3', code: 'B-02-01', description: 'Aisle B, Bin 02, Level 01' },
-          { id: '4', code: 'B-02-02', description: 'Aisle B, Bin 02, Level 02' },
-          { id: '5', code: 'C-03-01', description: 'Aisle C, Bin 03, Level 01' },
-        ];
+        // Fetch on-hand data to get locators for this item
+        const url = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getonhandsbylocator?P_ORGANIZATIONCODE=${locatorTransfer_selectedWarehouse.code}`;
+        const response = await fetch(url);
+        const data = await response.json();
+
+        // Filter locators for this specific item and subinventory
+        const locatorsMap = {};
+        if (data.items && Array.isArray(data.items)) {
+          data.items.forEach(row => {
+            const rowItemNumber = row.itemnumber || row.ITEMNUMBER;
+            const rowSubCode = row.subinventorycode || row.sub_inventory_code;
+            const rowLocatorId = row.locator_id || row.Locator || row.LOCATOR || 'NO_LOCATOR';
+
+            if (rowItemNumber === item.itemNumber && rowSubCode === locatorTransfer_selectedSubinventory.code) {
+              if (!locatorsMap[rowLocatorId]) {
+                locatorsMap[rowLocatorId] = {
+                  id: rowLocatorId,
+                  code: rowLocatorId,
+                  description: rowLocatorId // In real API, you could have a locator_description field
+                };
+              }
+            }
+          });
+        }
+
+        const locators = Object.values(locatorsMap);
         setLocatorTransfer_locators(locators);
-        setLocatorTransfer_selectedSourceLocator(locators[0]);
+        if (locators.length > 0) {
+          setLocatorTransfer_selectedSourceLocator(locators[0]);
+        }
         setLocatorTransfer_transferQuantity(item.onHandQuantity.toString());
         setLocatorTransfer_status(`Loaded ${locators.length} locators`);
         setTimeout(() => setLocatorTransfer_status(''), 2000);
         navigateTo('LocatorTransferDetail');
       } catch (error) {
         setLocatorTransfer_error(`Error loading locators: ${error.message}`);
+        setLocatorTransfer_status('');
       } finally {
         setLocatorTransfer_loading(false);
       }
