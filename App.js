@@ -4042,8 +4042,8 @@ _Sent from MobileWMS_`;
               <Text style={{ fontSize: 11, color: '#333', fontWeight: '500' }}>Shipping</Text>
             </TouchableOpacity>
 
-            {/* Orders */}
-            <TouchableOpacity
+            {/* Orders - HIDDEN */}
+            {/* <TouchableOpacity
               style={{ width: '31%', backgroundColor: '#fff', borderRadius: 8, padding: 12, alignItems: 'center', marginBottom: 10, elevation: 2 }}
               onPress={() => navigateTo('OrderManagementModule')}
             >
@@ -4051,10 +4051,10 @@ _Sent from MobileWMS_`;
                 <Text style={{ fontSize: 18 }}>📋</Text>
               </View>
               <Text style={{ fontSize: 11, color: '#333', fontWeight: '500' }}>Orders</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
-            {/* CRM */}
-            <TouchableOpacity
+            {/* CRM - HIDDEN */}
+            {/* <TouchableOpacity
               style={{ width: '31%', backgroundColor: '#fff', borderRadius: 8, padding: 12, alignItems: 'center', marginBottom: 10, elevation: 2 }}
               onPress={() => navigateTo('CRMModule')}
             >
@@ -4062,10 +4062,10 @@ _Sent from MobileWMS_`;
                 <Text style={{ fontSize: 18 }}>👥</Text>
               </View>
               <Text style={{ fontSize: 11, color: '#333', fontWeight: '500' }}>CRM</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
-            {/* Scanner */}
-            <TouchableOpacity
+            {/* Scanner - HIDDEN */}
+            {/* <TouchableOpacity
               style={{ width: '31%', backgroundColor: '#fff', borderRadius: 8, padding: 12, alignItems: 'center', marginBottom: 10, elevation: 2 }}
               onPress={() => navigateTo('Scanner')}
             >
@@ -4073,7 +4073,7 @@ _Sent from MobileWMS_`;
                 <Text style={{ fontSize: 18 }}>📷</Text>
               </View>
               <Text style={{ fontSize: 11, color: '#333', fontWeight: '500' }}>Scanner</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
             {/* Locator Transfers */}
             <TouchableOpacity
