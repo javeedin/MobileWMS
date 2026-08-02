@@ -4074,6 +4074,28 @@ _Sent from MobileWMS_`;
               </View>
               <Text style={{ fontSize: 11, color: '#333', fontWeight: '500' }}>Scanner</Text>
             </TouchableOpacity>
+
+            {/* Locator Transfers */}
+            <TouchableOpacity
+              style={{ width: '31%', backgroundColor: '#fff', borderRadius: 8, padding: 12, alignItems: 'center', marginBottom: 10, elevation: 2 }}
+              onPress={() => navigateTo('LocatorTransfers')}
+            >
+              <View style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: COLORS.info, justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={{ fontSize: 18 }}>🔄</Text>
+              </View>
+              <Text style={{ fontSize: 11, color: '#333', fontWeight: '500' }}>Locator Transfers</Text>
+            </TouchableOpacity>
+
+            {/* Stock Adjustments */}
+            <TouchableOpacity
+              style={{ width: '31%', backgroundColor: '#fff', borderRadius: 8, padding: 12, alignItems: 'center', marginBottom: 10, elevation: 2 }}
+              onPress={() => navigateTo('StockAdjustments')}
+            >
+              <View style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: COLORS.warning, justifyContent: 'center', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={{ fontSize: 18 }}>⚙️</Text>
+              </View>
+              <Text style={{ fontSize: 11, color: '#333', fontWeight: '500' }}>Stock Adjustments</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Quick Actions */}
@@ -6554,6 +6576,52 @@ _Sent from MobileWMS_`;
             )}
           </View>
         </View>
+      </View>
+    );
+  }
+
+  // ============= LOCATOR TRANSFERS SCREEN =============
+  if (currentScreen === 'LocatorTransfers') {
+    return (
+      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: COLORS.primary }}>
+          <TouchableOpacity onPress={goBack}>
+            <Text style={{ fontSize: 24, color: '#fff' }}>←</Text>
+          </TouchableOpacity>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>Locator Transfers</Text>
+          <Text style={{ fontSize: 18, color: '#fff' }}>🔄</Text>
+        </View>
+        <ScrollView style={{ flex: 1, padding: 16 }}>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.primary, marginBottom: 16 }}>Coming Soon</Text>
+          <Text style={{ fontSize: 14, color: COLORS.textSecondary, lineHeight: 22 }}>
+            This feature will allow you to transfer inventory items from one locator to another within your warehouse.
+            {'\n\n'}
+            Select warehouse and subinventory, then choose items to transfer with source and destination locators.
+          </Text>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // ============= STOCK ADJUSTMENTS SCREEN =============
+  if (currentScreen === 'StockAdjustments') {
+    return (
+      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: COLORS.primary }}>
+          <TouchableOpacity onPress={goBack}>
+            <Text style={{ fontSize: 24, color: '#fff' }}>←</Text>
+          </TouchableOpacity>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>Stock Adjustments</Text>
+          <Text style={{ fontSize: 18, color: '#fff' }}>⚙️</Text>
+        </View>
+        <ScrollView style={{ flex: 1, padding: 16 }}>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.primary, marginBottom: 16 }}>Coming Soon</Text>
+          <Text style={{ fontSize: 14, color: COLORS.textSecondary, lineHeight: 22 }}>
+            This feature will allow you to adjust inventory quantities for items, record cycle counts, and handle discrepancies.
+            {'\n\n'}
+            You will be able to mark items as gained, lost, or damaged, and track all adjustments with detailed audit trails.
+          </Text>
+        </ScrollView>
       </View>
     );
   }
