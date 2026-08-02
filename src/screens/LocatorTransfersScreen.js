@@ -34,11 +34,16 @@ export default function LocatorTransfersScreen({ navigation }) {
 
   const loadWarehouses = async () => {
     setLoading(true);
+    setError('');
+    setStatus('Loading warehouses...');
     try {
       const warehouseList = await fetchWarehouseList();
       setWarehouses(warehouseList);
+      setStatus(`Loaded ${warehouseList.length} warehouses`);
+      setTimeout(() => setStatus(''), 2000);
     } catch (error) {
-      Alert.alert('Error', 'Failed to load warehouses');
+      const errorMsg = `Failed to load warehouses: ${error.message}`;
+      setError(errorMsg);
       console.error(error);
     } finally {
       setLoading(false);
@@ -51,11 +56,16 @@ export default function LocatorTransfersScreen({ navigation }) {
     setItems([]);
     setShowWarehouseDropdown(false);
     setLoading(true);
+    setError('');
+    setStatus(`Loading subinventories for ${warehouse.name}...`);
     try {
       const subList = await fetchSubinventories(warehouse.id);
       setSubinventories(subList);
+      setStatus(`Loaded ${subList.length} subinventories`);
+      setTimeout(() => setStatus(''), 2000);
     } catch (error) {
-      Alert.alert('Error', 'Failed to load subinventories');
+      const errorMsg = `Failed to load subinventories: ${error.message}`;
+      setError(errorMsg);
       console.error(error);
     } finally {
       setLoading(false);
@@ -66,11 +76,16 @@ export default function LocatorTransfersScreen({ navigation }) {
     setSelectedSubinventory(subinventory);
     setShowSubinventoryDropdown(false);
     setLoading(true);
+    setError('');
+    setStatus(`Loading items from ${subinventory.name}...`);
     try {
       const itemList = await fetchSubinventoryItems(selectedWarehouse.id, subinventory.code);
       setItems(itemList);
+      setStatus(`Loaded ${itemList.length} items`);
+      setTimeout(() => setStatus(''), 2000);
     } catch (error) {
-      Alert.alert('Error', 'Failed to load items');
+      const errorMsg = `Failed to load items: ${error.message}`;
+      setError(errorMsg);
       console.error(error);
     } finally {
       setLoading(false);
@@ -109,6 +124,22 @@ export default function LocatorTransfersScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
+      {error && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>⚠️ {error}</Text>
+          <TouchableOpacity onPress={() => setError('')}>
+            <Text style={styles.errorClose}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {status && (
+        <View style={styles.statusBanner}>
+          <ActivityIndicator size="small" color={COLORS.primary} style={{ marginRight: SPACING.sm }} />
+          <Text style={styles.statusText}>{status}</Text>
+        </View>
+      )}
+
       <ScrollView style={styles.content}>
         {/* Warehouse Selector */}
         <View style={styles.section}>
@@ -214,6 +245,38 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.backgroundSecondary,
+  },
+  errorBanner: {
+    backgroundColor: COLORS.danger,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  errorText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    flex: 1,
+  },
+  errorClose: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.lg,
+    marginLeft: SPACING.md,
+  },
+  statusBanner: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    flex: 1,
   },
   content: {
     flex: 1,
