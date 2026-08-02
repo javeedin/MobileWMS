@@ -389,18 +389,29 @@ export default function App() {
           }
 
           const data = await response.json();
-          console.log('API Response:', JSON.stringify(data, null, 2));
+          console.log('Full API Response:', JSON.stringify(data, null, 2));
 
           // Group by warehouse/organization to get unique warehouses with their subinventories
           const warehouseMap = {};
           if (data.items && Array.isArray(data.items)) {
             console.log(`Processing ${data.items.length} items from API`);
-            data.items.forEach(item => {
-              const whCode = item.organizationcode;
-              const whName = item.organizationname || item.warehouse || whCode;
-              const subCode = item.subinventorycode;
+            // Log first item to see field names
+            if (data.items.length > 0) {
+              console.log('First item structure:', JSON.stringify(data.items[0], null, 2));
+            }
 
-              if (!warehouseMap[whCode]) {
+            data.items.forEach((item, index) => {
+              // Try different field name variations
+              const whCode = item.organizationcode || item.OrganizationCode || item.ORG_CODE;
+              const whName = item.organizationname || item.OrganizationName || item.warehouse || item.Warehouse || whCode;
+              const subCode = item.subinventorycode || item.SubinventoryCode || item.SUB_CODE;
+              const subName = item.subinventoryname || item.SubinventoryName || subCode;
+
+              if (index === 0) {
+                console.log(`Debug - Item ${index}:`, { whCode, whName, subCode, subName });
+              }
+
+              if (whCode && !warehouseMap[whCode]) {
                 warehouseMap[whCode] = {
                   id: whCode,
                   code: whCode,
@@ -410,24 +421,27 @@ export default function App() {
               }
 
               // Add subinventory if not already added
-              if (subCode && !warehouseMap[whCode].subinventories.find(s => s.code === subCode)) {
-                warehouseMap[whCode].subinventories.push({
-                  id: subCode,
-                  code: subCode,
-                  name: item.subinventoryname || subCode
-                });
+              if (whCode && subCode) {
+                if (!warehouseMap[whCode].subinventories.find(s => s.code === subCode)) {
+                  warehouseMap[whCode].subinventories.push({
+                    id: subCode,
+                    code: subCode,
+                    name: subName
+                  });
+                }
               }
             });
           } else {
             console.warn('No items in API response. Response structure:', Object.keys(data));
           }
 
-          const warehouses = Object.values(warehouseMap);
+          const warehouses = Object.values(warehouseMap).filter(w => w.id && w.code && w.name);
           console.log('Processed warehouses:', JSON.stringify(warehouses, null, 2));
+          console.log('Total warehouses with valid data:', warehouses.length);
           setLocatorTransfer_warehouses(warehouses);
 
           if (warehouses.length === 0) {
-            setLocatorTransfer_error('No warehouses found. Check API response.');
+            setLocatorTransfer_error('No warehouses found. Check API response. See console for details.');
           } else {
             setLocatorTransfer_status(`Loaded ${warehouses.length} warehouses`);
             setTimeout(() => setLocatorTransfer_status(''), 2000);
