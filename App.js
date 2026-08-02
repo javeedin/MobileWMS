@@ -6714,24 +6714,44 @@ _Sent from MobileWMS_`;
       try {
         // Fetch on-hand data from APEX API using warehouse_code and subinventory_code
         const apexUrl = `https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY/getorgnizationslist`;
+        console.log('=== LOADING ITEMS ===');
+        console.log('Full URL:', apexUrl);
+        console.log('Warehouse Code:', locatorTransfer_selectedWarehouse.code);
+        console.log('Subinventory Code:', sub.code);
+
         const response = await fetch(apexUrl);
         const data = await response.json();
+
+        console.log('API Response received. Total items in response:', data.items ? data.items.length : 0);
+        console.log('Full API Response:', JSON.stringify(data, null, 2));
 
         // Filter items by selected warehouse and subinventory
         const itemsArray = [];
         const itemsMap = {}; // Group by item number to avoid duplicates
 
         if (data.items && Array.isArray(data.items)) {
-          data.items.forEach(item => {
-            // Match warehouse and subinventory
-            if (item.warehouse_code === locatorTransfer_selectedWarehouse.code &&
-                item.subinventory_code === sub.code) {
+          console.log('Processing API items...');
+          let matchCount = 0;
 
+          data.items.forEach((item, index) => {
+            // Log first few items to see structure
+            if (index < 3) {
+              console.log(`Item ${index}:`, JSON.stringify(item, null, 2));
+            }
+
+            // Match warehouse and subinventory
+            const whMatch = item.warehouse_code === locatorTransfer_selectedWarehouse.code;
+            const subMatch = item.subinventory_code === sub.code;
+
+            if (whMatch && subMatch) {
+              matchCount++;
               const itemNumber = item.item_number;
               const itemDesc = item.item_description || 'N/A';
               const quantity = parseFloat(item.quantity || 0);
               const uom = item.uom_code || 'EA';
               const locatorId = item.locator_id ? item.locator_id.toString() : 'NO_LOCATOR';
+
+              console.log(`Match found: ${itemNumber} (Qty: ${quantity}, Locator: ${locatorId})`);
 
               // Create entry for each unique item (first occurrence)
               if (itemNumber && !itemsMap[itemNumber]) {
@@ -6748,19 +6768,25 @@ _Sent from MobileWMS_`;
               }
             }
           });
+
+          console.log(`Total matching items: ${matchCount}`);
+        } else {
+          console.warn('No items array in response!');
         }
 
         // Convert map to array
         Object.values(itemsMap).forEach(item => itemsArray.push(item));
 
-        console.log(`Loaded ${itemsArray.length} items for warehouse: ${locatorTransfer_selectedWarehouse.code}, subinventory: ${sub.code}`);
+        console.log(`Final loaded items: ${itemsArray.length}`, itemsArray);
         setLocatorTransfer_items(itemsArray);
         setLocatorTransfer_status(`Loaded ${itemsArray.length} items`);
         setTimeout(() => setLocatorTransfer_status(''), 2000);
       } catch (error) {
         setLocatorTransfer_error(`Error loading items: ${error.message}`);
         setLocatorTransfer_status('');
-        console.error('Error loading items:', error);
+        console.error('=== ERROR LOADING ITEMS ===');
+        console.error('Error message:', error.message);
+        console.error('Full error:', error);
       } finally {
         setLocatorTransfer_loading(false);
       }
