@@ -41,6 +41,20 @@ export default function DashboardScreen({ navigation }) {
       icon: '📤',
       screen: 'Ship',
     },
+    {
+      id: 'locator_transfers',
+      title: 'Locator Transfers',
+      description: 'Transfer items between locators',
+      icon: '🔄',
+      screen: 'LocatorTransfers',
+    },
+    {
+      id: 'stock_adjustments',
+      title: 'Stock Adjustments',
+      description: 'Adjust inventory quantities',
+      icon: '⚙️',
+      screen: 'StockAdjustments',
+    },
   ];
 
   return (
