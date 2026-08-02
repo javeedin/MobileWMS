@@ -371,6 +371,32 @@ export default function App() {
       pulseAnim.setValue(1);
     }
   }, [isAnimating, flowStep, currentScreen]);
+
+  // Load warehouses when navigating to LocatorTransfers
+  useEffect(() => {
+    if (currentScreen === 'LocatorTransfers' && locatorTransfer_warehouses.length === 0) {
+      const loadWarehouses = async () => {
+        setLocatorTransfer_loading(true);
+        setLocatorTransfer_error('');
+        setLocatorTransfer_status('Loading warehouses...');
+        try {
+          const warehouses = organizationsList.length > 0 ? organizationsList : [
+            { id: '1', name: 'Main Warehouse', code: 'MW' },
+            { id: '2', name: 'Secondary Warehouse', code: 'SW' },
+          ];
+          setLocatorTransfer_warehouses(warehouses);
+          setLocatorTransfer_status('');
+        } catch (error) {
+          setLocatorTransfer_error(`Error loading warehouses: ${error.message}`);
+          setLocatorTransfer_status('');
+        } finally {
+          setLocatorTransfer_loading(false);
+        }
+      };
+      loadWarehouses();
+    }
+  }, [currentScreen]);
+
   const [selectedShipOrder, setSelectedShipOrder] = useState(null);
 
   // ============= LOCATOR TRANSFERS STATE =============
@@ -6600,25 +6626,6 @@ _Sent from MobileWMS_`;
 
   // ============= LOCATOR TRANSFERS SCREEN =============
   if (currentScreen === 'LocatorTransfers') {
-    const loadWarehouses = async () => {
-      setLocatorTransfer_loading(true);
-      setLocatorTransfer_error('');
-      setLocatorTransfer_status('Loading warehouses...');
-      try {
-        const warehouses = organizationsList.length > 0 ? organizationsList : [
-          { id: '1', name: 'Main Warehouse', code: 'MW' },
-          { id: '2', name: 'Secondary Warehouse', code: 'SW' },
-        ];
-        setLocatorTransfer_warehouses(warehouses);
-        setLocatorTransfer_status('');
-      } catch (error) {
-        setLocatorTransfer_error(`Error loading warehouses: ${error.message}`);
-        setLocatorTransfer_status('');
-      } finally {
-        setLocatorTransfer_loading(false);
-      }
-    };
-
     const handleWarehouseSelect = async (warehouse) => {
       setLocatorTransfer_selectedWarehouse(warehouse);
       setLocatorTransfer_selectedSubinventory(null);
@@ -6691,12 +6698,6 @@ _Sent from MobileWMS_`;
         setLocatorTransfer_loading(false);
       }
     };
-
-    useEffect(() => {
-      if (currentScreen === 'LocatorTransfers' && locatorTransfer_warehouses.length === 0) {
-        loadWarehouses();
-      }
-    }, [currentScreen]);
 
     const filteredItems = locatorTransfer_items.filter(item =>
       item.itemNumber.toLowerCase().includes(locatorTransfer_searchQuery.toLowerCase()) ||
