@@ -27,6 +27,8 @@ export default function LocatorTransfersScreen({ navigation }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showWarehouseDropdown, setShowWarehouseDropdown] = useState(false);
   const [showSubinventoryDropdown, setShowSubinventoryDropdown] = useState(false);
+  const [error, setError] = useState('');
+  const [status, setStatus] = useState('');
 
   useEffect(() => {
     loadWarehouses();
