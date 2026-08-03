@@ -81,7 +81,7 @@ export default function LocatorTransfersScreen({ navigation }) {
     setError('');
     setStatus(`Loading items from ${subinventory.name}...`);
     try {
-      const itemList = await fetchSubinventoryItems(selectedWarehouse.id, subinventory.code);
+      const itemList = await fetchSubinventoryItems(selectedWarehouse.code, subinventory.code);
       setItems(itemList);
       setStatus(`Loaded ${itemList.length} items`);
       setTimeout(() => setStatus(''), 2000);
