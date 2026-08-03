@@ -1,6 +1,19 @@
 const APEX_API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
 const FUSION_API_BASE = 'https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05';
 
+// Fusion API Credentials (Basic Auth)
+const FUSION_USERNAME = 'emparun';
+const FUSION_PASSWORD = 'Fusion@1234';
+
+// Helper function to get Basic Auth header
+const getFusionAuthHeaders = () => {
+  const credentials = btoa(`${FUSION_USERNAME}:${FUSION_PASSWORD}`);
+  return {
+    'Authorization': `Basic ${credentials}`,
+    'Content-Type': 'application/json',
+  };
+};
+
 export const fetchWarehouseList = async () => {
   try {
     const url = `${APEX_API_BASE}/getorgnizationslist`;
@@ -92,9 +105,13 @@ export const fetchSubinventoryItems = async (warehouseCode, subinventoryCode) =>
     console.log('📍 Subinventory Code:', subinventoryCode);
     console.log('\n🔗 FULL URL BEING CALLED:');
     console.log(fusionUrl);
-    console.log('\n⏱️  Making fetch request...');
+    console.log('\n⏱️  Making fetch request with Basic Auth...');
+    console.log('🔐 Using credentials: emparun/***');
 
-    const response = await fetch(fusionUrl);
+    const response = await fetch(fusionUrl, {
+      method: 'GET',
+      headers: getFusionAuthHeaders(),
+    });
 
     const contentType = response.headers.get('content-type');
     const contentLength = response.headers.get('content-length');
@@ -247,7 +264,10 @@ export const fetchLocators = async (warehouseCode, subinventoryCode) => {
 
     console.log('Fetching locators from:', fusionUrl);
 
-    const response = await fetch(fusionUrl);
+    const response = await fetch(fusionUrl, {
+      method: 'GET',
+      headers: getFusionAuthHeaders(),
+    });
     const responseText = await response.text();
 
     if (!response.ok) {
@@ -292,6 +312,7 @@ export const submitSubinventoryTransfer = async (transferData) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Basic ${btoa(`${FUSION_USERNAME}:${FUSION_PASSWORD}`)}`,
       },
       body: JSON.stringify({
         warehouseCode: transferData.warehouseCode,
