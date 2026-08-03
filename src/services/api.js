@@ -76,9 +76,10 @@ export const fetchWarehouseList = async () => {
             warehouseMap[whCode].subinventories.push({
               id: subCode,
               code: subCode,
-              name: subName
+              name: subName,
+              locator_id: item.locator_id || subCode // Include locator_id if available from API
             });
-            console.log(`Added subinventory ${subCode} to warehouse ${whCode}`);
+            console.log(`Added subinventory ${subCode} to warehouse ${whCode}, locator_id: ${item.locator_id || subCode}`);
           }
         }
       });

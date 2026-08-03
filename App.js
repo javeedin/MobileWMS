@@ -6840,48 +6840,60 @@ _Sent from MobileWMS_`;
       setLocatorTransfer_status('Loading destination locators...');
 
       try {
-        // Fetch all locators for this item from Fusion inventoryOnhandBalances API
-        const fusionUrl = `https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05/inventoryOnhandBalances?q=OrganizationCode=${locatorTransfer_selectedWarehouse.code};SubinventoryCode=${locatorTransfer_selectedSubinventory.code}`;
+        const ORACLE_FUSION_BASE = 'https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05';
+        const ORACLE_FUSION_AUTH = btoa('emparun:Fusion@1234');
+        const PAGE_SIZE = 500;
 
-        console.log('Loading locators for item:', item.itemNumber);
-        console.log('Fusion URL:', fusionUrl);
+        // Get locator_id for the subinventory
+        const fusionLocatorId = locatorTransfer_selectedSubinventory?.locator_id || locatorTransfer_selectedSubinventory?.code;
 
-        // Basic Auth Credentials
-        const username = 'emparun';
-        const password = 'Fusion@1234';
-        const credentials = btoa(`${username}:${password}`);
-        const authHeader = `Basic ${credentials}`;
+        console.log('Loading locators for subinventory:', locatorTransfer_selectedSubinventory.code);
+        console.log('Fusion Locator ID:', fusionLocatorId);
 
-        const response = await fetch(fusionUrl, {
-          method: 'GET',
-          headers: {
-            'Authorization': authHeader,
-            'Content-Type': 'application/json',
-          },
-        });
-        const data = await response.json();
+        // Fetch all locators from Fusion /subinventories/{id}/child/locators endpoint
+        let offset = 0;
+        let allLocators = [];
+        let hasMore = true;
 
-        // Extract unique locators for this item in the selected subinventory
-        const locatorsMap = {};
-        if (data.items && Array.isArray(data.items)) {
-          data.items.forEach(row => {
-            if (row.ItemNumber === item.itemNumber) {
-              const locId = row.LocatorId ? row.LocatorId.toString() : 'NO_LOCATOR';
-              const locCode = row.Locator || locId; // Use friendly Locator field
-              if (!locatorsMap[locId]) {
-                locatorsMap[locId] = {
-                  id: locId,
-                  code: locCode,
-                  description: locCode
-                };
-              }
-            }
+        while (hasMore) {
+          const fusionUrl = `${ORACLE_FUSION_BASE}/subinventories/${fusionLocatorId}/child/locators?offset=${offset}&limit=${PAGE_SIZE}`;
+          console.log('Fetching locators:', fusionUrl);
+
+          const response = await fetch(fusionUrl, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Basic ${ORACLE_FUSION_AUTH}`,
+              'Content-Type': 'application/json',
+            },
           });
+          const data = await response.json();
+
+          const pageItems = data.items || [];
+          allLocators = allLocators.concat(pageItems);
+          console.log(`Offset ${offset}: ${pageItems.length} locators, hasMore=${data.hasMore}`);
+
+          hasMore = data.hasMore === true && pageItems.length === PAGE_SIZE;
+          offset += PAGE_SIZE;
         }
+
+        // Extract and format locators
+        const locatorsMap = {};
+        allLocators.forEach(loc => {
+          const locId = loc.LocatorId ? loc.LocatorId.toString() : (loc.locatorName || 'NO_LOCATOR');
+          const locCode = loc.LocatorCode || loc.locatorName || locId;
+          if (!locatorsMap[locId] && loc.StatusCode !== 'INACTIVE') { // Filter out inactive locators
+            locatorsMap[locId] = {
+              id: locId,
+              code: locCode,
+              description: locCode,
+              status: loc.StatusCode || 'Active'
+            };
+          }
+        });
 
         const locators = Object.values(locatorsMap);
         setLocatorTransfer_locators(locators);
-        console.log(`Loaded ${locators.length} destination locators for item: ${item.itemNumber}`, locators);
+        console.log(`Loaded ${locators.length} destination locators for subinventory: ${locatorTransfer_selectedSubinventory.code}`, locators);
         setLocatorTransfer_status(`Loaded ${locators.length} destination locators`);
         setTimeout(() => setLocatorTransfer_status(''), 2000);
         navigateTo('LocatorTransferDetail');
