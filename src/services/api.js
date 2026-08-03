@@ -141,8 +141,9 @@ export const fetchSubinventoryItems = async (warehouseCode, subinventoryCode) =>
         const quantity = parseFloat(item.PrimaryQuantity || 0);
         const uom = item.PrimaryUOMCode || 'PCS';
         const locatorId = item.LocatorId ? item.LocatorId.toString() : 'NO_LOCATOR';
+        const locatorCode = item.Locator || locatorId; // Use Locator field for user-friendly display
 
-        console.log(`Item ${processCount}: ${itemNumber} (Qty: ${quantity}, Locator: ${locatorId})`);
+        console.log(`Item ${processCount}: ${itemNumber} (Qty: ${quantity}, Locator: ${locatorCode})`);
 
         // Create entry for each unique item (first occurrence with that locator)
         const uniqueKey = `${itemNumber}-${locatorId}`;
@@ -154,6 +155,7 @@ export const fetchSubinventoryItems = async (warehouseCode, subinventoryCode) =>
             onHandQuantity: quantity,
             uomCode: uom,
             locatorId: locatorId,
+            locatorCode: locatorCode,
             inventoryItemId: item.InventoryItemId,
             organizationId: item.OrganizationId,
             organizationCode: item.OrganizationCode,
@@ -201,12 +203,13 @@ export const fetchLocators = async (warehouseCode, subinventoryCode) => {
     if (data.items && Array.isArray(data.items)) {
       data.items.forEach(row => {
         const locId = row.LocatorId ? row.LocatorId.toString() : 'NO_LOCATOR';
+        const locCode = row.Locator || locId; // Use Locator field for user-friendly display
         if (!locatorsMap[locId]) {
           locatorsMap[locId] = {
             id: locId,
-            code: locId,
-            name: locId,
-            description: locId
+            code: locCode,
+            name: locCode,
+            description: locCode
           };
         }
       });
