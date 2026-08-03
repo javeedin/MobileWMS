@@ -92,30 +92,48 @@ export const fetchSubinventoryItems = async (warehouseCode, subinventoryCode) =>
 
     const response = await fetch(fusionUrl);
 
-    console.log('Response Status:', response.status);
-    console.log('Response Headers:', {
-      'content-type': response.headers.get('content-type'),
-      'content-length': response.headers.get('content-length')
-    });
+    const contentType = response.headers.get('content-type');
+    const contentLength = response.headers.get('content-length');
+
+    console.log('=== FUSION API RESPONSE ===');
+    console.log('Response Status:', response.status, response.statusText);
+    console.log('Response Headers:', { contentType, contentLength });
+    console.log('Response OK:', response.ok);
 
     const responseText = await response.text();
+
+    console.log('Raw Response Length:', responseText.length);
     console.log('Raw Response Text:', responseText);
+    console.log('Response First 500 chars:', responseText.substring(0, 500));
 
     if (!response.ok) {
-      throw new Error(`API returned status ${response.status}: ${responseText}`);
+      console.error('ERROR: Response not OK');
+      throw new Error(`API returned status ${response.status} ${response.statusText}: ${responseText.substring(0, 300)}`);
     }
 
     if (!responseText || responseText.trim() === '') {
-      throw new Error('API returned empty response');
+      console.error('ERROR: Empty response body');
+      throw new Error('API returned empty response. Status: ' + response.status);
+    }
+
+    // Check if response looks like HTML (error page) instead of JSON
+    if (responseText.trim().startsWith('<')) {
+      console.error('ERROR: Response appears to be HTML, not JSON');
+      throw new Error('API returned HTML instead of JSON (possibly authentication required or server error)');
     }
 
     let data;
     try {
+      console.log('Attempting to parse JSON...');
       data = JSON.parse(responseText);
+      console.log('JSON parse successful. Items count:', data.items ? data.items.length : 0);
     } catch (parseError) {
-      console.error('JSON Parse Error:', parseError);
-      console.error('Response that failed to parse:', responseText);
-      throw new Error(`Failed to parse JSON: ${parseError.message}\nResponse: ${responseText.substring(0, 200)}`);
+      console.error('=== JSON PARSE ERROR ===');
+      console.error('Error:', parseError.message);
+      console.error('Response length:', responseText.length);
+      console.error('Response first 300 chars:', responseText.substring(0, 300));
+      console.error('Response last 100 chars:', responseText.substring(Math.max(0, responseText.length - 100)));
+      throw new Error(`Failed to parse JSON: ${parseError.message}\nResponse length: ${responseText.length}\nFirst 200 chars: ${responseText.substring(0, 200)}`);
     }
 
     console.log('API Response received. Total items in response:', data.items ? data.items.length : 0);
