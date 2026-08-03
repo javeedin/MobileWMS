@@ -6772,8 +6772,9 @@ _Sent from MobileWMS_`;
             const quantity = parseFloat(item.PrimaryQuantity || 0);
             const uom = item.PrimaryUOMCode || 'PCS';
             const locatorId = item.LocatorId ? item.LocatorId.toString() : 'NO_LOCATOR';
+            const locatorCode = item.Locator || locatorId; // Use friendly Locator field
 
-            console.log(`Item ${processCount}: ${itemNumber} (Qty: ${quantity}, Locator: ${locatorId})`);
+            console.log(`Item ${processCount}: ${itemNumber} (Qty: ${quantity}, Locator: ${locatorCode})`);
 
             // Create entry for each unique item (first occurrence with that locator)
             const uniqueKey = `${itemNumber}-${locatorId}`;
@@ -6785,6 +6786,7 @@ _Sent from MobileWMS_`;
                 quantity: quantity,
                 uomCode: uom,
                 locatorId: locatorId,
+                locatorCode: locatorCode,
                 inventoryItemId: item.InventoryItemId,
                 organizationId: item.OrganizationId,
                 organizationCode: item.OrganizationCode,
@@ -6844,7 +6846,19 @@ _Sent from MobileWMS_`;
         console.log('Loading locators for item:', item.itemNumber);
         console.log('Fusion URL:', fusionUrl);
 
-        const response = await fetch(fusionUrl);
+        // Basic Auth Credentials
+        const username = 'emparun';
+        const password = 'Fusion@1234';
+        const credentials = btoa(`${username}:${password}`);
+        const authHeader = `Basic ${credentials}`;
+
+        const response = await fetch(fusionUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': authHeader,
+            'Content-Type': 'application/json',
+          },
+        });
         const data = await response.json();
 
         // Extract unique locators for this item in the selected subinventory
@@ -6853,11 +6867,12 @@ _Sent from MobileWMS_`;
           data.items.forEach(row => {
             if (row.ItemNumber === item.itemNumber) {
               const locId = row.LocatorId ? row.LocatorId.toString() : 'NO_LOCATOR';
+              const locCode = row.Locator || locId; // Use friendly Locator field
               if (!locatorsMap[locId]) {
                 locatorsMap[locId] = {
                   id: locId,
-                  code: locId,
-                  description: locId
+                  code: locCode,
+                  description: locCode
                 };
               }
             }
@@ -6994,7 +7009,7 @@ _Sent from MobileWMS_`;
                           <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 4 }}>{item.itemDescription}</Text>
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                             <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>Qty: {item.quantity} {item.uomCode}</Text>
-                            <Text style={{ fontSize: 11, color: '#2563eb', fontWeight: '600' }}>📍 {item.locatorId}</Text>
+                            <Text style={{ fontSize: 11, color: '#2563eb', fontWeight: '600' }}>📍 {item.locatorCode || item.locatorId}</Text>
                           </View>
                         </View>
                       </View>
