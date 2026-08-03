@@ -6830,8 +6830,8 @@ _Sent from MobileWMS_`;
       // Create source locator object from item's current locator
       setLocatorTransfer_selectedSourceLocator({
         id: item.locatorId,
-        code: item.locatorId,
-        description: item.locatorId
+        code: item.locatorCode || item.locatorId,
+        description: item.locatorCode || item.locatorId
       });
       setLocatorTransfer_selectedDestLocator(null); // Reset destination
       setLocatorTransfer_transferQuantity(item.quantity.toString());
@@ -7180,7 +7180,7 @@ _Sent from MobileWMS_`;
           {/* Source Locator (Read-only) */}
           <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.primary, marginBottom: 8, textTransform: 'uppercase' }}>Source Locator</Text>
           <View style={{ backgroundColor: '#F0F9FF', borderLeftWidth: 4, borderLeftColor: COLORS.primary, borderRadius: 8, padding: 12, marginBottom: 16 }}>
-            <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.text }}>{locatorTransfer_selectedSourceLocator?.code || 'N/A'}</Text>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.text }}>📍 {locatorTransfer_selectedSourceLocator?.description || locatorTransfer_selectedSourceLocator?.code || 'N/A'}</Text>
             <Text style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 2 }}>Current location of this item</Text>
           </View>
 
