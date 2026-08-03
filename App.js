@@ -6720,8 +6720,34 @@ _Sent from MobileWMS_`;
         console.log('Warehouse Code:', locatorTransfer_selectedWarehouse.code);
         console.log('Subinventory Code:', sub.code);
 
-        const response = await fetch(fusionUrl);
-        const data = await response.json();
+        // Basic Auth Credentials
+        const username = 'emparun';
+        const password = 'Fusion@1234';
+        const credentials = btoa(`${username}:${password}`);
+        const authHeader = `Basic ${credentials}`;
+
+        console.log('\n🔐 SENDING REQUEST WITH BASIC AUTH:');
+        console.log('Username:', username);
+        console.log('Auth Header:', authHeader.substring(0, 30) + '...');
+
+        const response = await fetch(fusionUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': authHeader,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        console.log('\n✅ RESPONSE RECEIVED:');
+        console.log('Status:', response.status);
+        console.log('Status Text:', response.statusText);
+
+        const responseText = await response.text();
+        console.log('\n📦 RAW RESPONSE:');
+        console.log('Length:', responseText.length);
+        console.log('Content:', responseText.substring(0, 300));
+
+        const data = JSON.parse(responseText);
 
         console.log('API Response received. Total items in response:', data.items ? data.items.length : 0);
         console.log('Full API Response:', JSON.stringify(data, null, 2));
