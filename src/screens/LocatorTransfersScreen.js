@@ -118,7 +118,10 @@ export default function LocatorTransfersScreen({ navigation }) {
         </View>
         <Text style={styles.quantity}>{item.onHandQuantity}</Text>
       </View>
-      <Text style={styles.uomLabel}>UOM: {item.uomCode}</Text>
+      <View style={styles.itemFooter}>
+        <Text style={styles.uomLabel}>UOM: {item.uomCode}</Text>
+        <Text style={styles.locatorLabel}>Locator: {item.locatorCode}</Text>
+      </View>
     </TouchableOpacity>
   );
 
@@ -374,9 +377,19 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: COLORS.success,
   },
+  itemFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: SPACING.sm,
+  },
   uomLabel: {
     fontSize: FONT_SIZES.sm,
     color: COLORS.textSecondary,
+  },
+  locatorLabel: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textSecondary,
+    textAlign: 'right',
   },
   loadingContainer: {
     padding: SPACING.xl,
