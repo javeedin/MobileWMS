@@ -85,54 +85,94 @@ export const fetchSubinventoryItems = async (warehouseCode, subinventoryCode) =>
     // Fetch on-hand data from Oracle Fusion inventoryOnhandBalances API
     const fusionUrl = `${FUSION_API_BASE}/inventoryOnhandBalances?q=OrganizationCode=${warehouseCode};SubinventoryCode=${subinventoryCode}`;
 
-    console.log('=== LOADING ITEMS FROM FUSION ===');
-    console.log('Full URL:', fusionUrl);
-    console.log('Warehouse Code:', warehouseCode);
-    console.log('Subinventory Code:', subinventoryCode);
+    console.log('\n\n╔════════════════════════════════════════════════════╗');
+    console.log('║        FUSION API CALL - LOADING ITEMS             ║');
+    console.log('╚════════════════════════════════════════════════════╝');
+    console.log('📍 Warehouse Code:', warehouseCode);
+    console.log('📍 Subinventory Code:', subinventoryCode);
+    console.log('\n🔗 FULL URL BEING CALLED:');
+    console.log(fusionUrl);
+    console.log('\n⏱️  Making fetch request...');
 
     const response = await fetch(fusionUrl);
 
     const contentType = response.headers.get('content-type');
     const contentLength = response.headers.get('content-length');
 
-    console.log('=== FUSION API RESPONSE ===');
-    console.log('Response Status:', response.status, response.statusText);
-    console.log('Response Headers:', { contentType, contentLength });
-    console.log('Response OK:', response.ok);
+    console.log('\n✅ RESPONSE RECEIVED');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔹 Status Code:', response.status);
+    console.log('🔹 Status Text:', response.statusText);
+    console.log('🔹 Response OK:', response.ok);
+    console.log('🔹 Content-Type:', contentType);
+    console.log('🔹 Content-Length:', contentLength);
 
     const responseText = await response.text();
 
-    console.log('Raw Response Length:', responseText.length);
-    console.log('Raw Response Text:', responseText);
-    console.log('Response First 500 chars:', responseText.substring(0, 500));
+    console.log('\n📦 RESPONSE BODY');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📏 Body Length:', responseText.length, 'characters');
+    console.log('📄 Is Empty:', responseText.length === 0);
+    console.log('📄 Trimmed Length:', responseText.trim().length);
+
+    if (responseText.length === 0) {
+      console.log('⚠️  RESPONSE BODY IS EMPTY!');
+    } else if (responseText.length < 100) {
+      console.log('Full Response:', responseText);
+    } else {
+      console.log('First 500 chars:', responseText.substring(0, 500));
+      console.log('Last 200 chars:', responseText.substring(responseText.length - 200));
+    }
+
+    console.log('\n📋 FULL RESPONSE TEXT:');
+    console.log(responseText);
 
     if (!response.ok) {
-      console.error('ERROR: Response not OK');
+      console.error('\n❌ ERROR: Response Status Not OK');
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.error('Status:', response.status, response.statusText);
+      console.error('Response:', responseText.substring(0, 500));
       throw new Error(`API returned status ${response.status} ${response.statusText}: ${responseText.substring(0, 300)}`);
     }
 
     if (!responseText || responseText.trim() === '') {
-      console.error('ERROR: Empty response body');
+      console.error('\n❌ ERROR: Empty Response Body');
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.error('Status:', response.status);
+      console.error('The API returned a status', response.status, 'but with no response body');
+      console.error('This might indicate:');
+      console.error('  • Network policy blocking the response');
+      console.error('  • API server issue');
+      console.error('  • Request timeout');
       throw new Error('API returned empty response. Status: ' + response.status);
     }
 
     // Check if response looks like HTML (error page) instead of JSON
     if (responseText.trim().startsWith('<')) {
-      console.error('ERROR: Response appears to be HTML, not JSON');
+      console.error('\n❌ ERROR: Response is HTML, Not JSON');
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.error('This usually indicates:');
+      console.error('  • Authentication required (401/403)');
+      console.error('  • Server error (5xx response)');
+      console.error('  • Wrong URL');
+      console.error('First 300 chars:', responseText.substring(0, 300));
       throw new Error('API returned HTML instead of JSON (possibly authentication required or server error)');
     }
 
     let data;
     try {
-      console.log('Attempting to parse JSON...');
+      console.log('\n🔄 Parsing JSON Response...');
       data = JSON.parse(responseText);
-      console.log('JSON parse successful. Items count:', data.items ? data.items.length : 0);
+      console.log('✅ JSON Parsed Successfully!');
+      console.log('📊 Items in response:', data.items ? data.items.length : 0);
+      console.log('\n');
     } catch (parseError) {
-      console.error('=== JSON PARSE ERROR ===');
-      console.error('Error:', parseError.message);
-      console.error('Response length:', responseText.length);
-      console.error('Response first 300 chars:', responseText.substring(0, 300));
-      console.error('Response last 100 chars:', responseText.substring(Math.max(0, responseText.length - 100)));
+      console.error('\n❌ ERROR: JSON Parse Failed');
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.error('Parse Error:', parseError.message);
+      console.error('Response length:', responseText.length, 'characters');
+      console.error('First 300 chars:', responseText.substring(0, 300));
+      console.error('Last 100 chars:', responseText.substring(Math.max(0, responseText.length - 100)));
       throw new Error(`Failed to parse JSON: ${parseError.message}\nResponse length: ${responseText.length}\nFirst 200 chars: ${responseText.substring(0, 200)}`);
     }
 
