@@ -126,6 +126,15 @@ export const fetchSubinventoryItems = async (warehouseCode, subinventoryCode) =>
 
     const responseText = await response.text();
 
+    // IMMEDIATE LOGGING - BEFORE ANYTHING ELSE
+    console.log('\n\n██████████ FUSION API RAW RESPONSE ██████████');
+    console.log('STATUS:', response.status, response.statusText);
+    console.log('LENGTH:', responseText.length);
+    console.log('IS_EMPTY:', responseText.length === 0);
+    console.log('\nRAW_JSON_OUTPUT:');
+    console.log(responseText);
+    console.log('██████████ END RAW RESPONSE ██████████\n\n');
+
     console.log('\n📦 RESPONSE BODY');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('📏 Body Length:', responseText.length, 'characters');
