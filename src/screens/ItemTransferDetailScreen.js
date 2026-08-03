@@ -37,7 +37,7 @@ export default function ItemTransferDetailScreen({ route, navigation }) {
     setError('');
     setStatus('Loading locators...');
     try {
-      const locatorList = await fetchLocators(warehouse.id, subinventory.code);
+      const locatorList = await fetchLocators(warehouse.code, subinventory.code);
       setLocators(locatorList);
       if (locatorList.length > 0) {
         setSelectedSourceLocator(locatorList[0]);
@@ -94,10 +94,9 @@ export default function ItemTransferDetailScreen({ route, navigation }) {
     setStatus('Submitting transfer...');
     try {
       const transferData = {
-        warehouseId: warehouse.id,
+        warehouseCode: warehouse.code,
         fromSubinventory: subinventory.code,
         toSubinventory: subinventory.code,
-        itemId: item.id,
         itemNumber: item.itemNumber,
         quantity: parseFloat(transferQuantity),
         fromLocator: selectedSourceLocator.id,
