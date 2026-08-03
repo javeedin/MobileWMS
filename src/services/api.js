@@ -1,3 +1,5 @@
+import { Alert } from 'react-native';
+
 const APEX_API_BASE = 'https://g827cd88c3cfc03-mitsumioracledb.adb.me-dubai-1.oraclecloudapps.com/ords/test/INVENTORY';
 const FUSION_API_BASE = 'https://iacney-test.fa.ocs.oraclecloud.com/fscmRestApi/resources/11.13.18.05';
 
@@ -134,6 +136,18 @@ export const fetchSubinventoryItems = async (warehouseCode, subinventoryCode) =>
     console.log('\nRAW_JSON_OUTPUT:');
     console.log(responseText);
     console.log('██████████ END RAW RESPONSE ██████████\n\n');
+
+    // SHOW RAW RESPONSE ON MOBILE SCREEN
+    const displayText = responseText.length === 0
+      ? 'EMPTY RESPONSE'
+      : responseText.substring(0, 500);
+
+    Alert.alert(
+      `Fusion API Response [Status: ${response.status}]`,
+      `Length: ${responseText.length}\n\n${displayText}`,
+      [{ text: 'OK' }],
+      { cancelable: false }
+    );
 
     console.log('\n📦 RESPONSE BODY');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
