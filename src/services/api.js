@@ -10,8 +10,16 @@ const FUSION_PASSWORD = 'Fusion@1234';
 // Helper function to get Basic Auth header
 const getFusionAuthHeaders = () => {
   const credentials = btoa(`${FUSION_USERNAME}:${FUSION_PASSWORD}`);
+  const authHeader = `Basic ${credentials}`;
+
+  console.log('🔐 CREATING FUSION AUTH HEADERS:');
+  console.log('  Username:', FUSION_USERNAME);
+  console.log('  Password:', '***' + FUSION_PASSWORD.substring(FUSION_PASSWORD.length - 4));
+  console.log('  Credentials (base64):', credentials.substring(0, 20) + '...');
+  console.log('  Auth Header:', authHeader.substring(0, 30) + '...');
+
   return {
-    'Authorization': `Basic ${credentials}`,
+    'Authorization': authHeader,
     'Content-Type': 'application/json',
   };
 };
@@ -110,10 +118,19 @@ export const fetchSubinventoryItems = async (warehouseCode, subinventoryCode) =>
     console.log('\n⏱️  Making fetch request with Basic Auth...');
     console.log('🔐 Using credentials: emparun/***');
 
+    const authHeaders = getFusionAuthHeaders();
+    console.log('\n📤 FETCH REQUEST DETAILS:');
+    console.log('  Method: GET');
+    console.log('  URL:', fusionUrl);
+    console.log('  Headers:', JSON.stringify(authHeaders, null, 2));
+
     const response = await fetch(fusionUrl, {
       method: 'GET',
-      headers: getFusionAuthHeaders(),
+      headers: authHeaders,
     });
+
+    console.log('\n📥 FETCH COMPLETED');
+    console.log('  Response received - Status:', response.status);
 
     const contentType = response.headers.get('content-type');
     const contentLength = response.headers.get('content-length');
